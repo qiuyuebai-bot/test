@@ -1,0 +1,35 @@
+{
+  "_meta": {
+    "description": "前端业务配置选项（行业/领域/培训模板/脱敏规则展示）",
+    "version": "1.0",
+    "note": "供 GET /api/v1/config/options 端点返回；前端各页面通过 configApi 获取，避免硬编码"
+  },
+  "industries": [
+    { "value": "technology", "label": "信息技术" },
+    { "value": "manufacturing", "label": "智能制造" },
+    { "value": "finance", "label": "金融科技" },
+    { "value": "healthcare", "label": "医疗健康" },
+    { "value": "education", "label": "教育培训" },
+    { "value": "service", "label": "现代服务" }
+  ],
+  "domains": [
+    { "value": "smart_manufacturing", "label": "智能制造", "color": "bg-[#3d5a80]/10 text-[#3d5a80] border-[#3d5a80]/30" },
+    { "value": "industrial_internet", "label": "工业互联网", "color": "bg-[#5b8def]/10 text-[#5b8def] border-[#5b8def]/30" },
+    { "value": "software_development", "label": "软件开发", "color": "bg-[#10b981]/10 text-[#10b981] border-[#10b981]/30" },
+    { "value": "artificial_intelligence", "label": "人工智能", "color": "bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/30" }
+  ],
+  "training_templates": [
+    { "title": "新员工入职", "duration": "2周", "courses": 12 },
+    { "title": "技能提升", "duration": "4周", "courses": 24 },
+    { "title": "管理能力", "duration": "8周", "courses": 36 },
+    { "title": "专项技术", "duration": "2周", "courses": 16 }
+  ],
+  "desensitization_rules": [
+    { "field": "姓名", "rule": "首字母保留，其余脱敏", "enabled": true },
+    { "field": "学历", "rule": "保留原始值", "enabled": true },
+    { "field": "专业", "rule": "保留原始值", "enabled": true },
+    { "field": "测试成绩", "rule": "保留原始值（用于分析）", "enabled": true },
+    { "field": "联系方式", "rule": "完全脱敏（不存储）", "enabled": true },
+    { "field": "身份ID", "rule": "SHA256加密存储", "enabled": true }
+  ]
+}

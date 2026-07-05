@@ -1,0 +1,85 @@
+{
+  "_meta": {
+    "description": "学习者画像种子数据 - 首次启动时若 learner_profiles 表为空则自动导入",
+    "version": "1.0",
+    "default_password": "learner123",
+    "default_role": "learner"
+  },
+  "records": [
+    {
+      "username": "learner_zhangming",
+      "real_name": "张明",
+      "education_level": "本科",
+      "major": "计算机科学与技术",
+      "learning_style": "visual",
+      "target_industry": "人工智能",
+      "theoretical_foundation": 72.0,
+      "programming_ability": 78.0,
+      "algorithm_design": 65.0,
+      "system_architecture": 58.0,
+      "data_analysis": 71.0,
+      "engineering_practice": 62.0,
+      "knowledge_blind_areas": ["深度学习框架", "模型部署"]
+    },
+    {
+      "username": "learner_liyuqing",
+      "real_name": "李雨晴",
+      "education_level": "硕士",
+      "major": "数据科学",
+      "learning_style": "reading",
+      "target_industry": "人工智能",
+      "theoretical_foundation": 85.0,
+      "programming_ability": 88.0,
+      "algorithm_design": 82.0,
+      "system_architecture": 75.0,
+      "data_analysis": 90.0,
+      "engineering_practice": 80.0,
+      "knowledge_blind_areas": ["分布式训练"]
+    },
+    {
+      "username": "learner_wanghaoyu",
+      "real_name": "王浩宇",
+      "education_level": "博士",
+      "major": "人工智能",
+      "learning_style": "kinesthetic",
+      "target_industry": "人工智能",
+      "theoretical_foundation": 92.0,
+      "programming_ability": 91.0,
+      "algorithm_design": 90.0,
+      "system_architecture": 88.0,
+      "data_analysis": 89.0,
+      "engineering_practice": 85.0,
+      "knowledge_blind_areas": []
+    },
+    {
+      "username": "learner_chenxiao",
+      "real_name": "陈晓",
+      "education_level": "本科",
+      "major": "软件工程",
+      "learning_style": "auditory",
+      "target_industry": "智能制造",
+      "theoretical_foundation": 55.0,
+      "programming_ability": 68.0,
+      "algorithm_design": 48.0,
+      "system_architecture": 42.0,
+      "data_analysis": 60.0,
+      "engineering_practice": 50.0,
+      "knowledge_blind_areas": ["算法设计", "系统架构", "数据分析"]
+    },
+    {
+      "username": "learner_zhaojing",
+      "real_name": "赵静",
+      "education_level": "大专",
+      "major": "信息管理",
+      "learning_style": "visual",
+      "target_industry": "工业互联网",
+      "theoretical_foundation": 38.0,
+      "programming_ability": 45.0,
+      "algorithm_design": 30.0,
+      "system_architecture": 35.0,
+      "data_analysis": 50.0,
+      "engineering_practice": 42.0,
+      "knowledge_blind_areas": ["理论基础", "算法设计", "系统架构", "工程实践"]
+    }
+  ]
+}

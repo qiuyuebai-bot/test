@@ -1,0 +1,63 @@
+# ===========================================
+# 项目根目录 .dockerignore
+# ===========================================
+
+# Git
+.git
+.gitignore
+.github
+
+# 依赖目录（Docker 内会重新安装）
+node_modules
+backend/venv
+backend/__pycache__
+**/__pycache__
+**/*.pyc
+**/*.pyo
+
+# 构建产物
+dist
+build
+*.local
+
+# 开发数据与日志（通过 volume 挂载）
+backend/data
+backend/logs
+backend/uploads
+backend/server_start_log.txt
+backend/test_*.txt
+backend/test_report.xml
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# 环境变量（使用 .env.example）
+.env
+.env.local
+.env.*.local
+
+# 文档
+README.md
+docs
+
+# Docker 自身
+Dockerfile
+docker-compose*.yml
+deploy
+
+# 测试与覆盖率
+coverage
+**/coverage
+.pytest_cache
+.nyc_output
+
+# 其他
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log

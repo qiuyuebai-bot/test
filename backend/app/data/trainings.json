@@ -1,0 +1,134 @@
+{
+  "_meta": {
+    "description": "企业培训种子数据 - 首次启动时若 enterprise_trainings 表为空则自动导入",
+    "version": "1.0"
+  },
+  "records": [
+    {
+      "company_name": "华东重机集团",
+      "training_name": "智能制造工艺优化培训",
+      "training_type": "standard",
+      "description": "面向智能制造产线工艺工程师的系统性培训，涵盖工艺基础、设备操作、质量控制与安全规范",
+      "industry": "manufacturing",
+      "modules": ["工艺基础", "设备操作", "质量控制", "安全规范"],
+      "participant_count": 156,
+      "responsible_person": "刘工",
+      "estimated_duration": 30,
+      "status": "ongoing",
+      "progress_percentage": 68.0,
+      "completed_modules": 2,
+      "pass_rate": 87.5,
+      "average_score": 4.5,
+      "satisfaction_rate": 92.0
+    },
+    {
+      "company_name": "深圳智联科技",
+      "training_name": "工业互联网平台应用培训",
+      "training_type": "standard",
+      "description": "工业互联网平台架构与数据采集实践培训",
+      "industry": "technology",
+      "modules": ["平台架构", "数据采集", "边缘计算"],
+      "participant_count": 89,
+      "responsible_person": "陈经理",
+      "estimated_duration": 21,
+      "status": "ongoing",
+      "progress_percentage": 35.0,
+      "completed_modules": 1,
+      "pass_rate": 0,
+      "average_score": 0,
+      "satisfaction_rate": 0
+    },
+    {
+      "company_name": "北京智能云服",
+      "training_name": "AI模型部署与运维培训",
+      "training_type": "standard",
+      "description": "AI模型压缩、部署、监控与故障排查全流程培训",
+      "industry": "technology",
+      "modules": ["模型压缩", "部署实践", "监控运维", "故障排查"],
+      "participant_count": 45,
+      "responsible_person": "王博士",
+      "estimated_duration": 14,
+      "status": "completed",
+      "progress_percentage": 100.0,
+      "completed_modules": 4,
+      "pass_rate": 93.3,
+      "average_score": 4.8,
+      "satisfaction_rate": 95.0
+    },
+    {
+      "company_name": "杭州数字科技",
+      "training_name": "张伟-后端转AI工程师",
+      "training_type": "transfer",
+      "description": "后端开发工程师转岗AI工程师培训",
+      "industry": "technology",
+      "participant_count": 1,
+      "responsible_person": "张伟",
+      "estimated_duration": 90,
+      "status": "ongoing",
+      "progress_percentage": 42.0,
+      "completed_modules": 0,
+      "is_transfer_training": true,
+      "transfer_from_position": "后端开发",
+      "transfer_to_position": "AI工程师",
+      "skill_gap_analysis": {
+        "overall_gap": 15.0,
+        "skills": [
+          {"skill": "Python编程", "current": 75, "required": 90, "gap": 15},
+          {"skill": "机器学习基础", "current": 60, "required": 85, "gap": 25},
+          {"skill": "深度学习框架", "current": 45, "required": 80, "gap": 35},
+          {"skill": "模型部署", "current": 30, "required": 70, "gap": 40}
+        ]
+      }
+    },
+    {
+      "company_name": "上海数据智能",
+      "training_name": "李娜-数据分析转机器学习",
+      "training_type": "transfer",
+      "description": "数据分析师转岗机器学习工程师培训",
+      "industry": "technology",
+      "participant_count": 1,
+      "responsible_person": "李娜",
+      "estimated_duration": 60,
+      "status": "ongoing",
+      "progress_percentage": 67.0,
+      "completed_modules": 0,
+      "is_transfer_training": true,
+      "transfer_from_position": "数据分析师",
+      "transfer_to_position": "机器学习工程师",
+      "skill_gap_analysis": {
+        "overall_gap": 8.0,
+        "skills": [
+          {"skill": "Python编程", "current": 85, "required": 90, "gap": 5},
+          {"skill": "机器学习基础", "current": 70, "required": 85, "gap": 15},
+          {"skill": "深度学习框架", "current": 55, "required": 80, "gap": 25},
+          {"skill": "模型部署", "current": 40, "required": 70, "gap": 30}
+        ]
+      }
+    },
+    {
+      "company_name": "南京云智",
+      "training_name": "王强-运维转DevOps",
+      "training_type": "transfer",
+      "description": "运维工程师转岗DevOps专家培训",
+      "industry": "technology",
+      "participant_count": 1,
+      "responsible_person": "王强",
+      "estimated_duration": 75,
+      "status": "ongoing",
+      "progress_percentage": 23.0,
+      "completed_modules": 0,
+      "is_transfer_training": true,
+      "transfer_from_position": "运维工程师",
+      "transfer_to_position": "DevOps专家",
+      "skill_gap_analysis": {
+        "overall_gap": 22.0,
+        "skills": [
+          {"skill": "CI/CD", "current": 50, "required": 85, "gap": 35},
+          {"skill": "容器化", "current": 40, "required": 80, "gap": 40},
+          {"skill": "监控告警", "current": 60, "required": 85, "gap": 25},
+          {"skill": "云原生", "current": 35, "required": 75, "gap": 40}
+        ]
+      }
+    }
+  ]
+}

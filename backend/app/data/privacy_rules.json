@@ -1,0 +1,64 @@
+{
+  "_meta": {
+    "description": "数据脱敏规则配置（field_type/pattern/replace 为运行时脱敏逻辑；original/anonymized 仅为 UI 示例占位）",
+    "version": "1.0",
+    "note": "original 字段为通用占位值，非真实 PII；test_anonymization 实际使用 pattern/replace 对用户输入进行脱敏"
+  },
+  "records": [
+    {
+      "id": 1,
+      "field": "姓名",
+      "original": "张三",
+      "anonymized": "张*",
+      "method": "部分掩码",
+      "field_type": "name",
+      "pattern": "^(.).*$",
+      "replace": "\\1*",
+      "status": "active"
+    },
+    {
+      "id": 2,
+      "field": "手机号",
+      "original": "13800001234",
+      "anonymized": "138****1234",
+      "method": "中间掩码",
+      "field_type": "phone",
+      "pattern": "^(\\d{3})\\d{4}(\\d{4})$",
+      "replace": "\\1****\\2",
+      "status": "active"
+    },
+    {
+      "id": 3,
+      "field": "身份证号",
+      "original": "310101199001010000",
+      "anonymized": "310101********0000",
+      "method": "首尾保留",
+      "field_type": "idcard",
+      "pattern": "^(\\d{6})\\d{8}(\\d{4})$",
+      "replace": "\\1********\\2",
+      "status": "active"
+    },
+    {
+      "id": 4,
+      "field": "邮箱地址",
+      "original": "user@example.com",
+      "anonymized": "use***@example.com",
+      "method": "前缀掩码",
+      "field_type": "email",
+      "pattern": "^(\\w{3})\\w*(@.*)$",
+      "replace": "\\1***\\2",
+      "status": "active"
+    },
+    {
+      "id": 5,
+      "field": "家庭住址",
+      "original": "示例省市示例区示例路123号",
+      "anonymized": "示例省市示例区***",
+      "method": "部分截断",
+      "field_type": "address",
+      "pattern": "^(.{7}).*$",
+      "replace": "\\1***",
+      "status": "draft"
+    }
+  ]
+}

@@ -1,0 +1,122 @@
+# ===========================================
+# 依赖目录
+# ===========================================
+node_modules/
+backend/venv/
+backend/.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+
+# ===========================================
+# 构建产物
+# ===========================================
+dist/
+build/
+*.egg-info/
+backend/dist/
+backend/build/
+
+# ===========================================
+# 环境变量与密钥
+# ===========================================
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+data/.secret_key
+backend/data/.secret_key
+
+# ===========================================
+# 数据库与数据文件
+# ===========================================
+*.db
+*.sqlite
+*.sqlite3
+backend/data/chroma_db/
+backend/data/uploads/
+backend/data/resources/
+backend/data/knowledge_docs/
+
+# ===========================================
+# 日志文件
+# ===========================================
+*.log
+logs/
+backend/logs/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# ===========================================
+# 测试与缓存
+# ===========================================
+.pytest_cache/
+.coverage
+htmlcov/
+coverage/
+*.cover
+.cache/
+.parcel-cache/
+.vite/
+.eslintcache
+
+# ===========================================
+# IDE 与编辑器
+# ===========================================
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ===========================================
+# 临时文件
+# ===========================================
+*.tmp
+*.bak
+*.old
+status*.log
+port_check.log
+ports.txt
+check_*.txt
+build_*.log
+install_*.txt
+pip_list*.txt
+test_*result*.txt
+test_report.xml
+server_start_log.txt
+vite-requests.log
+cache_status.log
+check.txt
+
+# ===========================================
+# TypeScript 缓存
+# ===========================================
+*.tsbuildinfo
+
+# ===========================================
+# Celery
+# ===========================================
+celerybeat-schedule
+celerybeat.pid
+
+# ===========================================
+# Jupyter
+# ===========================================
+.ipynb_checkpoints
+
+# ===========================================
+# 其他
+# ===========================================
+.DS_Store?
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/

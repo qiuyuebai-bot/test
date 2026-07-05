@@ -1,0 +1,54 @@
+# ===========================================
+# 领域知识个性化生成与多智能体协同决策系统
+# 后端依赖配置文件
+# ===========================================
+
+# Web框架
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+# 数据库
+sqlalchemy==2.0.25
+alembic==1.13.1
+psycopg2-binary==2.9.9
+
+# 大模型与向量库
+langchain==0.1.0
+langchain-openai==0.0.2
+openai>=1.0.0
+chromadb==0.4.22
+sentence-transformers==2.3.1
+
+# 异步任务队列
+celery==5.3.6
+redis==5.0.1
+
+# 数据验证
+pydantic==2.5.3
+pydantic-settings==2.1.0
+
+# 工具库
+python-dotenv==1.0.0
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+httpx==0.26.0
+aiofiles==23.2.1
+
+# 日志
+loguru==0.7.2
+
+# 系统监控
+psutil==5.9.8
+
+# 测试
+pytest==7.4.4
+pytest-asyncio==0.23.3
+
+# 其他
+numpy==1.26.3
+pandas==2.1.4
+jieba==0.42.1
+
+# PDF 报告导出
+reportlab==4.0.8

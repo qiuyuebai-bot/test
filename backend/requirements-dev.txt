@@ -1,0 +1,16 @@
+# ===========================================
+# 开发依赖 - 代码规范与测试
+# 安装: pip install -r requirements-dev.txt
+# ===========================================
+
+# 代码规范 - Lint & Format
+ruff>=0.2.0
+mypy>=1.8.0
+types-python-dateutil
+
+# 测试增强
+pytest-cov>=4.1.0
+pytest-mock>=3.12.0
+
+# 安全检查
+bandit>=1.7.6

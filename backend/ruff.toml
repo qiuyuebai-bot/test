@@ -1,0 +1,41 @@
+# Ruff 配置 - 高性能 Python Linter & Formatter
+# 参考: https://docs.astral.sh/ruff/
+
+target-version = "py311"
+line-length = 100
+src = ["app"]
+
+# 启用的规则集
+[lint]
+select = [
+  "E",    # pycodestyle errors
+  "W",    # pycodestyle warnings
+  "F",    # pyflakes
+  "I",    # isort
+  "N",    # pep8-naming
+  "UP",   # pyupgrade
+  "B",    # flake8-bugbear
+  "SIM",  # flake8-simplify
+  "C4",   # flake8-comprehensions
+  "TCH",  # flake8-type-checking
+  "RUF",  # ruff-specific rules
+]
+ignore = [
+  "E501",   # 行长度由 formatter 处理
+  "B008",   # 函数参数默认值为可变对象
+  "N801",   # 类名驼峰（SQLAlchemy模型特殊字段）
+  "N806",   # 变量小写
+]
+
+[lint.isort]
+known-first-party = ["app"]
+
+[lint.per-file-ignores]
+"__init__.py" = ["F401"]  # 未使用的导入（模块导出）
+"tests/*" = ["B011", "B008"]
+
+# 格式化配置
+[format]
+quote-style = "double"
+indent-style = "space"
+docstring-code-format = true

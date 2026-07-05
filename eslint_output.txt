@@ -1,0 +1,48 @@
+﻿
+C:\Users\22602\Desktop\新建文件夹\src\components\Form.tsx
+  55:10  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  55:37  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+  55:50  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\22602\Desktop\新建文件夹\src\components\Toast.tsx
+  37:14  warning  Fast refresh only works when a file only exports components. Use a new file to share constants or functions between components  react-refresh/only-export-components
+
+C:\Users\22602\Desktop\新建文件夹\src\pages\AdaptiveGuidance.tsx
+  113:41  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  114:27  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  115:60  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  195:21  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  243:88  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  244:22  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  245:55  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  554:63  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  581:61  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\22602\Desktop\新建文件夹\src\pages\LearnerProfile.tsx
+  510:7  error  'end' is never reassigned. Use 'const' instead  prefer-const
+
+C:\Users\22602\Desktop\新建文件夹\src\pages\LearningReport.tsx
+   92:14  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  653:61  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\22602\Desktop\新建文件夹\src\pages\ResourceGeneration.tsx
+  238:6  warning  React Hook useCallback has an unnecessary dependency: 'fetchResources'. Either exclude it or remove the dependency array  react-hooks/exhaustive-deps
+
+C:\Users\22602\Desktop\新建文件夹\src\pages\SystemTest.tsx
+  79:47  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  80:45  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+C:\Users\22602\Desktop\新建文件夹\src\store\index.ts
+  292:48   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  312:46   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  368:100  warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  369:44   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  369:80   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  370:38   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  371:37   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  371:66   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+  400:40   warning  Unexpected any. Specify a different type  @typescript-eslint/no-explicit-any
+
+✖ 28 problems (1 error, 27 warnings)
+  1 error and 0 warnings potentially fixable with the `--fix` option.
+

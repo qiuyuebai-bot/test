@@ -1,0 +1,167 @@
+# ===========================================
+# 领域知识个性化生成与多智能体协同决策系统
+# Docker Compose 多服务编排
+# ===========================================
+#
+# 使用方式:
+#   开发模式（SQLite + Redis + 前后端）: docker-compose up -d
+#   完整模式（含 PostgreSQL + Celery + Chroma）: docker-compose --profile full up -d
+#   仅前端: docker-compose up -d frontend
+# ===========================================
+
+version: "3.8"
+
+services:
+  # ---- 前端 Nginx 服务 ----
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: knowledge-frontend
+    ports:
+      - "${FRONTEND_PORT:-80}:80"
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - knowledge-network
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+
+  # ---- 后端 API 服务 ----
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: knowledge-backend
+    ports:
+      - "${BACKEND_PORT:-8000}:8000"
+    environment:
+      # 数据库：默认 SQLite（开发/演示）；完整模式下通过 profile 使用 PostgreSQL
+      - DATABASE_URL=${DATABASE_URL:-sqlite:////app/data/app.db}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - CHROMA_DB_PATH=/app/data/chroma_db
+      - DEBUG_MODE=${DEBUG_MODE:-false}
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production-please}
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_API_BASE=${OPENAI_API_BASE:-https://api.openai.com/v1}
+      - OPENAI_MODEL_NAME=${OPENAI_MODEL_NAME:-gpt-4-turbo-preview}
+    volumes:
+      - backend-data:/app/data
+      - backend-logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - knowledge-network
+
+  # ---- PostgreSQL 数据库（完整模式） ----
+  postgres:
+    image: postgres:16-alpine
+    container_name: knowledge-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
+      POSTGRES_DB: ${POSTGRES_DB:-knowledge_system}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - knowledge-network
+    profiles:
+      - full
+
+  # ---- Redis 缓存/队列 ----
+  redis:
+    image: redis:7-alpine
+    container_name: knowledge-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    command: redis-server --appendonly yes
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - knowledge-network
+
+  # ---- Celery Worker（完整模式，异步任务） ----
+  celery-worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: knowledge-celery
+    command: celery -A app.celery_app worker --loglevel=info --concurrency=2
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:password@postgres:5432/knowledge_system}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - SECRET_KEY=${SECRET_KEY:-change-me-in-production-please}
+    volumes:
+      - backend-data:/app/data
+      - backend-logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - knowledge-network
+    profiles:
+      - full
+
+  # ---- Chroma 向量数据库（完整模式） ----
+  chroma:
+    image: chromadb/chroma:latest
+    container_name: knowledge-chroma
+    ports:
+      - "${CHROMA_PORT:-8001}:8000"
+    volumes:
+      - chroma-data:/chroma/chroma
+    environment:
+      - IS_PERSISTENT=TRUE
+      - ANONYMIZED_TELEMETRY=FALSE
+    restart: unless-stopped
+    networks:
+      - knowledge-network
+    profiles:
+      - full
+
+# ---- 数据卷 ----
+volumes:
+  postgres-data:
+    driver: local
+  redis-data:
+    driver: local
+  chroma-data:
+    driver: local
+  backend-data:
+    driver: local
+  backend-logs:
+    driver: local
+
+# ---- 网络 ----
+networks:
+  knowledge-network:
+    driver: bridge

@@ -1,0 +1,111 @@
+
+============================================================
+TEST: 1. Root
+URL: http://localhost:8000/
+STATUS: 200
+BODY:
+{
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "name": "领域知识个性化生成与多智能体协同决策系统",
+    "version": "1.0.0",
+    "status": "running",
+    "uptime_seconds": 66.3
+  },
+  "timestamp": "2026-06-28 21:22:56"
+}
+
+============================================================
+TEST: 2. Liveness
+URL: http://localhost:8000/health/live
+STATUS: 200
+BODY:
+{
+  "code": 200,
+  "message": "alive",
+  "data": {
+    "status": "alive",
+    "uptime_seconds": 68.3,
+    "timestamp": "2026-06-28T21:22:58+0800"
+  }
+}
+
+============================================================
+TEST: 3. Readiness
+URL: http://localhost:8000/health/ready
+STATUS: 200
+BODY:
+{
+  "code": 200,
+  "message": "ready",
+  "data": {
+    "status": "ready",
+    "checks": {
+      "database": {
+        "status": "up",
+        "latency_ms": 2.6
+      },
+      "chroma": {
+        "status": "fallback",
+        "note": "Chroma不可用，使用数据库关键词检索降级模式"
+      },
+      "system": {
+        "status": "up",
+        "memory_percent": 68.5,
+        "cpu_percent": 0.0,
+        "disk_free_gb": 221.98
+      },
+      "llm": {
+        "status": "configured",
+        "model": "qwen-plus",
+        "note": "API可用"
+      }
+    },
+    "uptime_seconds": 70.5,
+    "timestamp": "2026-06-28T21:23:00+0800",
+    "version": "1.0.0",
+    "python_version": "3.11.9"
+  }
+}
+
+============================================================
+TEST: 4. Prometheus Metrics
+URL: http://localhost:8000/metrics
+STATUS: 200
+BODY:
+"# HELP http_requests_total Total number of HTTP requests\n# TYPE http_requests_total counter\nhttp_requests_total{method=\"GET\",endpoint=\"/\",status_code=\"200\"} 1.0\nhttp_requests_total{method=\"GET\",endpoint=\"/health/live\",status_code=\"200\"} 1.0\nhttp_requests_total{method=\"GET\",endpoint=\"/health/ready\",status_code=\"200\"} 1.0\n\n# HELP http_request_duration_seconds HTTP request duration in seconds\n# TYPE http_request_duration_seconds histogram\nhttp_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/\",le=\"0.005\"} 0\nhttp_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/\",le=\"0.01\"} 0\nhttp_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/\",le=\"0.025\"} 1\nhttp_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/\",le=\"0.05\"} 1\nhttp_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/\",le=\"0.1\"} 1\nhttp_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/\",le=\"0.25\"} 1\nhttp_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/\",le=\"0.5\"} 1\nhttp_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/\",le=\"1.0\"} 1\nhttp_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/\",le=\"2.5\"} 1\nhttp_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/\",le=\"5.0\"} 1\nhttp_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/\",le=\"10.0\"} 1\nhttp_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/\",le=\"+Inf\"} 1\nhttp_request_duration_seconds_sum{method=\"GET\",endpoint=\"/\"} 0.01672220230102539\nhttp_request_duration_seconds_count{method=\"GET\",endpoint=\"/\"} 1\nhttp_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/health/live\",le=\"0.005\"} 0\nhttp_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/health/live\",le=\"0.01\"} 1\nhttp_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/health/live\",le=\"0.025\"} 1\nhttp_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/health/live\",le=\"0.05\"} 1\nhttp_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/health/live\",le=\"0.1\"} 1\nhttp_request_duration_seconds_bucket{method=\"GET\",endpoint=\"/health/l"
+
+============================================================
+TEST: 5. API v1 Health
+URL: http://localhost:8000/api/v1/health
+STATUS: 200
+BODY:
+{
+  "code": 200,
+  "message": "alive",
+  "data": {
+    "status": "alive",
+    "uptime_seconds": 74.6,
+    "timestamp": "2026-06-28T21:23:05+0800"
+  }
+}
+
+============================================================
+TEST: 6. Tracing Headers
+URL: http://localhost:8000/
+STATUS: 200
+X-Request-ID: 45facc67
+X-Response-Time: 2.0ms
+BODY:
+{
+  "code": 200,
+  "message": "操作成功",
+  "data": {
+    "name": "领域知识个性化生成与多智能体协同决策系统",
+    "version": "1.0.0",
+    "status": "running",
+    "uptime_seconds": 76.7
+  },
+  "timestamp": "2026-06-28 21:23:07"
+}
