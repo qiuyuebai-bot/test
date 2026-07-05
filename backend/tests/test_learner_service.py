@@ -20,6 +20,7 @@ from app.models import (
     UserRoleEnum,
     AnonymizedData,
     AnswerRecord,
+    AnswerResultEnum,
 )
 
 
@@ -223,7 +224,7 @@ class TestLearnerAnswerRecords:
         record = LearnerService.add_answer_record(db_session, data)
         
         assert record is not None
-        assert record.result == "correct"
+        assert record.result == AnswerResultEnum.CORRECT
         assert record.score == 10.0
 
     def test_get_answer_records(self, db_session: Session, sample_learner_profile: LearnerProfile):

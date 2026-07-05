@@ -2,7 +2,7 @@
 用户答题交互记录表 ORM 模型
 存储用户答题交互与自适应导学决策记录
 """
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Float, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Float, JSON, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -50,7 +50,7 @@ class AnswerRecord(Base):
     
     # 答题基本信息
     question_id = Column(Integer, nullable=True, comment="题目ID")
-    question_type = Column(String(20), nullable=False, comment="题目类型")
+    question_type = Column(SQLEnum(QuestionTypeEnum, values_callable=lambda e: [m.value for m in e]), nullable=False, comment="题目类型")
     question_topic = Column(String(100), nullable=True, comment="题目主题")
     question_difficulty = Column(Integer, default=3, comment="题目难度(1-5)")
     
@@ -60,7 +60,7 @@ class AnswerRecord(Base):
     correct_answer = Column(JSON, nullable=True, comment="正确答案")
     
     # 答题结果
-    result = Column(String(20), nullable=False, index=True, comment="答题结果")
+    result = Column(SQLEnum(AnswerResultEnum, values_callable=lambda e: [m.value for m in e]), nullable=False, index=True, comment="答题结果")
     score = Column(Float, default=0.0, comment="得分")
     time_spent_ms = Column(Integer, default=0, comment="答题耗时(毫秒)")
     
@@ -69,7 +69,7 @@ class AnswerRecord(Base):
     hints_used = Column(Integer, default=0, comment="使用提示次数")
     
     # Agent决策记录
-    agent_decision = Column(String(20), nullable=True, comment="Agent自适应决策")
+    agent_decision = Column(SQLEnum(AdaptiveDecisionEnum, values_callable=lambda e: [m.value for m in e]), nullable=True, comment="Agent自适应决策")
     decision_reason = Column(Text, nullable=True, comment="决策原因")
     decision_confidence = Column(Float, default=0.0, comment="决策置信度")
     
