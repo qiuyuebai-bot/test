@@ -109,7 +109,90 @@ docker-compose down -v
 docker-compose build --no-cache backend
 ```
 
-### 方式二：本地开发
+### 方式二：一键启动脚本（本地开发推荐）
+
+项目提供跨平台一键启动脚本，自动检测环境、并行启动前后端，无需手动开多个终端。
+
+#### 前置要求
+- Node.js 18+（脚本运行依赖）
+- Python 3.11+（后端运行依赖）
+- 首次使用需先初始化环境（创建虚拟环境、安装依赖、复制配置文件）
+
+#### 步骤 1：环境初始化（仅首次执行）
+
+```bash
+# 任选其一
+node scripts/start.mjs --setup     # 跨平台
+npm run start:setup                 # 等价命令
+```
+
+Windows 用户也可双击 `start.bat` 并传入参数：
+```cmd
+start.bat --setup
+```
+
+该命令会自动完成：
+1. 从 `.env.example` 复制 `.env`
+2. 在 `backend/venv` 创建 Python 虚拟环境
+3. 安装后端 `requirements.txt` 依赖
+4. 安装前端 `node_modules` 依赖
+
+#### 步骤 2：一键启动前后端
+
+```bash
+# 任选其一
+node scripts/start.mjs          # 跨平台
+npm start                       # 等价命令
+```
+
+Windows：双击 `start.bat`
+Linux/macOS：`./start.sh`
+
+启动后效果：
+- 实时聚合输出，带 `[backend]` / `[frontend]` 前缀着色
+- 显示服务地址（后端 API + 前端页面 + API 文档）
+- `Ctrl+C` 一键优雅关闭两个服务
+
+#### 启动选项
+
+| 命令 | 说明 |
+|------|------|
+| `npm start` | 同时启动前后端（默认） |
+| `npm run start:backend` | 仅启动后端 |
+| `npm run start:frontend` | 仅启动前端 |
+| `npm run start:setup` | 自动准备环境（创建 venv、安装依赖、复制 .env） |
+| `node scripts/start.mjs --help` | 查看帮助 |
+
+#### 服务地址
+
+| 服务 | 地址 |
+|------|------|
+| 前端页面 | http://localhost:5173 |
+| 后端 API | http://localhost:8000 |
+| Swagger 文档 | http://localhost:8000/docs |
+| ReDoc 文档 | http://localhost:8000/redoc |
+| 健康检查 | http://localhost:8000/health |
+
+#### 脚本文件说明
+
+| 文件 | 作用 |
+|------|------|
+| [scripts/start.mjs](scripts/start.mjs) | 跨平台核心启动脚本（Node.js ES Module） |
+| [start.bat](start.bat) | Windows 双击入口 |
+| [start.sh](start.sh) | Linux/macOS 入口 |
+| [package.json](package.json) `scripts` 字段 | npm 命令别名 |
+
+#### 常见问题
+
+| 问题 | 解决方法 |
+|------|----------|
+| `未检测到 Node.js` | 安装 Node.js 18+：https://nodejs.org/ |
+| `未检测到 Python` | 安装 Python 3.11+，确保 `python` 或 `python3` 在 PATH |
+| 端口 8000/5173 被占用 | 关闭占用进程，或修改 `scripts/start.mjs` 中的 `CONFIG.backend.port` |
+| 后端启动失败 | 进入 `backend/`，激活 venv 后运行 `uvicorn app.main:app --reload` 排查错误 |
+| 前端启动失败 | 运行 `npm run lint` 与 `npm run typecheck` 排查代码问题 |
+
+### 方式三：手动启动（如需更细控制）
 
 #### 后端（Python 3.11+）
 

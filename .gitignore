@@ -34,6 +34,9 @@ backend/data/.secret_key
 # 数据库与数据文件
 # ===========================================
 *.db
+*.db-shm
+*.db-wal
+*.db-journal
 *.sqlite
 *.sqlite3
 backend/data/chroma_db/
