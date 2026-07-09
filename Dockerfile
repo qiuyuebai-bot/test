@@ -35,7 +35,7 @@ RUN if [ "${VITE_MODE}" = "staging" ]; then \
     fi
 
 # ---- 运行阶段 ----
-FROM nginx:1.25-alpine AS runtime
+FROM nginx:1.31-alpine AS runtime
 
 LABEL maintainer="knowledge-system"
 LABEL description="领域知识个性化生成与多智能体协同决策系统 - 前端"
