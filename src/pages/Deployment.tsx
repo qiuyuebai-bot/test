@@ -1,11 +1,12 @@
 import { useState, useEffect, useMemo } from 'react'
 import { useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
-import LoadingState from '@/components/LoadingState'
 import EmptyState from '@/components/EmptyState'
 import ErrorState from '@/components/ErrorState'
+import { PageSkeleton } from '@/components/Skeleton'
 import {
   Rocket,
   Server,
@@ -20,8 +21,12 @@ import {
 } from 'lucide-react'
 
 export default function Deployment() {
-  const learners = useStore((s) => s.learners)
-  const learnersLoading = useStore((s) => s.learnersLoading)
+  const { learners, learnersLoading } = useStore(
+    useShallow((s) => ({
+      learners: s.learners,
+      learnersLoading: s.learnersLoading,
+    }))
+  )
   const fetchLearners = useStore((s) => s.fetchLearners)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -71,6 +76,16 @@ export default function Deployment() {
     navigator.clipboard.writeText(code)
   }
 
+  const handleDownloadData = () => {
+    const blob = new Blob([JSON.stringify(learners, null, 2)], { type: 'application/json;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `learners_${new Date().toISOString().slice(0, 10)}.json`
+    a.click()
+    URL.revokeObjectURL(url)
+  }
+
   // 按能力等级筛选 3 类样本：初学者 / 进阶者 / 专家
   const getSampleLevel = (avg: number): { type: string; description: string } => {
     if (avg < 50) return { type: '初学者样本', description: '理论基础薄弱，需要从基础开始' }
@@ -90,7 +105,7 @@ export default function Deployment() {
   }, [learners])
 
   if (loading || learnersLoading) {
-    return <LoadingState type="default" />
+    return <PageSkeleton type="default" />
   }
 
   if (error) {
@@ -192,7 +207,7 @@ export default function Deployment() {
                 <Badge variant="default">TypeScript</Badge>
               </div>
               <p className="text-sm text-text-secondary mb-3">React 18 + Vite + TailwindCSS</p>
-              <Button variant="outline" size="sm" className="w-full">
+              <Button variant="outline" size="sm" className="w-full" onClick={() => window.open('/docs', '_blank')}>
                 <LinkIcon className="w-4 h-4 mr-1" />
                 查看源码
               </Button>
@@ -206,7 +221,7 @@ export default function Deployment() {
                 <Badge variant="default">Python</Badge>
               </div>
               <p className="text-sm text-text-secondary mb-3">FastAPI + SQLAlchemy + Pydantic</p>
-              <Button variant="outline" size="sm" className="w-full">
+              <Button variant="outline" size="sm" className="w-full" onClick={() => window.open('/redoc', '_blank')}>
                 <LinkIcon className="w-4 h-4 mr-1" />
                 查看源码
               </Button>
@@ -299,7 +314,7 @@ export default function Deployment() {
                           style={{ width: `${learner.averageAbility}%` }}
                         />
                       </div>
-                      <span className="text-xs font-medium w-8 text-right">{learner.averageAbility.toFixed(0)}</span>
+                      <span className="text-xs font-medium w-12 text-right">{learner.averageAbility.toFixed(2)}%</span>
                     </div>
                   </div>
                   {learner.knowledgeBlindAreas && learner.knowledgeBlindAreas.length > 0 && (
@@ -327,7 +342,7 @@ export default function Deployment() {
           </div>
         )}
         <div className="mt-4 flex justify-end">
-          <Button variant="outline">
+          <Button variant="outline" onClick={handleDownloadData}>
             <Cloud className="w-4 h-4 mr-1" />
             下载完整数据
           </Button>

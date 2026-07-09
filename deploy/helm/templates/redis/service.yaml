@@ -1,0 +1,19 @@
+{{- if and .Values.redis.enabled (not .Values.redis.external.enabled) -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "knowledge-system.redisServiceName" . }}
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+spec:
+  type: {{ .Values.redis.service.type }}
+  ports:
+    - port: {{ .Values.redis.service.port }}
+      targetPort: tcp-redis
+      protocol: TCP
+      name: tcp-redis
+  selector:
+    {{- include "knowledge-system.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+{{- end -}}

@@ -4,8 +4,9 @@
 """
 import json
 import time
+import random
 import threading
-from typing import Dict, Any, List, Optional, Type, TypeVar
+from typing import Any, Callable, Dict, List, Optional, Type, TypeVar
 
 from app.database import get_db_context
 from app.models import (
@@ -17,6 +18,9 @@ from app.utils.logger import LoggerUtil
 from app.constants import MAX_DIFFICULTY
 
 T = TypeVar('T')
+
+# 缓存哨兵：区分"缓存未命中"和"缓存了 None 值"
+_CACHE_MISS = object()
 
 
 class BaseService:
@@ -45,8 +49,11 @@ class BaseService:
     
     # 缓存配置
     _cache: Dict[str, Any] = {}
-    _cache_ttl: int = 300  # 缓存TTL: 5分钟
-    _cache_lock: threading.Lock = threading.Lock()
+    _cache_ttl: int = 300  # 基础 TTL: 5 分钟
+    _cache_jitter: int = 30  # TTL 随机抖动范围（±30s），防止缓存雪崩
+    _cache_empty_ttl: int = 60  # 空值缓存短 TTL: 60 秒，防止缓存穿透
+    # 用 RLock 支持 get_or_set 内部嵌套调用
+    _cache_lock: threading.RLock = threading.RLock()
     
     @classmethod
     def model_to_dict(cls, model) -> Dict[str, Any]:
@@ -228,39 +235,107 @@ class BaseService:
         LoggerUtil.log_error(message, error)
     
     @classmethod
+    def _get_cache_entry(cls, key: str) -> Any:
+        """
+        内部方法：获取缓存条目
+
+        Returns:
+            缓存值，或 _CACHE_MISS（哨兵）表示未命中
+        """
+        with cls._cache_lock:
+            entry = cls._cache.get(key)
+            if entry is None:
+                return _CACHE_MISS
+            if time.time() - entry["timestamp"] < entry["ttl"]:
+                return entry["value"]
+            del cls._cache[key]
+        return _CACHE_MISS
+
+    @classmethod
     def get_cache(cls, key: str) -> Optional[Any]:
         """
-        获取缓存（线程安全）
+        获取缓存（线程安全，向后兼容）
 
         Args:
             key: 缓存键
 
         Returns:
-            缓存值或None
+            缓存值或 None（未命中或缓存了 None 值均返回 None）
         """
-        with cls._cache_lock:
-            if key in cls._cache:
-                entry = cls._cache[key]
-                if time.time() - entry["timestamp"] < cls._cache_ttl:
-                    return entry["value"]
-                else:
-                    del cls._cache[key]
-        return None
+        value = cls._get_cache_entry(key)
+        return None if value is _CACHE_MISS else value
 
     @classmethod
-    def set_cache(cls, key: str, value: Any) -> None:
+    def set_cache(cls, key: str, value: Any, ttl: Optional[int] = None) -> None:
         """
         设置缓存（线程安全）
+
+        性能增强：
+        - 自动 TTL 随机抖动（±30s）防止缓存雪崩
+        - None 值用短 TTL（60s）防止缓存穿透
+        - 支持自定义 TTL
 
         Args:
             key: 缓存键
             value: 缓存值
+            ttl: 自定义 TTL（秒），None 时用默认策略
         """
         with cls._cache_lock:
+            if ttl is None:
+                if value is None:
+                    # 空值用短 TTL，防止穿透
+                    ttl = cls._cache_empty_ttl
+                else:
+                    # 正常值加随机抖动，防止雪崩
+                    ttl = cls._cache_ttl + random.randint(
+                        -cls._cache_jitter, cls._cache_jitter
+                    )
             cls._cache[key] = {
                 "value": value,
                 "timestamp": time.time(),
+                "ttl": ttl,
             }
+
+    @classmethod
+    def get_or_set(
+        cls,
+        key: str,
+        loader: Callable[[], Any],
+        ttl: Optional[int] = None,
+    ) -> Any:
+        """
+        查缓存 → 未命中加载 → 设缓存（推荐使用）
+
+        内置三重防护：
+        1. 互斥锁防击穿：热点 key 过期时只允许一个线程加载
+        2. 空值缓存防穿透：loader 返回 None 时用短 TTL 缓存
+        3. TTL 抖动防雪崩：set_cache 自动添加随机抖动
+
+        Args:
+            key: 缓存键
+            loader: 缓存未命中时的数据加载函数
+            ttl: 自定义 TTL（秒），None 时用默认策略
+
+        Returns:
+            缓存值或加载的值
+        """
+        # 1. 快速路径：查缓存（不加锁）
+        cached = cls._get_cache_entry(key)
+        if cached is not _CACHE_MISS:
+            return cached
+
+        # 2. 缓存未命中，加锁 + 双重检查（互斥锁防击穿）
+        with cls._cache_lock:
+            cached = cls._get_cache_entry(key)
+            if cached is not _CACHE_MISS:
+                return cached
+
+            # 在锁内加载数据，避免并发重复加载
+            value = loader()
+
+        # 3. 设缓存（在锁外，减少锁持有时间；set_cache 内部会加锁）
+        cls.set_cache(key, value, ttl)
+        return value
 
     @classmethod
     def clear_cache(cls, pattern: str = None) -> None:

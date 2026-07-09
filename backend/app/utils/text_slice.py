@@ -77,7 +77,8 @@ class TextSliceUtil:
                         'slice_type': 'paragraph_split',
                     })
                     slice_index += 1
-            
+                continue
+
             # 如果加上当前段落会超过最大长度，先保存当前切片
             elif current_length + para_length > max_length:
                 if current_slice:
@@ -352,7 +353,7 @@ class TextSliceUtil:
             content: 内容文本
             
         Returns:
-            MD5哈希值
+            内容哈希值（用于去重）
         """
         import hashlib
-        return hashlib.md5(content.encode('utf-8')).hexdigest()
+        return hashlib.md5(content.encode('utf-8'), usedforsecurity=False).hexdigest()

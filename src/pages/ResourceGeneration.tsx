@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import type { LearningResource } from '@/types'
 import { agentApi, configApi } from '@/api'
 import type { IndustryOption } from '@/api/config'
@@ -33,8 +34,9 @@ import {
   X,
   Building2,
 } from 'lucide-react'
-import LoadingState from '@/components/LoadingState'
 import EmptyState from '@/components/EmptyState'
+import { CardSkeleton } from '@/components/Skeleton'
+import { toast } from '@/components/toastStore'
 
 type ResourceType = 'guide' | 'lecture' | 'case' | 'quiz' | 'roadmap'
 
@@ -82,14 +84,22 @@ const stageToStepIndex: Record<string, number> = {
 }
 
 export default function ResourceGeneration() {
-  const learners = useStore((s) => s.learners)
-  const currentLearner = useStore((s) => s.currentLearner)
-  const setCurrentLearner = useStore((s) => s.setCurrentLearner)
-  const fetchLearners = useStore((s) => s.fetchLearners)
-  const resources = useStore((s) => s.resources)
-  const fetchResources = useStore((s) => s.fetchResources)
-  const resourceLoading = useStore((s) => s.resourceLoading)
-  const resourcesTotal = useStore((s) => s.resourcesTotal)
+  const { learners, currentLearner, resources, resourceLoading, resourcesTotal } = useStore(
+    useShallow((s) => ({
+      learners: s.learners,
+      currentLearner: s.currentLearner,
+      resources: s.resources,
+      resourceLoading: s.resourceLoading,
+      resourcesTotal: s.resourcesTotal,
+    }))
+  )
+  const { setCurrentLearner, fetchLearners, fetchResources } = useStore(
+    useShallow((s) => ({
+      setCurrentLearner: s.setCurrentLearner,
+      fetchLearners: s.fetchLearners,
+      fetchResources: s.fetchResources,
+    }))
+  )
 
   const [sseTaskId, setSseTaskId] = useState<number | null>(null)
   const [stageDescription, setStageDescription] = useState('')
@@ -254,6 +264,50 @@ export default function ResourceGeneration() {
     if (score >= SCORE_EXCELLENT_THRESHOLD) return 'text-success'
     if (score >= SCORE_GOOD_THRESHOLD) return 'text-amber-500'
     return 'text-danger'
+  }
+
+  const getResourceText = () => {
+    if (!selectedResource) return ''
+    return selectedResource.content || selectedResource.contentSummary || selectedResource.title
+  }
+
+  const handlePreview = () => {
+    if (!selectedResource) return
+    const text = getResourceText()
+    const isHtml = selectedResource.contentType === 'html'
+    const blob = new Blob([text], { type: isHtml ? 'text/html;charset=utf-8' : 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank')
+    setTimeout(() => URL.revokeObjectURL(url), 30000)
+  }
+
+  const handlePrint = () => {
+    if (!selectedResource) return
+    window.print()
+  }
+
+  const handleCopy = async () => {
+    if (!selectedResource) return
+    try {
+      await navigator.clipboard.writeText(getResourceText())
+      toast.success('已复制到剪贴板')
+    } catch {
+      toast.error('复制失败')
+    }
+  }
+
+  const handleExport = () => {
+    if (!selectedResource) return
+    const text = getResourceText()
+    const isHtml = selectedResource.contentType === 'html'
+    const blob = new Blob([text], { type: isHtml ? 'text/html;charset=utf-8' : 'text/plain;charset=utf-8' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = `${selectedResource.title || 'resource'}${isHtml ? '.html' : '.txt'}`
+    a.click()
+    URL.revokeObjectURL(url)
+    toast.success('资源已导出')
   }
 
   const renderResourceDetail = () => {
@@ -598,8 +652,12 @@ export default function ResourceGeneration() {
             </div>
             <div className="space-y-2 max-h-80 overflow-y-auto">
               {resourceLoading ? (
-                <div className="py-8 text-center">
-                  <LoadingState.Generating />
+                <div className="space-y-2">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <div key={i} className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 space-y-2">
+                      <CardSkeleton lines={2} />
+                    </div>
+                  ))}
                 </div>
               ) : filteredResources.length === 0 ? (
                 <div className="py-8 text-center text-sm text-text-tertiary">
@@ -691,7 +749,11 @@ export default function ResourceGeneration() {
             {/* 资源内容 */}
             <div className="p-5 min-h-[500px]">
               {resourceLoading ? (
-                <LoadingState.Generating />
+                <div className="space-y-4">
+                  <CardSkeleton lines={2} />
+                  <CardSkeleton lines={6} />
+                  <CardSkeleton lines={4} />
+                </div>
               ) : isGenerating && !selectedResource ? (
                 <div className="flex flex-col items-center justify-center h-full min-h-[400px]">
                   <div className="relative">
@@ -712,21 +774,21 @@ export default function ResourceGeneration() {
             <div className="p-4 border-t border-border bg-bg-secondary/20">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="sm" disabled={!selectedResource}>
+                  <Button variant="ghost" size="sm" disabled={!selectedResource} onClick={handlePreview}>
                     <Eye className="w-3.5 h-3.5" />
                     预览
                   </Button>
-                  <Button variant="ghost" size="sm" disabled={!selectedResource}>
+                  <Button variant="ghost" size="sm" disabled={!selectedResource} onClick={handlePrint}>
                     <Printer className="w-3.5 h-3.5" />
                     打印
                   </Button>
                 </div>
                 <div className="flex items-center gap-1">
-                  <Button variant="outline" size="sm" disabled={!selectedResource}>
+                  <Button variant="outline" size="sm" disabled={!selectedResource} onClick={handleCopy}>
                     <Copy className="w-3.5 h-3.5" />
                     复制
                   </Button>
-                  <Button variant="outline" size="sm" disabled={!selectedResource}>
+                  <Button variant="outline" size="sm" disabled={!selectedResource} onClick={handleExport}>
                     <Download className="w-3.5 h-3.5" />
                     导出
                   </Button>

@@ -1,0 +1,95 @@
+{{- if and .Values.argocd.syncHooks.enabled .Values.argocd.syncHooks.postSync.enabled -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "knowledge-system.fullname" . }}-postsync-healthcheck
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: healthcheck
+  annotations:
+    # ArgoCD sync hook：在主资源同步后执行
+    argocd.argoproj.io/hook: PostSync
+    argocd.argoproj.io/hook-delete-policy: {{ .Values.argocd.syncHooks.hookDeletePolicy | quote }}
+spec:
+  ttlSecondsAfterFinished: {{ .Values.argocd.syncHooks.ttlSecondsAfterFinished }}
+  backoffLimit: 2
+  template:
+    metadata:
+      labels:
+        {{- include "knowledge-system.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: healthcheck
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ include "knowledge-system.serviceAccountName" . }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: healthcheck
+          image: {{ include "knowledge-system.image" (list .Values.images.backend .Values.global) }}
+          imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
+          command: ["/bin/sh", "-c"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "knowledge-system.configMapName" . }}
+            - secretRef:
+                name: {{ include "knowledge-system.secretName" . }}
+          args:
+            - |
+              BACKEND_URL="http://{{ include "knowledge-system.backendServiceName" . }}:{{ .Values.backend.service.port }}"
+              HEALTH_PATH="{{ .Values.argocd.syncHooks.postSync.healthCheckPath }}"
+              SMOKE_PATH="{{ .Values.argocd.syncHooks.postSync.smokeTestPath }}"
+
+              echo "=========================================="
+              echo "  PostSync 健康检查"
+              echo "=========================================="
+              echo "后端地址: ${BACKEND_URL}"
+              echo ""
+
+              # 等待 backend 就绪（最长 120 秒）
+              echo "等待 backend 就绪..."
+              for i in $(seq 1 40); do
+                HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" "${BACKEND_URL}${HEALTH_PATH}" 2>/dev/null || echo "000")
+                if [ "$HTTP_CODE" = "200" ]; then
+                  echo "backend 就绪（HTTP 200）"
+                  break
+                fi
+                echo "等待中... ($i/40, HTTP $HTTP_CODE)"
+                sleep 3
+              done
+
+              # 最终健康检查
+              echo ""
+              echo "=== 1. 健康检查: ${HEALTH_PATH} ==="
+              HTTP_CODE=$(curl -s -o /tmp/health.json -w "%{http_code}" "${BACKEND_URL}${HEALTH_PATH}" 2>/dev/null || echo "000")
+              if [ "$HTTP_CODE" != "200" ]; then
+                echo "健康检查失败: HTTP $HTTP_CODE（期望 200）"
+                cat /tmp/health.json 2>/dev/null
+                exit 1
+              fi
+              echo "健康检查通过: HTTP 200"
+              cat /tmp/health.json | python -m json.tool 2>/dev/null || cat /tmp/health.json
+              echo ""
+
+              # 冒烟测试
+              echo "=== 2. 冒烟测试: ${SMOKE_PATH} ==="
+              HTTP_CODE=$(curl -s -o /tmp/smoke.json -w "%{http_code}" "${BACKEND_URL}${SMOKE_PATH}" 2>/dev/null || echo "000")
+              if [ "$HTTP_CODE" != "200" ]; then
+                echo "冒烟测试失败: HTTP $HTTP_CODE（期望 200）"
+                cat /tmp/smoke.json 2>/dev/null
+                exit 1
+              fi
+              echo "冒烟测试通过: HTTP 200"
+              cat /tmp/smoke.json | python -m json.tool 2>/dev/null || cat /tmp/smoke.json
+              echo ""
+
+              echo "=========================================="
+              echo "  所有检查通过！"
+              echo "=========================================="
+          {{- with .Values.podSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- include "knowledge-system.resources" .Values.argocd.syncHooks.postSync.resources | nindent 10 }}
+{{- end -}}

@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import type { LearnerProfile } from '@/types'
 import { configApi } from '@/api'
 import type { DesensitizationRule } from '@/api/config'
@@ -34,9 +35,9 @@ import {
   ChevronRight,
   Trash2,
 } from 'lucide-react'
-import LoadingState from '@/components/LoadingState'
 import EmptyState from '@/components/EmptyState'
 import ErrorState from '@/components/ErrorState'
+import { PageSkeleton } from '@/components/Skeleton'
 
 const educationOptions = [
   { value: '高中', label: '高中' },
@@ -189,13 +190,13 @@ function LearnerCard({
             <span className="text-xs text-text-secondary">先验能力底盘</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex-1 h-2 bg-gray-100 rounded-full overflow-hidden">
+            <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-500 bg-primary"
                 style={{ width: `${avgAbility}%` }}
               />
             </div>
-            <span className="text-sm font-semibold text-primary">{avgAbility}</span>
+            <span className="text-sm font-semibold text-primary">{avgAbility.toFixed(2)}</span>
           </div>
         </div>
         <div>
@@ -394,7 +395,7 @@ function EditModal({
                     max="100"
                     value={formData[dim.key as keyof typeof formData] as number}
                     onChange={(e) => setFormData({ ...formData, [dim.key]: Number(e.target.value) })}
-                    className="w-full h-1.5 bg-gray-200 rounded-full appearance-none cursor-pointer accent-primary"
+                    className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full appearance-none cursor-pointer accent-primary"
                   />
                 </div>
               ))}
@@ -568,16 +569,24 @@ function Pagination({
 }
 
 export default function LearnerProfilePage() {
-  const learners = useStore((s) => s.learners)
-  const learnerLoading = useStore((s) => s.learnerLoading)
-  const learnersLoading = useStore((s) => s.learnersLoading)
-  const pagination = useStore((s) => s.pagination)
-  const fetchLearners = useStore((s) => s.fetchLearners)
-  const addLearner = useStore((s) => s.addLearner)
-  const updateLearner = useStore((s) => s.updateLearner)
-  const deleteLearner = useStore((s) => s.deleteLearner)
-  const currentLearner = useStore((s) => s.currentLearner)
-  const setCurrentLearner = useStore((s) => s.setCurrentLearner)
+  const { learners, learnerLoading, learnersLoading, pagination, currentLearner } = useStore(
+    useShallow((s) => ({
+      learners: s.learners,
+      learnerLoading: s.learnerLoading,
+      learnersLoading: s.learnersLoading,
+      pagination: s.pagination,
+      currentLearner: s.currentLearner,
+    }))
+  )
+  const { fetchLearners, addLearner, updateLearner, deleteLearner, setCurrentLearner } = useStore(
+    useShallow((s) => ({
+      fetchLearners: s.fetchLearners,
+      addLearner: s.addLearner,
+      updateLearner: s.updateLearner,
+      deleteLearner: s.deleteLearner,
+      setCurrentLearner: s.setCurrentLearner,
+    }))
+  )
   const [searchQuery, setSearchQuery] = useState('')
   const [showEditModal, setShowEditModal] = useState(false)
   const [showDesensitization, setShowDesensitization] = useState(false)
@@ -670,7 +679,7 @@ export default function LearnerProfilePage() {
     }
   }
 
-  if (loading && learners.length === 0) return <LoadingState.Analyzing />
+  if (loading && learners.length === 0) return <PageSkeleton type="table" />
   if (error) return <ErrorState type="default" onRetry={() => { setError(null); fetchLearners({ page: currentPage, pageSize: pagination.pageSize }) }} />
 
   const currentRadarData = currentLearner ? getRadarData(currentLearner) : []
@@ -770,13 +779,13 @@ export default function LearnerProfilePage() {
                       综合能力评分
                     </h4>
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="flex-1 h-3 bg-gray-100 rounded-full overflow-hidden">
+                      <div className="flex-1 h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                         <div
                           className="h-full rounded-full bg-primary transition-all duration-500"
                           style={{ width: `${currentAvgAbility}%` }}
                         />
                       </div>
-                      <span className="text-lg font-bold text-primary">{currentAvgAbility}</span>
+                      <span className="text-lg font-bold text-primary">{currentAvgAbility.toFixed(2)}</span>
                     </div>
                     <RadarChartCard data={currentRadarData} />
                   </div>
@@ -791,7 +800,7 @@ export default function LearnerProfilePage() {
                         <div key={dim.subject} className="flex items-center justify-between">
                           <span className="text-xs text-text-secondary">{dim.subject}</span>
                           <div className="flex items-center gap-2">
-                            <div className="w-24 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="w-24 h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                               <div
                                 className={`h-full rounded-full ${dim.score >= SCORE_EXCELLENT_THRESHOLD ? 'bg-success' : dim.score >= SCORE_GOOD_THRESHOLD ? 'bg-primary' : 'bg-amber-500'}`}
                                 style={{ width: `${dim.score}%` }}
@@ -836,7 +845,7 @@ export default function LearnerProfilePage() {
               </>
             ) : (
               <div className="p-8 text-center">
-                <div className="w-14 h-14 rounded-full bg-gray-100 flex items-center justify-center mx-auto mb-3">
+                <div className="w-14 h-14 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-3">
                   <GraduationCap className="w-7 h-7 text-text-tertiary" />
                 </div>
                 <p className="text-text-secondary">选择学习者查看详情</p>

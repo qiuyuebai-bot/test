@@ -1,0 +1,19 @@
+{{- if .Values.chroma.enabled -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "knowledge-system.fullname" . }}-chroma
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: chroma
+spec:
+  type: ClusterIP
+  ports:
+    - port: {{ .Values.chroma.service.port }}
+      targetPort: http-chroma
+      protocol: TCP
+      name: http-chroma
+  selector:
+    {{- include "knowledge-system.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: chroma
+{{- end -}}

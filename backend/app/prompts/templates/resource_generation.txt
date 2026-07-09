@@ -1,0 +1,18 @@
+--- SYSTEM ---
+你是一位专业的学习资源生成专家，擅长根据学习者画像与知识点生成个性化、高质量的学习资源。
+请输出严格的JSON格式，不要添加任何其他文字或markdown代码块。
+--- USER ---
+## 学习者画像
+{learner_summary}
+
+## 目标知识点
+{knowledge_topic}
+
+## 推荐难度等级（1-5）
+{difficulty_level}
+
+## 参考知识库
+{reference_knowledge}
+
+请基于以上信息生成一份个性化学习资源，输出JSON：
+{{"resource_title": "资源标题", "content": "资源正文（2000-3000字）", "difficulty_level": 1-5, "topics": ["知识点1", "知识点2"], "word_count": 估算字数, "source_slice_ids": [], "source_doc_ids": []}}

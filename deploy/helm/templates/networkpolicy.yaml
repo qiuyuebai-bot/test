@@ -1,0 +1,162 @@
+{{- if .Values.networkPolicy.enabled -}}
+# ===========================================
+# NetworkPolicy: 限制服务间通信
+# 默认拒绝所有入站流量，按需放行
+# ===========================================
+
+# ---- 默认拒绝所有入站 ----
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "knowledge-system.fullname" . }}-default-deny
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+---
+# ---- backend: 允许 frontend + Ingress + 同 namespace ----
+{{- if .Values.backend.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "knowledge-system.backendServiceName" . }}-allow
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "knowledge-system.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  policyTypes:
+    - Ingress
+  ingress:
+    # 允许 frontend 访问 backend
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "knowledge-system.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: frontend
+      ports:
+        - protocol: TCP
+          port: 8000
+    # 允许 Ingress namespace 流量（nginx-ingress-controller）
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8000
+    # 允许同 namespace 内 Prometheus 抓取 metrics
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 8000
+{{- end }}
+---
+# ---- postgres: 仅允许 backend + celery-worker 访问 ----
+{{- if and .Values.postgresql.enabled (not .Values.postgresql.external.enabled) }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "knowledge-system.postgresServiceName" . }}-allow
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "knowledge-system.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: postgres
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "knowledge-system.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: backend
+        {{- if .Values.celeryWorker.enabled }}
+        - podSelector:
+            matchLabels:
+              {{- include "knowledge-system.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: celery-worker
+        {{- end }}
+        {{- if .Values.backup.enabled }}
+        - podSelector:
+            matchLabels:
+              {{- include "knowledge-system.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: backup
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 5432
+{{- end }}
+---
+# ---- redis: 仅允许 backend + celery-worker 访问 ----
+{{- if and .Values.redis.enabled (not .Values.redis.external.enabled) }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "knowledge-system.redisServiceName" . }}-allow
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "knowledge-system.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: redis
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "knowledge-system.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: backend
+        {{- if .Values.celeryWorker.enabled }}
+        - podSelector:
+            matchLabels:
+              {{- include "knowledge-system.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: celery-worker
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 6379
+{{- end }}
+---
+# ---- chroma: 仅允许 backend 访问 ----
+{{- if .Values.chroma.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "knowledge-system.fullname" . }}-chroma-allow
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "knowledge-system.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: chroma
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "knowledge-system.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: backend
+      ports:
+        - protocol: TCP
+          port: 8000
+{{- end }}
+{{- end -}}

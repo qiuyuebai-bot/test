@@ -1,0 +1,597 @@
+# ===========================================
+# 领域知识个性化生成与多智能体协同决策系统
+# Helm Chart 默认配置（开发环境基准）
+# 多环境覆盖：values-dev.yaml / values-staging.yaml / values-prod.yaml
+# ===========================================
+
+# ---- 全局参数 ----
+global:
+  # 镜像仓库与命名空间（生产环境替换为云仓库地址）
+  imageRegistry: ""
+  imagePullSecrets: []
+  # 存储类（默认使用集群默认 StorageClass；生产建议指定 fast SSD 类）
+  storageClass: ""
+  # 命名空间后缀（留空则按 release 部署）
+  namespaceSuffix: ""
+  # 应用版本标签
+  appVersion: "1.0.0"
+
+# ---- 镜像配置 ----
+images:
+  frontend:
+    repository: knowledge-frontend
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent
+  backend:
+    repository: knowledge-backend
+    tag: "1.0.0"
+    pullPolicy: IfNotPresent
+  postgres:
+    repository: postgres
+    tag: "16-alpine"
+    pullPolicy: IfNotPresent
+  redis:
+    repository: redis
+    tag: "7-alpine"
+    pullPolicy: IfNotPresent
+  backup:
+    repository: python
+    tag: "3.11-slim"
+    pullPolicy: IfNotPresent
+
+# ---- 命名与标签 ----
+nameOverride: ""
+fullnameOverride: ""
+
+# ---- 部署策略（蓝绿发布用） ----
+deployment:
+  slot: ""  # 蓝绿发布 slot 标签：blue / green，留空表示不启用蓝绿
+
+# ---- 前端服务 ----
+frontend:
+  enabled: true
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 80
+  # Nginx 静态文件服务，无外部配置
+  config: {}
+  # 健康检查
+  livenessProbe:
+    httpGet:
+      path: /
+      port: http
+    initialDelaySeconds: 10
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  # startupProbe（frontend 启动较快，最多等待 1 分钟）
+  startupProbe:
+    httpGet:
+      path: /
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 12
+  # 优雅关闭：preStop hook 让 LB/ingress 摘除流量后再发 SIGTERM
+  lifecycle:
+    preStop:
+      enabled: true
+      exec:
+        command:
+          - /bin/sh
+          - -c
+          - "sleep 10"
+  # HPA 配置（阶段 2 启用）
+  hpa:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 5
+    targetCPUUtilizationPercentage: 70
+
+# ---- 后端 API 服务 ----
+backend:
+  enabled: true
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi  # FastAPI + SQLAlchemy + httpx + LLM 响应缓存
+  service:
+    type: ClusterIP
+    port: 8000
+    targetPort: 8000
+  # 启动命令（与 Dockerfile CMD 一致）
+  command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+  # uvicorn workers 数（留空则单进程；生产可设为 2-4）
+  workers: 1
+  # 健康检查（后端已实现 /health/live 与 /health/ready）
+  livenessProbe:
+    httpGet:
+      path: /health/live
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 30
+    timeoutSeconds: 10
+    failureThreshold: 3
+  readinessProbe:
+    httpGet:
+      path: /health/ready
+      port: http
+    initialDelaySeconds: 15
+    periodSeconds: 15
+    timeoutSeconds: 10
+    failureThreshold: 3
+  # startupProbe（针对慢启动：backend 需执行 alembic 迁移 + 模型加载）
+  # 启动阶段失败次数上限 30 * period 10s = 最多等待 5 分钟
+  startupProbe:
+    httpGet:
+      path: /health/live
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 30
+  # 优雅关闭：preStop hook 让 LB/ingress 摘除流量后再发 SIGTERM
+  lifecycle:
+    preStop:
+      enabled: true
+      exec:
+        command:
+          - /bin/sh
+          - -c
+          - "sleep 15"
+  # HPA 配置
+  hpa:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  # 后端额外环境变量（除 ConfigMap/Secret 外的自定义项）
+  extraEnv: []
+  # - name: EXTRA_VAR
+  #   value: "extra-value"
+
+# ---- PostgreSQL 数据库 ----
+postgresql:
+  enabled: true
+  # 生产环境强烈建议使用云 RDS（置为 false 后通过外部连接配置接入）
+  external:
+    enabled: false
+    host: ""
+    port: 5432
+    username: ""
+    existingSecret: ""
+    secretKey: password
+    database: knowledge_system
+  # 自建 PostgreSQL StatefulSet
+  image:
+    repository: postgres
+    tag: "16-alpine"
+  auth:
+    username: postgres
+    password: "ChangeMeInProduction"  # 生产环境务必通过 Secret 覆盖
+    database: knowledge_system
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 20Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  service:
+    type: ClusterIP
+    port: 5432
+
+# ---- Redis 缓存 ----
+redis:
+  enabled: true
+  external:
+    enabled: false
+    host: ""
+    port: 6379
+    password: ""
+  image:
+    repository: redis
+    tag: "7-alpine"
+  auth:
+    enabled: false
+    password: ""
+  persistence:
+    enabled: true
+    storageClass: ""
+    accessModes:
+      - ReadWriteOnce
+    size: 5Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  service:
+    type: ClusterIP
+    port: 6379
+  # 持久化配置（与 docker-compose 一致：开启 AOF）
+  args: ["redis-server", "--appendonly", "yes"]
+
+# ---- Celery Worker（异步任务） ----
+celeryWorker:
+  enabled: false  # 默认关闭，完整模式启用
+  replicaCount: 2
+  command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info", "--concurrency=2"]
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi  # Celery 任务执行 LLM 调用与数据处理
+  hpa:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+
+# ---- Chroma 向量库 ----
+chroma:
+  enabled: false  # 默认关闭，完整模式启用
+  image:
+    repository: chromadb/chroma
+    tag: latest
+    pullPolicy: IfNotPresent
+  persistence:
+    enabled: true
+    size: 20Gi
+  service:
+    port: 8000
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 1Gi
+  env:
+    isPersistent: "TRUE"
+    anonymizedTelemetry: "FALSE"
+
+# ---- 数据备份 CronJob ----
+backup:
+  enabled: false  # 默认关闭，完整模式启用
+  schedule: "0 18 * * *"  # UTC 18:00 = 北京时间 02:00
+  # 镜像复用 images.postgres（内置 pg_dump，无需运行时 pip install）
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+  # 备份保留策略
+  retention:
+    days: 7
+  # 备份存储 PVC
+  persistence:
+    enabled: true
+    size: 10Gi
+
+# ---- Velero 备份与恢复（阶段 8） ----
+# 需要集群已安装 Velero（kubectl apply -f https://github.com/vmware-tanzu/velero/releases）
+velero:
+  enabled: false  # 默认关闭，需要集群已安装 Velero controller
+  schedule: "0 2 * * *"  # 每天凌晨 2 点全量备份
+  ttl: "168h"  # 备份保留 7 天（168 小时）
+
+  # 主备份存储位置（对象存储）
+  backupStorageLocation:
+    provider: aws  # aws（兼容 S3 协议：阿里云 OSS、AWS S3、MinIO）
+    bucket: ""  # 对象存储 bucket 名
+    prefix: "knowledge-system"  # bucket 内前缀路径
+    region: "cn-hangzhou"  # 对象存储区域
+    endpoint: ""  # S3 兼容端点（阿里云 OSS: https://oss-cn-hangzhou.aliyuncs.com）
+    s3ForcePathStyle: false  # MinIO 等需设为 true
+    accessKey: ""  # 访问密钥（生产环境通过 --set 注入或使用 existingCredential）
+    secretKey: ""  # 密钥
+    existingCredential: ""  # 使用已有 Secret（生产推荐）
+
+  # 存储快照位置（云厂商块存储快照）
+  volumeSnapshotLocation:
+    provider: aws
+    region: "cn-hangzhou"
+    enabled: true  # 是否启用卷快照（需要云厂商 CSI 驱动支持）
+
+  # 跨区域备份复制（阶段 8.6）
+  replication:
+    enabled: false  # 默认关闭，生产环境建议启用异地备份
+    provider: aws
+    bucket: ""
+    prefix: "knowledge-system-replica"
+    region: "cn-shanghai"  # 异地 region（与主存储不同）
+    endpoint: ""
+    accessKey: ""
+    secretKey: ""
+    existingCredential: ""
+
+# ---- 监控告警（阶段 4） ----
+monitoring:
+  # Prometheus ServiceMonitor：自动发现 backend /metrics 端点
+  serviceMonitor:
+    enabled: false  # 默认关闭，需要集群已安装 kube-prometheus-stack
+    namespace: monitoring  # ServiceMonitor 部署到 monitoring namespace
+    interval: 30s
+    scrapeTimeout: 10s
+    path: /metrics
+
+  # PrometheusRule 告警规则
+  prometheusRule:
+    enabled: false  # 默认关闭，需要集群已安装 kube-prometheus-stack
+    namespace: monitoring
+
+  # Grafana Dashboard ConfigMap
+  grafanaDashboard:
+    enabled: false  # 默认关闭，需要集群已安装 kube-prometheus-stack (含 Grafana)
+    namespace: monitoring
+
+  # Alertmanager 通知配置（钉钉/企业微信/邮件）
+  alertmanager:
+    enabled: false  # 默认关闭
+    namespace: monitoring
+    # 通知渠道：dingtalk | wechat | email | slack
+    channel: dingtalk
+    # webhook URL（敏感，生产环境通过 --set 注入或使用 existingSecret）
+    webhookUrl: ""
+    # 邮件配置（仅 channel=email 时使用）
+    smtp:
+      from: ""
+      smarthost: ""
+      authUsername: ""
+      authPassword: ""
+
+# ---- 数据库迁移 Job（阶段 3） ----
+migration:
+  enabled: true  # 启用 helm hook 自动迁移
+  # Alembic 迁移命令：upgraded 到最新 head
+  command: ["alembic", "upgrade", "head"]
+  # 是否同时初始化默认管理员账户（post-install hook）
+  seedAdmin: true
+  # 回滚版本数（post-rollback hook，-1 表示回退到上一版本，"base" 表示回退到初始）
+  rollbackRevision: "-1"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  # Job 完成后保留时间（便于查看日志）：0=立即删除，1=保留 1 小时
+  ttlSecondsAfterFinished: 3600
+  # 失败重试次数
+  backoffLimit: 3
+
+# ---- ArgoCD sync hook（阶段 5） ----
+argocd:
+  syncHooks:
+    enabled: false  # 默认关闭，仅 ArgoCD 管理时启用
+    # PreSync hook：在主资源同步前运行 alembic 迁移
+    preSync:
+      enabled: true
+      command: ["alembic", "upgrade", "head"]
+      resources:
+        requests: {cpu: 100m, memory: 128Mi}
+        limits: {cpu: 500m, memory: 512Mi}
+    # PostSync hook：在主资源同步后运行健康检查 + 冒烟测试
+    postSync:
+      enabled: true
+      # 健康检查端点路径（域名由模板自动拼接 release-backend:8000）
+      healthCheckPath: "/health/ready"
+      # 冒烟测试路径
+      smokeTestPath: "/api/v1/info"
+      resources:
+        requests: {cpu: 50m, memory: 64Mi}
+        limits: {cpu: 200m, memory: 256Mi}
+    # hook 删除策略：HookSucceeded | HookFailed | BeforeHookCreation
+    hookDeletePolicy: HookSucceeded
+    # hook 完成后保留时间（秒）
+    ttlSecondsAfterFinished: 3600
+
+# ---- Argo Rollouts 自动回滚（阶段 5） ----
+# 需要集群已安装 Argo Rollouts controller（kubectl apply -f https://github.com/argoproj/argo-rollouts/manifests/install.yaml）
+rollouts:
+  enabled: false  # 默认关闭，启用后将用 Rollout CRD 替代 backend Deployment
+  # 金丝雀策略
+  strategy: canary
+  canary:
+    # 渐进式流量切分步骤（setWeight=流量百分比，pause=暂停秒数）
+    steps:
+      - setWeight: 20
+      - pause: { duration: 30s }
+      - setWeight: 40
+      - pause: { duration: 30s }
+      - setWeight: 60
+      - pause: { duration: 30s }
+      - setWeight: 80
+      - pause: { duration: 30s }
+    # 基于指标的自动分析（失败则自动回滚）
+    analysis:
+      enabled: true
+      # Prometheus 查询地址（Rollout AnalysisTemplate 使用）
+      prometheusAddress: "http://prometheus-server.monitoring.svc.cluster.local:9090"
+      metrics:
+        # 5xx 错误率阈值（>5% 触发回滚）
+        - name: error-rate
+          query: "sum(rate(http_requests_total{status_code=~\"5..\"}[2m])) / clamp_min(sum(rate(http_requests_total[2m])), 1)"
+          threshold: "0.05"
+        # P99 延迟阈值（>2s 触发回滚）
+        - name: p99-latency
+          query: "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[2m])) by (le))"
+          threshold: "2"
+
+# ---- Ingress 配置 ----
+ingress:
+  enabled: false  # 默认关闭，按需启用
+  className: nginx
+  annotations: {}
+    # kubernetes.io/tls-acme: "true"
+    # cert-manager.io/cluster-issuer: letsencrypt-prod
+  hosts:
+    - host: knowledge-system.local
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+        - path: /api
+          pathType: Prefix
+          service: backend
+        - path: /docs
+          pathType: Prefix
+          service: backend
+        - path: /health
+          pathType: Prefix
+          service: backend
+        - path: /metrics
+          pathType: Prefix
+          service: backend
+  tls: []
+    # - secretName: knowledge-system-tls
+    #   hosts:
+    #     - knowledge-system.example.com
+
+# ---- 应用配置（注入 ConfigMap） ----
+appConfig:
+  APP_NAME: "领域知识个性化生成与多智能体协同决策系统"
+  APP_VERSION: "1.0.0"
+  API_PREFIX: "/api/v1"
+  DEBUG_MODE: "false"
+  # 数据库连接（默认指向集群内 postgres Service）
+  DATABASE_URL: "postgresql://postgres:ChangeMeInProduction@knowledge-system-postgres:5432/knowledge_system"
+  DATABASE_POOL_SIZE: "10"
+  DATABASE_MAX_OVERFLOW: "20"
+  # Redis 连接（默认指向集群内 redis Service）
+  REDIS_URL: "redis://knowledge-system-redis:6379/0"
+  CELERY_BROKER_URL: "redis://knowledge-system-redis:6379/1"
+  CELERY_RESULT_BACKEND: "redis://knowledge-system-redis:6379/2"
+  # Chroma 向量库
+  CHROMA_DB_PATH: "/app/data/chroma_db"
+  CHROMA_COLLECTION_NAME: "knowledge_slices"
+  # 文件存储路径（容器内固定路径，通过 PVC 持久化）
+  UPLOAD_DIR: "/app/data/uploads"
+  KNOWLEDGE_DOC_DIR: "/app/data/knowledge_docs"
+  RESOURCE_OUTPUT_DIR: "/app/data/resources"
+  LOG_DIR: "/app/logs"
+  # 大模型配置（敏感信息走 Secret）
+  OPENAI_API_BASE: "https://api.openai.com/v1"
+  OPENAI_MODEL_NAME: "gpt-4-turbo-preview"
+  OPENAI_TEMPERATURE: "0.7"
+  OPENAI_MAX_TOKENS: "4096"
+  # JWT 配置
+  JWT_ALGORITHM: "HS256"
+  JWT_EXPIRE_MINUTES: "60"
+  # 脱敏配置
+  ANONYMIZE_NAME: "true"
+  ANONYMIZE_PHONE: "true"
+  ANONYMIZE_ID_CARD: "true"
+  ANONYMIZE_ADDRESS: "true"
+  # 指标计算阈值
+  HALLUCINATION_THRESHOLD: "5.0"
+  MATCH_ACCURACY_THRESHOLD: "90.0"
+  KNOWLEDGE_COVERAGE_THRESHOLD: "95.0"
+  # CORS 配置（生产环境应限制具体域名）
+  CORS_ORIGINS: "*"
+  CORS_ALLOW_CREDENTIALS: "true"
+
+# ---- 敏感配置（注入 Secret） ----
+secrets:
+  # 是否使用外部已存在的 Secret（生产推荐）
+  existingSecret: ""
+  # 内置 Secret 数据（base64 编码由 Helm 自动处理，这里写明文）
+  data:
+    SECRET_KEY: "change-me-in-production-please-use-a-long-random-string"
+    OPENAI_API_KEY: "sk-your-api-key-here"
+    DEFAULT_ADMIN_PASSWORD: "admin123"
+    POSTGRES_PASSWORD: "ChangeMeInProduction"
+    REDIS_PASSWORD: ""
+
+# ---- 资源调度 ----
+nodeSelector: {}
+affinity: {}
+tolerations: {}
+
+# ---- Pod 反亲和与跨节点分布（阶段 2） ----
+podAntiAffinity:
+  enabled: true  # 默认开启，确保多副本 Pod 跨节点分布
+  # 软策略：preferredDuringSchedulingIgnoredDuringExecution（不强制）
+  # 硬策略：requiredDuringSchedulingIgnoredDuringExecution（强制跨节点）
+  type: "preferred"  # preferred | required
+  topologyKey: "kubernetes.io/hostname"
+
+topologySpreadConstraints:
+  enabled: true  # 跨 zone/region 均匀分布
+  maxSkew: 1
+  topologyKey: "topology.kubernetes.io/zone"
+  whenUnsatisfiable: "ScheduleAnyway"  # DoNotSchedule | ScheduleAnyway
+
+# ---- PodDisruptionBudget（阶段 2） ----
+podDisruptionBudget:
+  enabled: true  # 默认开启，保证节点维护时最少副本数
+  minAvailable: 1  # 最少保持 1 个 Pod 可用
+
+# ---- NetworkPolicy 网络隔离（阶段 2） ----
+networkPolicy:
+  enabled: false  # 默认关闭（需要 CNI 支持，如 Calico/Cilium）
+  # 启用后将限制：仅 frontend→backend→postgres/redis/chroma 的通信
+
+# ---- Celery Worker HPA（阶段 2） ----
+# celeryWorker.hpa 需要在 celeryWorker 段下配置，见下方注释
+
+# ---- Pod 安全 ----
+podSecurityContext:
+  fsGroup: 1000
+  runAsUser: 1000
+  runAsGroup: 1000
+  runAsNonRoot: true
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false  # FastAPI/Nginx 需要写临时文件
+  runAsNonRoot: true
+  runAsUser: 1000
+
+# ---- 服务账号 ----
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# ---- Pod 优雅关闭 ----
+terminationGracePeriodSeconds: 60

@@ -1,0 +1,307 @@
+name: Docker Images
+
+on:
+  push:
+    branches: [main, develop, 'feature/**']
+    tags: ['v*.*.*']
+    paths:
+      - 'Dockerfile'
+      - 'backend/Dockerfile'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'backend/requirements.txt'
+      - 'src/**'
+      - 'backend/app/**'
+      - 'deploy/nginx/**'
+      - '.github/workflows/docker-images.yml'
+  workflow_dispatch:
+    inputs:
+      reason:
+        description: 'Manual build reason'
+        required: false
+        default: 'manual'
+
+env:
+  REGISTRY: ghcr.io
+  FRONTEND_IMAGE: ${{ github.repository }}-frontend
+  BACKEND_IMAGE: ${{ github.repository }}-backend
+
+permissions:
+  contents: read
+  packages: write
+  security-events: write
+  id-token: write
+
+jobs:
+  build-frontend:
+    name: Build & Push Frontend Image
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.version }}
+      image-digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=main-,format=short
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=ref,event=branch
+
+      - name: Build & Push
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: ./Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=frontend
+          cache-to: type=gha,mode=max,scope=frontend
+          build-args: |
+            CACHEBUST=${{ github.sha }}
+            VITE_MODE=${{ github.ref == 'refs/heads/main' && 'production' || github.ref == 'refs/heads/develop' && 'staging' || 'development' }}
+
+  build-backend:
+    name: Build & Push Backend Image
+    runs-on: ubuntu-latest
+    outputs:
+      image-tag: ${{ steps.meta.outputs.version }}
+      image-digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}
+          tags: |
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=sha,prefix=main-,format=short
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=ref,event=branch
+
+      - name: Build & Push
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./backend
+          file: ./backend/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=backend
+          cache-to: type=gha,mode=max,scope=backend
+          build-args: |
+            CACHEBUST=${{ github.sha }}
+
+  scan-frontend:
+    name: Trivy Scan Frontend
+    needs: build-frontend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trivy Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}:${{ needs.build-frontend.outputs.image-tag }}
+          format: sarif
+          output: trivy-frontend.sarif
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-frontend.sarif
+          category: trivy-frontend
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-frontend-report
+          path: trivy-frontend.sarif
+
+  scan-backend:
+    name: Trivy Scan Backend
+    needs: build-backend
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trivy Scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}:${{ needs.build-backend.outputs.image-tag }}
+          format: sarif
+          output: trivy-backend.sarif
+          severity: HIGH,CRITICAL
+          exit-code: '1'
+          ignore-unfixed: true
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-backend.sarif
+          category: trivy-backend
+
+      - name: Upload report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: trivy-backend-report
+          path: trivy-backend.sarif
+
+  sign-images:
+    name: Cosign Sign Images
+    needs: [build-frontend, build-backend]
+    runs-on: ubuntu-latest
+    if: ${{ vars.COSIGN_ENABLED == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.2.4'
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Sign frontend image (keyless)
+        env:
+          COSIGN_EXPERIMENTAL: '1'
+        run: |
+          cosign sign --yes ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE }}@${{ needs.build-frontend.outputs.image-digest }}
+
+      - name: Sign backend image (keyless)
+        env:
+          COSIGN_EXPERIMENTAL: '1'
+        run: |
+          cosign sign --yes ${{ env.REGISTRY }}/${{ env.BACKEND_IMAGE }}@${{ needs.build-backend.outputs.image-digest }}
+
+  update-helm-values:
+    name: Update Helm Values Image Tag
+    needs: [build-frontend, build-backend, scan-frontend, scan-backend]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GHCR_BOT_TOKEN || secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+
+      - name: Configure git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Install yq
+        run: |
+          wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+          chmod +x /usr/local/bin/yq
+
+      - name: Update values.yaml image tags
+        run: |
+          FRONTEND_TAG="${{ needs.build-frontend.outputs.image-tag }}"
+          BACKEND_TAG="${{ needs.build-backend.outputs.image-tag }}"
+
+          echo "Updating frontend tag to: ${FRONTEND_TAG}"
+          echo "Updating backend tag to: ${BACKEND_TAG}"
+
+          yq -i ".images.frontend.tag = \"${FRONTEND_TAG}\"" deploy/helm/values.yaml
+          yq -i ".images.backend.tag = \"${BACKEND_TAG}\"" deploy/helm/values.yaml
+
+          git diff deploy/helm/values.yaml
+
+      - name: Commit changes
+        run: |
+          git add deploy/helm/values.yaml
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "chore(helm): update image tags to frontend=${{ needs.build-frontend.outputs.image-tag }}, backend=${{ needs.build-backend.outputs.image-tag }}"
+            git push
+            echo "Pushed Helm values update"
+          fi
+
+  notify-argocd:
+    name: Trigger ArgoCD Sync
+    needs: update-helm-values
+    runs-on: ubuntu-latest
+    if: ${{ success() && vars.ARGOCD_API_URL != '' }}
+    steps:
+      - name: Refresh ArgoCD Application
+        env:
+          ARGOCD_API_URL: ${{ vars.ARGOCD_API_URL }}
+          ARGOCD_TOKEN: ${{ secrets.ARGOCD_TOKEN }}
+          APP_NAME: ${{ vars.ARGOCD_APP_NAME || 'knowledge-system' }}
+        run: |
+          if [ -z "$ARGOCD_TOKEN" ]; then
+            echo "ARGOCD_TOKEN not configured, skipping sync trigger"
+            exit 0
+          fi
+          echo "Triggering ArgoCD refresh for: ${APP_NAME}"
+          curl -X POST \
+            -H "Authorization: Bearer ${ARGOCD_TOKEN}" \
+            -H "Content-Type: application/json" \
+            "${ARGOCD_API_URL}/api/v1/applications/${APP_NAME}?refresh=true" \
+            --fail-with-body
+          echo "ArgoCD sync triggered successfully"
+
+  deploy:
+    name: Deploy to Kubernetes
+    needs: [build-frontend, build-backend, scan-frontend, scan-backend]
+    uses: ./.github/workflows/deploy.yml
+    if: github.event_name == 'push'
+    with:
+      image-tag: ${{ needs.build-backend.outputs.image-tag }}
+      environment: ${{ github.ref == 'refs/heads/main' && 'production' || github.ref == 'refs/heads/develop' && 'staging' || 'development' }}
+      image-digest: ${{ needs.build-backend.outputs.image-digest }}
+    secrets: inherit

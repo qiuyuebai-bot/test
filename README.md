@@ -12,7 +12,7 @@
 | 缓存/队列 | Redis + Celery |
 | 向量库 | ChromaDB |
 | 大模型 | OpenAI API（兼容接口） |
-| 部署 | Docker + Docker Compose + Nginx |
+| 部署 | Docker Compose（开发） / Kubernetes + Helm（生产） / Nginx |
 
 ## 项目结构
 
@@ -248,6 +248,87 @@ pip install ruff
 ruff check backend/app
 ruff format backend/app
 ```
+
+### 方式四：K8s 部署（生产推荐）
+
+项目提供完整的 Helm Chart，支持多环境（dev/staging/prod）一键部署到 Kubernetes 集群，含监控告警、备份恢复、蓝绿/金丝雀发布等生产级能力。
+
+#### 前置要求
+
+- K8s 集群 1.26+（云厂商托管 ACK/TKE 或自建）
+- Helm 3.10+、kubectl 已配置
+- 容器镜像仓库（阿里云 ACR / Docker Hub / Harbor）
+- 域名 + TLS 证书（生产）
+
+#### 快速部署
+
+```bash
+# 1. 部署到开发环境（minikube/kind）
+helm install knowledge-system ./deploy/helm \
+  -f deploy/helm/values-dev.yaml \
+  -n knowledge-dev --create-namespace
+
+# 2. 部署到生产环境
+helm install knowledge-system ./deploy/helm \
+  -f deploy/helm/values-prod.yaml \
+  -n knowledge-prod --create-namespace
+
+# 3. 查看部署状态
+kubectl get pods -n knowledge-prod -w
+```
+
+#### 核心能力
+
+| 能力 | 说明 |
+|------|------|
+| 多环境配置 | dev/staging/prod 三套 values，差异化资源配置 |
+| 自动扩缩 | HPA 基于 CPU 自动扩缩容（backend 2-10 副本） |
+| 数据库迁移 | helm hook 自动执行 Alembic 迁移（pre-install/pre-upgrade） |
+| 监控告警 | Prometheus + Grafana + Alertmanager（10 条告警规则 + 3 个 Dashboard） |
+| 蓝绿/金丝雀发布 | 零停机发布、渐进切流、秒级回滚 |
+| 备份恢复 | PostgreSQL 每日备份 + Velero PVC 快照 + 跨区域复制 |
+| 自我修复 | startupProbe + livenessProbe + OOM 调优 + LLM 熔断器 |
+| GitOps | ArgoCD 自动同步 + Argo Rollouts 指标驱动回滚 |
+
+#### 运维文档索引
+
+详细的 K8s 部署与运维文档位于 `docs/ops/` 目录：
+
+| 文档 | 说明 |
+|------|------|
+| [部署运维手册](docs/ops/DEPLOYMENT_GUIDE.md) | 集群前置条件、首次部署、多环境配置、升级扩容、日常运维 |
+| [故障处理指南](docs/ops/TROUBLESHOOTING.md) | 12 类常见故障的排查步骤与解决方案 |
+| [发布操作手册](docs/ops/RELEASE_SOP.md) | 蓝绿/金丝雀/回滚 SOP、Argo Rollouts 自动化 |
+| [备份恢复手册](docs/ops/BACKUP_RECOVERY.md) | 备份策略、恢复操作、监控验证 |
+| [监控告警手册](docs/ops/MONITORING_ALERTING.md) | 指标体系、10 条告警规则、3 个 Dashboard |
+| [Helm Chart 使用文档](docs/ops/HELM_CHART_GUIDE.md) | 完整参数说明、自定义配置、依赖组件安装 |
+| [灾难恢复演练手册](docs/DR_RUNBOOK.md) | RTO/RPO 定义、演练流程、10 项验证清单 |
+| [K8s 部署总体规划](docs/K8S_DEPLOYMENT_PLAN.md) | 9 阶段 57 任务总体计划 |
+
+#### 部署架构
+
+```
+                        ┌─────────────────────┐
+                        │     Ingress (TLS)    │
+                        └──────────┬──────────┘
+                                   │
+                            ┌───────▼───────┐
+                            │    frontend   │ (HPA 2-5 副本)
+                            └───────┬───────┘
+                                    │
+                            ┌───────▼───────┐
+                            │    backend    │ (HPA 2-10 副本)
+                            └───┬───┬───┬───┘
+                                │   │   │
+                ┌───────────────┘   │   └───────────────┐
+                ▼                   ▼                   ▼
+          ┌──────────┐        ┌──────────┐        ┌──────────┐
+          │ postgres │        │  redis   │        │  chroma  │
+          │StatefulSet│       │StatefulSet│       │StatefulSet│
+          └──────────┘        └──────────┘        └──────────┘
+```
+
+完整部署文档详见 [docs/ops/DEPLOYMENT_GUIDE.md](docs/ops/DEPLOYMENT_GUIDE.md)。
 
 ## API 概览
 

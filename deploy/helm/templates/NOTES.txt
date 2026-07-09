@@ -1,0 +1,59 @@
+Thank you for installing {{ .Chart.Name }}-{{ .Chart.Version }}.
+
+Your release is named {{ .Release.Name }} in namespace {{ .Release.Namespace }}.
+
+{{- if .Values.frontend.enabled }}
+
+1. Frontend Service: {{ include "knowledge-system.frontendServiceName" . }}
+{{- end }}
+{{- if .Values.backend.enabled }}
+
+2. Backend API Service: {{ include "knowledge-system.backendServiceName" . }}
+   Health check endpoints:
+     - Liveness: /health/live
+     - Readiness: /health/ready
+     - Metrics: /metrics (Prometheus)
+{{- end }}
+{{- if .Values.postgresql.enabled }}
+
+3. PostgreSQL StatefulSet: {{ include "knowledge-system.postgresServiceName" . }}
+{{- else if .Values.postgresql.external.enabled }}
+
+3. PostgreSQL (external): {{ .Values.postgresql.external.host }}:{{ .Values.postgresql.external.port }}
+{{- end }}
+{{- if .Values.redis.enabled }}
+
+4. Redis StatefulSet: {{ include "knowledge-system.redisServiceName" . }}
+{{- end }}
+{{- if .Values.ingress.enabled }}
+
+Access the application via Ingress:
+{{- range .Values.ingress.hosts }}
+  - http{{ if $.Values.ingress.tls }}s{{ end }}://{{ .host }}{{ if eq .host "knowledge-system.local" }} (add to /etc/hosts for local testing){{ end }}
+{{- end }}
+
+If using nginx-ingress with local testing, run:
+  kubectl port-forward svc/{{ include "knowledge-system.frontendServiceName" . }} 8080:80 -n {{ .Release.Namespace }}
+{{- else }}
+
+To access the application locally, port-forward the frontend service:
+  kubectl port-forward svc/{{ include "knowledge-system.frontendServiceName" . }} 8080:80 -n {{ .Release.Namespace }}
+
+Then visit: http://localhost:8080
+{{- end }}
+
+To check deployment status:
+  kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/instance={{ .Release.Name }}
+
+To view backend logs:
+  kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/component=backend --tail=100 -f
+
+To execute database migration (if not using helm hook):
+  kubectl exec -it -n {{ .Release.Namespace }} deploy/{{ include "knowledge-system.backendServiceName" . }} -- alembic upgrade head
+
+{{- if not .Values.secrets.existingSecret }}
+
+IMPORTANT: You are using the built-in Secret with default placeholder values.
+For production, override with:
+  --set secrets.existingSecret=my-external-secret
+{{- end }}

@@ -24,16 +24,31 @@ from app.utils.auth import (
     get_current_user,
     CurrentUser,
 )
-from app.utils.logger import LoggerUtil
+from app.utils.logger import LoggerUtil, _sanitize_value
 
 router = APIRouter(prefix="/auth", tags=["认证"])
+
+
+_AUTH_RESPONSES = {
+    400: {"description": "请求参数错误（用户名已占用、邮箱已注册等）"},
+    401: {"description": "未授权（凭据无效或Token过期）"},
+    422: {"description": "请求体验证失败（字段格式不符合要求）"},
+    500: {"description": "服务器内部错误"},
+}
+
+
+def _mask_username(username: str) -> str:
+    """脱敏用户名，避免在登录失败日志中暴露完整用户名"""
+    if not username:
+        return "***"
+    return _sanitize_value(username)
 
 
 # ===========================================
 # 1. 用户注册
 # ===========================================
 
-@router.post("/register", summary="用户注册")
+@router.post("/register", summary="用户注册", responses=_AUTH_RESPONSES)
 def register(
     request: RegisterRequest,
     db: Session = Depends(get_db),
@@ -101,7 +116,7 @@ def register(
 # 2. 用户登录
 # ===========================================
 
-@router.post("/login", summary="用户登录")
+@router.post("/login", summary="用户登录", responses=_AUTH_RESPONSES)
 def login(
     request: LoginRequest,
     db: Session = Depends(get_db),
@@ -119,17 +134,17 @@ def login(
         ).first()
         
         if not user:
-            logger.warning(f"[登录失败] 用户名不存在: username={request.username}")
+            logger.warning(f"[登录失败] 用户名不存在: username={_mask_username(request.username)}")
             return unauthorized("用户名或密码错误")
         
         # 验证密码
         if not verify_password(request.password, user.password_hash):
-            logger.warning(f"[登录失败] 密码错误: username={request.username}, user_id={user.id}")
+            logger.warning(f"[登录失败] 密码错误: username={_mask_username(request.username)}, user_id={user.id}")
             return unauthorized("用户名或密码错误")
         
         # 检查账户状态
         if not user.is_active:
-            logger.warning(f"[登录失败] 账户已禁用: username={request.username}, user_id={user.id}")
+            logger.warning(f"[登录失败] 账户已禁用: username={_mask_username(request.username)}, user_id={user.id}")
             return unauthorized("账户已被禁用，请联系管理员")
         
         # 更新最后登录时间
@@ -162,7 +177,7 @@ def login(
 # 3. Token 刷新
 # ===========================================
 
-@router.post("/refresh", summary="刷新Token")
+@router.post("/refresh", summary="刷新Token", responses=_AUTH_RESPONSES)
 def refresh_token(
     request: RefreshTokenRequest,
     db: Session = Depends(get_db),
@@ -207,7 +222,7 @@ def refresh_token(
 # 4. 获取当前用户信息
 # ===========================================
 
-@router.get("/me", summary="获取当前用户信息")
+@router.get("/me", summary="获取当前用户信息", responses=_AUTH_RESPONSES)
 def get_current_user_info(
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -245,7 +260,7 @@ def get_current_user_info(
 # 5. 修改密码
 # ===========================================
 
-@router.post("/change-password", summary="修改密码")
+@router.post("/change-password", summary="修改密码", responses=_AUTH_RESPONSES)
 def change_password(
     request: ChangePasswordRequest,
     current_user: CurrentUser = Depends(get_current_user),
@@ -303,7 +318,7 @@ def logout(
 # 7. 验证Token有效性
 # ===========================================
 
-@router.get("/verify", summary="验证Token有效性")
+@router.get("/verify", summary="验证Token有效性", responses=_AUTH_RESPONSES)
 def verify_token(
     current_user: CurrentUser = Depends(get_current_user),
 ):

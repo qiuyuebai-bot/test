@@ -176,7 +176,7 @@ class AnonymizeUtil:
             return ""
         
         if algorithm == "md5":
-            return hashlib.md5(data.encode()).hexdigest()
+            return hashlib.md5(data.encode(), usedforsecurity=False).hexdigest()
         elif algorithm == "sha256":
             return hashlib.sha256(data.encode()).hexdigest()
         else:

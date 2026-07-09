@@ -1,0 +1,146 @@
+# ===========================================
+# 预发布环境覆盖配置（staging）
+# 用法: helm install knowledge-system ./deploy/helm -f deploy/helm/values-staging.yaml -n knowledge-staging --create-namespace
+# ===========================================
+
+global:
+  # staging 镜像仓库（替换为实际仓库地址）
+  imageRegistry: "registry.cn-hangzhou.aliyuncs.com/knowledge-system"
+  imagePullSecrets:
+    - name: registry-credentials
+  storageClass: "managed-csi"  # 云盘 SSD
+
+# ---- 前端 ----
+frontend:
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+
+# ---- 后端 ----
+backend:
+  replicaCount: 3
+  workers: 2
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+  hpa:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+
+# ---- PostgreSQL（staging 自建，prod 建议云 RDS） ----
+postgresql:
+  enabled: true
+  external:
+    enabled: false
+  auth:
+    username: postgres
+    password: "StagingStrongPwd2026"  # staging 用，prod 走 existingSecret
+    database: knowledge_system
+  persistence:
+    size: 30Gi
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+
+# ---- Redis ----
+redis:
+  enabled: true
+  persistence:
+    size: 5Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 256Mi
+
+# ---- Celery Worker（staging 启用） ----
+celeryWorker:
+  enabled: true
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+
+# ---- Chroma（staging 启用） ----
+chroma:
+  enabled: true
+  persistence:
+    size: 20Gi
+
+# ---- 备份（staging 启用，每日备份） ----
+backup:
+  enabled: true
+  schedule: "0 18 * * *"  # UTC 18:00 = 北京时间 02:00
+  persistence:
+    size: 20Gi
+  retention:
+    days: 14
+
+# ---- Ingress（staging 域名 + TLS） ----
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+  hosts:
+    - host: staging.knowledge-system.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+        - path: /api
+          pathType: Prefix
+          service: backend
+        - path: /docs
+          pathType: Prefix
+          service: backend
+        - path: /health
+          pathType: Prefix
+          service: backend
+        - path: /metrics
+          pathType: Prefix
+          service: backend
+  tls:
+    - secretName: knowledge-system-staging-tls
+      hosts:
+        - staging.knowledge-system.example.com
+
+# ---- 应用配置 ----
+appConfig:
+  DEBUG_MODE: "false"
+  CORS_ORIGINS: "https://staging.knowledge-system.example.com"
+  CORS_ALLOW_CREDENTIALS: "true"
+  OPENAI_MODEL_NAME: "gpt-4-turbo-preview"
+
+# ---- Secret（staging 用内置，prod 必须用 existingSecret） ----
+secrets:
+  existingSecret: ""
+  data:
+    SECRET_KEY: "staging-secret-key-generate-a-random-32-char-string-here"
+    OPENAI_API_KEY: "sk-staging-api-key-replace-with-real"
+    DEFAULT_ADMIN_PASSWORD: "StagingAdmin2026"
+    POSTGRES_PASSWORD: "StagingStrongPwd2026"
+    REDIS_PASSWORD: ""

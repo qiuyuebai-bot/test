@@ -1,6 +1,8 @@
+# syntax=docker/dockerfile:1
 # ===========================================
 # 领域知识个性化生成与多智能体协同决策系统 - 后端
 # 多阶段构建 Dockerfile
+# 启用 BuildKit 高级特性：--mount=type=cache 加速 pip 与 apt
 # ===========================================
 
 # ---- 构建阶段 ----
@@ -8,20 +10,23 @@ FROM python:3.11-slim AS builder
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_NO_CACHE_DIR=1 \
     PIP_DISABLE_PIP_VERSION_CHECK=1
 
 WORKDIR /app
 
 # 安装构建依赖（仅编译阶段需要）
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# 使用 BuildKit cache mount 加速 apt 重复构建
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
-    gcc \
-    && rm -rf /var/lib/apt/lists/*
+    gcc
 
 # 复制依赖文件并安装到虚拟环境
+# 使用 BuildKit cache mount 加速 pip 重复构建（pip 缓存跨构建复用）
 COPY requirements.txt .
-RUN python -m venv /opt/venv && \
+RUN --mount=type=cache,target=/root/.cache/pip \
+    python -m venv /opt/venv && \
     /opt/venv/bin/pip install --upgrade pip && \
     /opt/venv/bin/pip install -r requirements.txt
 
@@ -34,7 +39,8 @@ LABEL description="领域知识个性化生成与多智能体协同决策系统 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     PATH="/opt/venv/bin:$PATH" \
-    DEBIAN_FRONTEND=noninteractive
+    DEBIAN_FRONTEND=noninteractive \
+    APP_ENV=production
 
 WORKDIR /app
 

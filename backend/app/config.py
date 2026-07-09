@@ -3,6 +3,10 @@
 从 .env 文件加载配置，支持环境变量覆盖
 默认使用 SQLite（开发/演示环境，开箱即用），
 可通过 DATABASE_URL 环境变量切换到 PostgreSQL（生产/Docker环境）
+
+多环境支持：
+- 通过 APP_ENV 环境变量切换环境（development / staging / production）
+- 加载顺序：.env（基础）→ .env.{APP_ENV}（环境覆盖）→ 环境变量（最高优先级）
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import Field, field_validator, ValidationInfo
@@ -14,8 +18,31 @@ from pathlib import Path
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = BASE_DIR / "data"
 
+_APP_ENV = os.environ.get("APP_ENV", "development").lower()
+_VALID_ENVS = {"development", "staging", "production"}
+if _APP_ENV not in _VALID_ENVS:
+    import warnings
+    warnings.warn(
+        f"[配置] APP_ENV='{_APP_ENV}' 不在支持列表 {_VALID_ENVS} 中，回退为 development"
+    )
+    _APP_ENV = "development"
+
 DEFAULT_SECRET_KEY = "your-secret-key-change-in-production"
 _SECRET_FILE = DATA_DIR / ".secret_key"
+
+# 已知不安全的 SECRET_KEY 黑名单（曾出现在代码库或文档中，禁止使用）
+_INSECURE_SECRET_KEYS = {
+    DEFAULT_SECRET_KEY,
+    "knowledge-system-jwt-secret-2024-production-change-me",
+    "change-me-in-production-please",
+    "change-me",
+    "",
+}
+
+
+def _is_insecure_secret(value: str) -> bool:
+    """检测 SECRET_KEY 是否为已知的不安全值"""
+    return value in _INSECURE_SECRET_KEYS
 
 
 def _load_or_generate_secret() -> str:
@@ -23,20 +50,30 @@ def _load_or_generate_secret() -> str:
     加载或自动生成 JWT Secret Key
     
     优先级：
-    1. 环境变量 SECRET_KEY
-    2. .env 文件中的 SECRET_KEY
+    1. 环境变量 SECRET_KEY（非黑名单值）
+    2. .env 文件中的 SECRET_KEY（非黑名单值）
     3. data/.secret_key 文件中持久化的密钥（自动生成）
     4. 首次运行自动生成并持久化
+    
+    安全策略：检测到黑名单值时忽略，强制使用自动生成的密钥
     """
     DATA_DIR.mkdir(parents=True, exist_ok=True)
     
     env_secret = os.environ.get("SECRET_KEY", "")
-    if env_secret and env_secret != DEFAULT_SECRET_KEY:
+    if env_secret and not _is_insecure_secret(env_secret):
         return env_secret
+    
+    if env_secret and _is_insecure_secret(env_secret):
+        import warnings
+        warnings.warn(
+            "[安全] 检测到不安全的 SECRET_KEY（黑名单值），已忽略并自动生成新密钥。"
+            "请通过环境变量 SECRET_KEY 设置一个随机密钥，可用以下命令生成："
+            "python -c \"import secrets; print(secrets.token_urlsafe(48))\"",
+        )
     
     if _SECRET_FILE.exists():
         stored = _SECRET_FILE.read_text(encoding="utf-8").strip()
-        if stored and stored != DEFAULT_SECRET_KEY:
+        if stored and not _is_insecure_secret(stored):
             return stored
     
     generated = secrets.token_urlsafe(48)
@@ -62,16 +99,29 @@ def _default_sqlite_url() -> str:
 class Settings(BaseSettings):
     """系统配置类"""
 
+    APP_ENV: str = Field(
+        default="development",
+        description="运行环境（development / staging / production）",
+    )
+
     DATABASE_URL: str = Field(
         default_factory=_default_sqlite_url,
         description="数据库连接URL，默认SQLite（./data/app.db），可设为postgresql://user:pass@host:port/dbname"
     )
     DATABASE_POOL_SIZE: int = Field(default=10, description="数据库连接池大小（仅PostgreSQL生效）")
     DATABASE_MAX_OVERFLOW: int = Field(default=20, description="数据库最大溢出连接数（仅PostgreSQL生效）")
+    SEED_ON_STARTUP: bool = Field(
+        default=True,
+        description="启动时是否自动初始化种子数据（生产环境建议关闭，改用 CLI: python -m app.seed_data）",
+    )
 
     REDIS_URL: str = Field(default="redis://localhost:6379/0", description="Redis连接URL")
     CELERY_BROKER_URL: str = Field(default="redis://localhost:6379/1", description="Celery消息队列URL")
     CELERY_RESULT_BACKEND: str = Field(default="redis://localhost:6379/2", description="Celery结果存储URL")
+    USE_CELERY: bool = Field(
+        default=False,
+        description="是否启用 Celery 异步任务队列（true: 任务走 Celery worker + Redis pub/sub 跨进程 SSE；false: 走进程内 daemon 线程，无需 Redis）",
+    )
 
     CHROMA_DB_PATH: str = Field(default="./data/chroma_db", description="Chroma向量数据库路径")
     CHROMA_COLLECTION_NAME: str = Field(default="knowledge_slices", description="Chroma集合名称")
@@ -82,6 +132,11 @@ class Settings(BaseSettings):
     OPENAI_MODEL_NAME: str = Field(default="gpt-4-turbo-preview", description="使用的模型名称")
     OPENAI_TEMPERATURE: float = Field(default=0.7, description="模型温度参数")
     OPENAI_MAX_TOKENS: int = Field(default=4096, description="最大Token数")
+
+    # LLM 熔断器（Phase 7：防止 LLM 服务故障导致雪崩）
+    LLM_CIRCUIT_BREAKER_ENABLED: bool = Field(default=True, description="是否启用 LLM 熔断器")
+    LLM_CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = Field(default=5, description="连续失败多少次后触发熔断")
+    LLM_CIRCUIT_BREAKER_RECOVERY_TIMEOUT: int = Field(default=60, description="熔断后冷却时间（秒），过后转半开试探")
 
     UPLOAD_DIR: str = Field(default="./data/uploads", description="上传文件目录")
     KNOWLEDGE_DOC_DIR: str = Field(default="./data/knowledge_docs", description="知识库文档目录")
@@ -99,10 +154,13 @@ class Settings(BaseSettings):
 
     APP_NAME: str = Field(default="领域知识个性化生成与多智能体协同决策系统", description="应用名称")
     APP_VERSION: str = Field(default="1.0.0", description="应用版本")
-    DEBUG_MODE: bool = Field(default=True, description="调试模式")
+    DEBUG_MODE: bool = Field(default=False, description="调试模式（生产环境必须为 False，开启会暴露详细错误信息）")
     API_PREFIX: str = Field(default="/api/v1", description="API前缀")
 
-    CORS_ORIGINS: str = Field(default="*", description="允许的CORS来源，逗号分隔，生产环境应限制具体域名")
+    CORS_ORIGINS: str = Field(
+        default="http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173",
+        description="允许的CORS来源，逗号分隔。生产环境必须改为具体域名，禁止使用 *",
+    )
     CORS_ALLOW_CREDENTIALS: bool = Field(default=False, description="是否允许CORS携带凭证")
 
     TRUSTED_PROXIES: str = Field(
@@ -128,6 +186,17 @@ class Settings(BaseSettings):
     HALLUCINATION_THRESHOLD: float = Field(default=5.0, description="幻觉率阈值")
     MATCH_ACCURACY_THRESHOLD: float = Field(default=90.0, description="匹配准确率阈值")
     KNOWLEDGE_COVERAGE_THRESHOLD: float = Field(default=95.0, description="知识点覆盖率阈值")
+
+    @field_validator("APP_ENV")
+    @classmethod
+    def validate_app_env(cls, v: str) -> str:
+        """校验运行环境值"""
+        v = v.lower().strip()
+        if v not in _VALID_ENVS:
+            raise ValueError(
+                f"APP_ENV 必须为 {_VALID_ENVS} 之一，当前值: {v}"
+            )
+        return v
 
     @field_validator("DATABASE_URL")
     @classmethod
@@ -231,6 +300,11 @@ class Settings(BaseSettings):
     def validate_cors_origins(cls, v: str) -> str:
         """校验CORS来源格式"""
         if v == "*":
+            import warnings
+            warnings.warn(
+                "[安全] CORS_ORIGINS='*' 允许任意站点跨域访问，存在 CSRF 风险。"
+                "生产环境请改为具体域名白名单，如 'https://your-domain.com'。",
+            )
             return v
         origins = [o.strip() for o in v.split(",") if o.strip()]
         for origin in origins:
@@ -251,7 +325,7 @@ class Settings(BaseSettings):
         return v
 
     model_config = SettingsConfigDict(
-        env_file=".env",
+        env_file=[".env", f".env.{_APP_ENV}"],
         env_file_encoding="utf-8",
         case_sensitive=True,
     )
@@ -263,6 +337,18 @@ class Settings(BaseSettings):
     @property
     def is_postgresql(self) -> bool:
         return self.DATABASE_URL.startswith("postgresql")
+
+    @property
+    def is_development(self) -> bool:
+        return self.APP_ENV == "development"
+
+    @property
+    def is_staging(self) -> bool:
+        return self.APP_ENV == "staging"
+
+    @property
+    def is_production(self) -> bool:
+        return self.APP_ENV == "production"
 
     @property
     def cors_origin_list(self) -> list:

@@ -19,8 +19,8 @@ export default function Button({
   ...props
 }: ButtonProps) {
   const variantStyles = {
-    primary: 'bg-primary text-white hover:bg-primary-hover active:bg-primary-active disabled:bg-gray-300',
-    secondary: 'bg-secondary text-white hover:bg-secondary-hover disabled:bg-gray-300',
+    primary: 'bg-primary text-white hover:bg-primary-hover active:bg-primary-active disabled:bg-gray-300 dark:disabled:bg-gray-600',
+    secondary: 'bg-secondary text-white hover:bg-secondary-hover disabled:bg-gray-300 dark:disabled:bg-gray-600',
     outline: 'border border-border text-text-primary hover:bg-gray-50 dark:hover:bg-gray-800 disabled:border-border disabled:text-text-tertiary',
     ghost: 'text-text-secondary hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-text-primary disabled:text-text-tertiary',
   }

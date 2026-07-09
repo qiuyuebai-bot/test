@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import { PageSkeleton } from '@/components/Skeleton'
@@ -15,15 +16,23 @@ import {
 } from 'lucide-react'
 
 export default function Dashboard() {
-  const systemMetrics = useStore((s) => s.systemMetrics)
-  const learners = useStore((s) => s.learners)
-  const agentStatuses = useStore((s) => s.agentStatuses)
-  const tasks = useStore((s) => s.tasks)
-  const fetchSystemMetrics = useStore((s) => s.fetchSystemMetrics)
-  const fetchLearners = useStore((s) => s.fetchLearners)
-  const fetchAgentStatuses = useStore((s) => s.fetchAgentStatuses)
-  const fetchResources = useStore((s) => s.fetchResources)
-  const fetchTasks = useStore((s) => s.fetchTasks)
+  const { systemMetrics, learners, agentStatuses, tasks } = useStore(
+    useShallow((s) => ({
+      systemMetrics: s.systemMetrics,
+      learners: s.learners,
+      agentStatuses: s.agentStatuses,
+      tasks: s.tasks,
+    }))
+  )
+  const { fetchSystemMetrics, fetchLearners, fetchAgentStatuses, fetchResources, fetchTasks } = useStore(
+    useShallow((s) => ({
+      fetchSystemMetrics: s.fetchSystemMetrics,
+      fetchLearners: s.fetchLearners,
+      fetchAgentStatuses: s.fetchAgentStatuses,
+      fetchResources: s.fetchResources,
+      fetchTasks: s.fetchTasks,
+    }))
+  )
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -41,13 +50,25 @@ export default function Dashboard() {
     loadData()
 
     const refreshInterval = setInterval(() => {
+      // 标签页隐藏时跳过轮询，避免后台无效请求消耗带宽和 CPU
+      if (document.hidden) return
       fetchSystemMetrics()
       fetchAgentStatuses()
       fetchTasks({ page: 1, pageSize: 10 })
     }, 30000)
 
+    // 标签页重新可见时立即刷新一次，保证数据新鲜度
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        fetchSystemMetrics()
+        fetchAgentStatuses()
+      }
+    }
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+
     return () => {
       clearInterval(refreshInterval)
+      document.removeEventListener('visibilitychange', handleVisibilityChange)
     }
   }, [fetchSystemMetrics, fetchLearners, fetchAgentStatuses, fetchResources, fetchTasks])
 
@@ -97,7 +118,7 @@ export default function Dashboard() {
   }
 
   if (loading) {
-    return <PageSkeleton />
+    return <PageSkeleton type="dashboard" />
   }
 
   const displayLearners = learners.slice(0, 3)
@@ -288,7 +309,7 @@ export default function Dashboard() {
                           />
                         </div>
                         <span className="text-sm font-medium text-text-primary">
-                          {learner.averageAbility}%
+                          {learner.averageAbility.toFixed(2)}%
                         </span>
                       </div>
                     </td>

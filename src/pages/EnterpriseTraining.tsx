@@ -3,9 +3,9 @@ import Card from '@/components/Card'
 import Modal from '@/components/Modal'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
-import LoadingState from '@/components/LoadingState'
 import EmptyState from '@/components/EmptyState'
 import ErrorState from '@/components/ErrorState'
+import { PageSkeleton } from '@/components/Skeleton'
 import { trainingApi, configApi } from '@/api'
 import { toast } from '@/components/toastStore'
 import type { TrainingTemplate } from '@/api/config'
@@ -25,12 +25,14 @@ import {
   Upload,
   FileText,
   ArrowRight,
-  ChevronRight,
   UserPlus,
   Search,
   BarChart3,
   GraduationCap,
   Briefcase,
+  Edit2,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -84,6 +86,24 @@ export default function EnterpriseTraining() {
   const [importFile, setImportFile] = useState<File | null>(null)
   const [statusTemplates, setStatusTemplates] = useState<TrainingTemplate[]>([])
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // 编辑 & 删除状态
+  const [editingTraining, setEditingTraining] = useState<TrainingProject | null>(null)
+  const [showEdit, setShowEdit] = useState(false)
+  const [editSaving, setEditSaving] = useState(false)
+  const [editForm, setEditForm] = useState({
+    companyName: '',
+    trainingName: '',
+    industry: '',
+    participantCount: 0,
+    responsiblePerson: '',
+    description: '',
+    modules: '',
+    status: 'planning' as string,
+  })
+  const [deleteTarget, setDeleteTarget] = useState<TrainingProject | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
 
   useEffect(() => {
     configApi.getOptions().then(opts => setStatusTemplates(opts.trainingTemplates)).catch(() => {})
@@ -213,7 +233,72 @@ export default function EnterpriseTraining() {
     }
   }
 
-  if (loading) return <LoadingState />
+  const handleEditClick = (project: TrainingProject) => {
+    setEditingTraining(project)
+    setEditForm({
+      companyName: project.companyName || '',
+      trainingName: project.trainingName || '',
+      industry: project.industry || '',
+      participantCount: project.participantCount || 0,
+      responsiblePerson: project.responsiblePerson || '',
+      description: project.description || '',
+      modules: (project.modules || []).join(', '),
+      status: project.status || 'planning',
+    })
+    setShowEdit(true)
+  }
+
+  const handleEditSave = async () => {
+    if (!editingTraining) return
+    if (!editForm.companyName || !editForm.trainingName) {
+      toast.warning('企业名称和培训名称不能为空')
+      return
+    }
+    setEditSaving(true)
+    try {
+      const payload: Partial<CreateTrainingData> = {
+        companyName: editForm.companyName,
+        trainingName: editForm.trainingName,
+        industry: editForm.industry || undefined,
+        participantCount: Number(editForm.participantCount) || 0,
+        responsiblePerson: editForm.responsiblePerson || undefined,
+        description: editForm.description || undefined,
+        modules: editForm.modules
+          ? editForm.modules.split(/[,，]/).map((s) => s.trim()).filter(Boolean)
+          : [],
+      }
+      await trainingApi.update(editingTraining.id, payload)
+      setShowEdit(false)
+      setEditingTraining(null)
+      await loadAllData(true)
+    } catch (err) {
+      // 错误已由 request 层 toast 提示
+    } finally {
+      setEditSaving(false)
+    }
+  }
+
+  const handleDeleteClick = (project: TrainingProject) => {
+    setDeleteTarget(project)
+    setShowDeleteConfirm(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await trainingApi.delete(deleteTarget.id)
+      setShowDeleteConfirm(false)
+      setDeleteTarget(null)
+      await loadAllData(true)
+    } catch (err) {
+      // 错误已由 request 层 toast 提示
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  if (loading) return <PageSkeleton type="table" />
 
   if (error) {
     return (
@@ -352,7 +437,7 @@ export default function EnterpriseTraining() {
                         <td className="px-4 py-3 text-sm text-text-secondary">{project.participantCount} 人</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            <div className="w-20 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="w-20 h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                               <div className="h-full bg-primary rounded-full" style={{ width: `${project.progressPercentage}%` }} />
                             </div>
                             <span className="text-xs text-text-secondary">{project.progressPercentage}%</span>
@@ -364,9 +449,22 @@ export default function EnterpriseTraining() {
                           </Badge>
                         </td>
                         <td className="px-4 py-3 text-right">
-                          <button className="p-1.5 rounded-lg hover:bg-bg-secondary transition-colors">
-                            <ChevronRight className="w-4 h-4 text-text-tertiary" />
-                          </button>
+                          <div className="flex items-center justify-end gap-1">
+                            <button
+                              onClick={() => handleEditClick(project)}
+                              className="p-1.5 rounded-lg hover:bg-primary/10 transition-colors"
+                              title="编辑"
+                            >
+                              <Edit2 className="w-4 h-4 text-text-secondary hover:text-primary" />
+                            </button>
+                            <button
+                              onClick={() => handleDeleteClick(project)}
+                              className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                              title="删除"
+                            >
+                              <Trash2 className="w-4 h-4 text-text-secondary hover:text-error" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))
@@ -403,7 +501,7 @@ export default function EnterpriseTraining() {
                   <Briefcase className="w-4 h-4 text-text-secondary" />
                   员工转岗适配
                 </h3>
-                <Button variant="ghost" size="sm">添加</Button>
+                <Button variant="ghost" size="sm" onClick={() => toast.info('转岗培训请通过批量导入添加', 'CSV 文件需包含 trainingType=transfer 列')}>添加</Button>
               </div>
             </div>
             <div className="p-4 space-y-3">
@@ -433,7 +531,7 @@ export default function EnterpriseTraining() {
                     <span className="text-text-tertiary">完成度</span>
                     <span className="text-text-primary font-medium">{t.completion}%</span>
                   </div>
-                  <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-1 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                     <div className="h-full bg-primary rounded-full" style={{ width: `${t.completion}%` }} />
                   </div>
                 </div>
@@ -458,7 +556,7 @@ export default function EnterpriseTraining() {
                     <span className="text-xs text-text-primary">{skill.skill}</span>
                     <span className="text-xs text-text-tertiary">差距 {skill.gap}%</span>
                   </div>
-                  <div className="relative h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="relative h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                     <div className="absolute inset-y-0 left-0 bg-success/40 rounded-full" style={{ width: `${skill.current}%` }} />
                     <div className="absolute inset-y-0 bg-primary rounded-full" style={{ width: `${skill.required}%` }} />
                   </div>
@@ -601,6 +699,125 @@ export default function EnterpriseTraining() {
             <div className="flex justify-end gap-2">
               <Button variant="outline" onClick={() => setShowImport(false)}>取消</Button>
               <Button variant="primary" onClick={handleBatchImport}>开始导入</Button>
+            </div>
+        </Modal>
+      )}
+
+      {/* 编辑培训弹窗 */}
+      {showEdit && editingTraining && (
+        <Modal isOpen={showEdit} onClose={() => { setShowEdit(false); setEditingTraining(null) }} maxWidth="max-w-md" className="p-8">
+            <div className="flex items-center justify-between mb-5">
+              <h3 className="text-base font-semibold text-text-primary flex items-center gap-2">
+                <Edit2 className="w-4 h-4 text-text-secondary" />
+                编辑培训任务
+              </h3>
+            </div>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-xs text-text-tertiary mb-1">企业名称 <span className="text-error">*</span></label>
+                <input
+                  type="text"
+                  value={editForm.companyName}
+                  onChange={(e) => setEditForm({ ...editForm, companyName: e.target.value })}
+                  className="w-full h-9 px-3 bg-bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-text-tertiary mb-1">培训名称 <span className="text-error">*</span></label>
+                <input
+                  type="text"
+                  value={editForm.trainingName}
+                  onChange={(e) => setEditForm({ ...editForm, trainingName: e.target.value })}
+                  className="w-full h-9 px-3 bg-bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs text-text-tertiary mb-1">所属行业</label>
+                  <input
+                    type="text"
+                    value={editForm.industry}
+                    onChange={(e) => setEditForm({ ...editForm, industry: e.target.value })}
+                    className="w-full h-9 px-3 bg-bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs text-text-tertiary mb-1">参与人数</label>
+                  <input
+                    type="number"
+                    value={editForm.participantCount}
+                    onChange={(e) => setEditForm({ ...editForm, participantCount: Number(e.target.value) })}
+                    min={0}
+                    className="w-full h-9 px-3 bg-bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-xs text-text-tertiary mb-1">负责人</label>
+                <input
+                  type="text"
+                  value={editForm.responsiblePerson}
+                  onChange={(e) => setEditForm({ ...editForm, responsiblePerson: e.target.value })}
+                  className="w-full h-9 px-3 bg-bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-text-tertiary mb-1">培训模块（逗号分隔）</label>
+                <input
+                  type="text"
+                  value={editForm.modules}
+                  onChange={(e) => setEditForm({ ...editForm, modules: e.target.value })}
+                  className="w-full h-9 px-3 bg-bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                />
+              </div>
+              <div>
+                <label className="block text-xs text-text-tertiary mb-1">培训描述</label>
+                <textarea
+                  value={editForm.description}
+                  onChange={(e) => setEditForm({ ...editForm, description: e.target.value })}
+                  rows={2}
+                  className="w-full px-3 py-2 bg-bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 mt-5">
+              <Button variant="outline" onClick={() => { setShowEdit(false); setEditingTraining(null) }}>取消</Button>
+              <Button
+                variant="primary"
+                onClick={handleEditSave}
+                disabled={editSaving || !editForm.companyName || !editForm.trainingName}
+              >
+                {editSaving ? '保存中...' : '保存修改'}
+              </Button>
+            </div>
+        </Modal>
+      )}
+
+      {/* 删除确认弹窗 */}
+      {showDeleteConfirm && deleteTarget && (
+        <Modal isOpen={showDeleteConfirm} onClose={() => { setShowDeleteConfirm(false); setDeleteTarget(null) }} maxWidth="max-w-sm" className="p-8">
+            <div className="text-center">
+              <div className="w-12 h-12 rounded-full bg-error/10 flex items-center justify-center mx-auto mb-4">
+                <AlertTriangle className="w-6 h-6 text-error" />
+              </div>
+              <h3 className="text-base font-semibold text-text-primary mb-2">确认删除培训任务？</h3>
+              <p className="text-sm text-text-secondary mb-1">
+                即将删除「<span className="font-medium text-text-primary">{deleteTarget.trainingName}</span>」
+              </p>
+              <p className="text-xs text-text-tertiary mb-5">
+                企业：{deleteTarget.companyName} · 此操作不可撤销
+              </p>
+              <div className="flex justify-center gap-2">
+                <Button variant="outline" onClick={() => { setShowDeleteConfirm(false); setDeleteTarget(null) }}>取消</Button>
+                <Button
+                  variant="primary"
+                  onClick={handleDeleteConfirm}
+                  disabled={deleting}
+                  className="!bg-error hover:!bg-error/90"
+                >
+                  {deleting ? '删除中...' : '确认删除'}
+                </Button>
+              </div>
             </div>
         </Modal>
       )}

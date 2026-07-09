@@ -1,0 +1,28 @@
+{
+  "_comment": "Prompt 模板清单：每个模板对应 templates/<name>.txt 文件，记录版本与变量说明",
+  "hallucination_check": {
+    "version": "1.0.0",
+    "description": "幻觉深度检测：基于参考知识核查生成内容是否含无依据声称",
+    "variables": ["reference_knowledge", "content", "suspicious_points"]
+  },
+  "content_correction": {
+    "version": "1.0.0",
+    "description": "内容审校修正：根据审核意见修正学习资源中的幻觉/绝对化表述",
+    "variables": ["content", "correction_text", "reference_text"]
+  },
+  "learner_diagnosis": {
+    "version": "1.0.0",
+    "description": "学习者能力诊断：基于能力评分与盲区生成个性化诊断报告",
+    "variables": ["ability_summary", "blind_areas", "average_score"]
+  },
+  "resource_generation": {
+    "version": "1.0.0",
+    "description": "个性化学习资源生成：按学习者画像与知识点生成专属资源",
+    "variables": ["learner_summary", "knowledge_topic", "difficulty_level", "reference_knowledge"]
+  },
+  "question_generation": {
+    "version": "1.0.0",
+    "description": "分阶测试题生成：按难度等级生成对应题目与解析",
+    "variables": ["knowledge_topic", "difficulty_level", "question_count", "reference_knowledge"]
+  }
+}

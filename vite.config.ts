@@ -9,12 +9,17 @@ export default defineConfig({
     chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
-        manualChunks: {
-          'react-vendor': ['react', 'react-dom', 'react-router-dom'],
-          'charts': ['recharts'],
-          'icons': ['lucide-react'],
-          'state': ['zustand', 'zustand/middleware'],
-          'forms': ['react-hook-form', '@hookform/resolvers/zod', 'zod'],
+        manualChunks(id) {
+          if (!id.includes('node_modules')) return
+          if (id.includes('/react/') || id.includes('react-dom') || id.includes('react-router') || id.includes('@remix-run') || id.includes('scheduler')) {
+            return 'react-vendor'
+          }
+          if (id.includes('recharts') || id.includes('d3-') || id.includes('victory-')) return 'charts'
+          if (id.includes('lucide-react')) return 'icons'
+          if (id.includes('zustand') || id.includes('@tanstack/react-query')) return 'state'
+          if (id.includes('react-hook-form') || id.includes('@hookform') || id.includes('/zod/')) return 'forms'
+          if (id.includes('@sentry')) return 'monitoring'
+          return 'vendor'
         },
       },
     },
@@ -37,6 +42,8 @@ export default defineConfig({
       '@hookform/resolvers/zod',
       'zod',
       'recharts',
+      '@sentry/react',
+      '@tanstack/react-query',
     ],
   },
   resolve: {

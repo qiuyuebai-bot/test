@@ -1,0 +1,30 @@
+# Patterns to ignore when packaging the Helm chart.
+# Operates similar to .gitignore.
+# Common VCS files
+.git/
+.gitignore
+.bzr/
+.bzrignore
+.hg/
+.hgignore
+.svn/
+# Common backup files
+*.swp
+*.bak
+*.tmp
+*.orig
+*~
+# Various IDEs
+.project
+.idea/
+*.tmproj
+.vscode/
+# Documentation
+README.md.gotmpl
+# Python (validation script)
+__pycache__/
+*.pyc
+validate_chart.py
+# OS files
+.DS_Store
+Thumbs.db

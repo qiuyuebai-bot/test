@@ -1,4 +1,5 @@
 import { ReactNode, isValidElement, ElementType } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
 import Card from './Card'
 import Button from './Button'
@@ -67,23 +68,25 @@ EmptyState.Search = function SearchEmpty() {
 }
 
 EmptyState.Users = function UsersEmpty() {
+  const navigate = useNavigate()
   return (
     <EmptyState
       type="users"
       title="暂无学习者"
       description="添加学习者档案以开始个性化学习之旅"
-      action={<Button variant="outline">添加学习者</Button>}
+      action={<Button variant="outline" onClick={() => navigate('/profile')}>添加学习者</Button>}
     />
   )
 }
 
 EmptyState.Data = function DataEmpty() {
+  const navigate = useNavigate()
   return (
     <EmptyState
       type="data"
       title="知识库为空"
       description="上传领域知识文档以构建专业内容库"
-      action={<Button variant="outline">上传文档</Button>}
+      action={<Button variant="outline" onClick={() => navigate('/knowledge-base')}>上传文档</Button>}
     />
   )
 }

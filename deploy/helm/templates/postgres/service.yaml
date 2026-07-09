@@ -1,0 +1,19 @@
+{{- if and .Values.postgresql.enabled (not .Values.postgresql.external.enabled) -}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "knowledge-system.postgresServiceName" . }}
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+spec:
+  type: {{ .Values.postgresql.service.type }}
+  ports:
+    - port: {{ .Values.postgresql.service.port }}
+      targetPort: tcp-postgres
+      protocol: TCP
+      name: tcp-postgres
+  selector:
+    {{- include "knowledge-system.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: postgres
+{{- end -}}

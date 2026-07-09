@@ -1,0 +1,165 @@
+# ===========================================
+# 生产环境覆盖配置（prod）
+# 用法: helm install knowledge-system ./deploy/helm -f deploy/helm/values-prod.yaml -n knowledge-prod --create-namespace
+#
+# 生产环境关键注意事项：
+# 1. 必须使用 existingSecret 对接云 KMS / External Secrets Operator
+# 2. 数据库建议使用云 RDS（postgresql.external.enabled=true）
+# 3. Redis 建议使用云 Redis（redis.external.enabled=true）
+# 4. 镜像仓库必须使用私有时配置 imagePullSecrets
+# ===========================================
+
+global:
+  # 生产镜像仓库（替换为实际仓库地址）
+  imageRegistry: "registry.cn-hangzhou.aliyuncs.com/knowledge-system"
+  imagePullSecrets:
+    - name: registry-credentials
+  storageClass: "managed-csi-ssd"  # 高性能 SSD
+
+# ---- 前端 ----
+frontend:
+  replicaCount: 3
+  resources:
+    requests:
+      cpu: 100m
+      memory: 128Mi
+    limits:
+      cpu: 300m
+      memory: 256Mi
+  hpa:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 8
+    targetCPUUtilizationPercentage: 70
+
+# ---- 后端 ----
+backend:
+  replicaCount: 4
+  workers: 4
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1Gi
+    limits:
+      cpu: 2000m
+      memory: 2Gi
+  hpa:
+    enabled: true
+    minReplicas: 4
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 65
+
+# ---- PostgreSQL（生产强烈建议使用云 RDS） ----
+postgresql:
+  enabled: false  # 使用云 RDS
+  external:
+    enabled: true
+    host: "rm-bp-xxxxx.pg.rds.aliyuncs.com"  # 替换为实际 RDS 地址
+    port: 5432
+    username: "knowledge_app"
+    existingSecret: "knowledge-system-db-secret"
+    secretKey: password
+    database: "knowledge_system"
+
+# ---- Redis（生产建议使用云 Redis） ----
+redis:
+  enabled: false  # 使用云 Redis
+  external:
+    enabled: true
+    host: "r-bp-xxxxx.redis.rds.aliyuncs.com"  # 替换为实际云 Redis 地址
+    port: 6379
+    password: ""  # 通过 existingSecret 注入（见 secrets）
+
+# ---- Celery Worker（生产启用，高并发） ----
+celeryWorker:
+  enabled: true
+  replicaCount: 3
+  command: ["celery", "-A", "app.celery_app", "worker", "--loglevel=info", "--concurrency=4"]
+  resources:
+    requests:
+      cpu: 300m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+
+# ---- Chroma（生产启用） ----
+chroma:
+  enabled: true
+  persistence:
+    size: 50Gi
+  resources:
+    requests:
+      cpu: 200m
+      memory: 512Mi
+    limits:
+      cpu: 1000m
+      memory: 2Gi
+
+# ---- 备份（生产启用，每日备份 + 长保留） ----
+backup:
+  enabled: true
+  schedule: "0 18 * * *"  # UTC 18:00 = 北京时间 02:00
+  persistence:
+    size: 100Gi
+  retention:
+    days: 30
+
+# ---- Ingress（生产域名 + TLS + 性能优化） ----
+ingress:
+  enabled: true
+  className: nginx
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "600"
+    nginx.ingress.kubernetes.io/limit-rps: "100"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-Frame-Options: SAMEORIGIN";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains";
+  hosts:
+    - host: knowledge-system.example.com  # 替换为实际生产域名
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+        - path: /api
+          pathType: Prefix
+          service: backend
+        - path: /docs
+          pathType: Prefix
+          service: backend
+        - path: /health
+          pathType: Prefix
+          service: backend
+        - path: /metrics
+          pathType: Prefix
+          service: backend
+  tls:
+    - secretName: knowledge-system-prod-tls
+      hosts:
+        - knowledge-system.example.com
+
+# ---- 应用配置 ----
+appConfig:
+  DEBUG_MODE: "false"
+  CORS_ORIGINS: "https://knowledge-system.example.com"
+  CORS_ALLOW_CREDENTIALS: "true"
+  OPENAI_MODEL_NAME: "gpt-4-turbo-preview"
+  OPENAI_TEMPERATURE: "0.7"
+  OPENAI_MAX_TOKENS: "4096"
+  DATABASE_POOL_SIZE: "20"
+  DATABASE_MAX_OVERFLOW: "40"
+  JWT_EXPIRE_MINUTES: "120"
+  HALLUCINATION_THRESHOLD: "5.0"
+
+# ---- Secret（生产必须使用外部 Secret） ----
+secrets:
+  # 生产环境必须使用云 KMS / External Secrets Operator 管理的 Secret
+  # 以下 existingSecret 应为集群中预先创建的 Secret 名称
+  existingSecret: "knowledge-system-prod-secrets"
+  data: {}  # 使用 existingSecret 时此项留空

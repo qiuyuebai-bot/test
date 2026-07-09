@@ -1,0 +1,143 @@
+{{- if and .Values.backend.enabled (not .Values.rollouts.enabled) -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "knowledge-system.backendServiceName" . }}
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  replicas: {{ .Values.backend.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "knowledge-system.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        {{- include "knowledge-system.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backend
+        {{- if .Values.deployment.slot }}
+        slot: {{ .Values.deployment.slot | quote }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "knowledge-system.serviceAccountName" . }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.podAntiAffinity.enabled }}
+      {{- include "knowledge-system.podAntiAffinity" (list . "backend") | nindent 8 }}
+      {{- else }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: backend
+          image: {{ include "knowledge-system.image" (list .Values.images.backend .Values.global) }}
+          imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
+          {{- if .Values.backend.command }}
+          command: {{ toYaml .Values.backend.command | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "knowledge-system.configMapName" . }}
+            - secretRef:
+                name: {{ include "knowledge-system.secretName" . }}
+          {{- with .Values.backend.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- include "knowledge-system.resources" .Values.backend.resources | nindent 10 }}
+          livenessProbe:
+            {{- toYaml .Values.backend.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.backend.readinessProbe | nindent 12 }}
+          {{- if .Values.backend.startupProbe }}
+          startupProbe:
+            {{- toYaml .Values.backend.startupProbe | nindent 12 }}
+          {{- end }}
+          {{- if .Values.backend.lifecycle.preStop.enabled }}
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  {{- toYaml .Values.backend.lifecycle.preStop.exec.command | nindent 16 }}
+          {{- end }}
+          volumeMounts:
+            - name: backend-data
+              mountPath: /app/data
+            - name: backend-logs
+              mountPath: /app/logs
+      volumes:
+        - name: backend-data
+          persistentVolumeClaim:
+            claimName: {{ include "knowledge-system.fullname" . }}-backend-data
+        - name: backend-logs
+          persistentVolumeClaim:
+            claimName: {{ include "knowledge-system.fullname" . }}-backend-logs
+{{- end }}
+{{- if .Values.backend.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "knowledge-system.fullname" . }}-backend-data
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  {{- if .Values.global.storageClass }}
+  storageClassName: {{ .Values.global.storageClass }}
+  {{- end }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "knowledge-system.fullname" . }}-backend-logs
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  {{- if .Values.global.storageClass }}
+  storageClassName: {{ .Values.global.storageClass }}
+  {{- end }}
+{{- end -}}

@@ -5,8 +5,8 @@
 import pytest
 from sqlalchemy.orm import Session
 
-from app.services.knowledge_service import KnowledgeService
-from app.schemas.knowledge import (
+from app.domains.knowledge.service import KnowledgeService
+from app.domains.knowledge.schemas import (
     KnowledgeDocCreate,
     KnowledgeDocUpdate,
     KnowledgeSearchRequest,
@@ -189,7 +189,7 @@ class TestKnowledgeTrace:
         """测试资源溯源"""
         # 创建关联资源
         from app.models import LearningResource, ResourceTypeEnum, ResourceStatusEnum
-        from app.models.learner_profile import LearnerProfile
+        from app.domains.learner.models import LearnerProfile
         
         # 使用已有学习者或创建
         profile = db_session.query(LearnerProfile).first()

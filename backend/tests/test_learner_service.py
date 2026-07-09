@@ -5,8 +5,8 @@
 import pytest
 from sqlalchemy.orm import Session
 
-from app.services.learner_service import LearnerService
-from app.schemas.learner import (
+from app.domains.learner.service import LearnerService
+from app.domains.learner.schemas import (
     LearnerProfileCreate,
     LearnerProfileUpdate,
     LearnerBatchImportRequest,
@@ -169,7 +169,7 @@ class TestLearnerBatchOperations:
 
     def test_batch_export(self, db_session: Session, sample_learner_profile: LearnerProfile):
         """测试批量导出学习者"""
-        from app.schemas.learner import LearnerBatchExportRequest
+        from app.domains.learner.schemas import LearnerBatchExportRequest
         
         request = LearnerBatchExportRequest(
             learner_ids=[sample_learner_profile.id],

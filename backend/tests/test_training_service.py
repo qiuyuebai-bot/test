@@ -5,14 +5,14 @@
 import pytest
 from sqlalchemy.orm import Session
 
-from app.services.training_service import TrainingService
-from app.schemas.training import (
+from app.domains.training.service import TrainingService
+from app.domains.training.schemas import (
     TrainingCreate,
     TrainingUpdate,
     TrainingBatchImportRequest,
     TrainingBatchImportItem,
 )
-from app.models.enterprise_training import EnterpriseTraining
+from app.domains.training.models import EnterpriseTraining
 
 
 def _make_training(db: Session, **overrides) -> EnterpriseTraining:

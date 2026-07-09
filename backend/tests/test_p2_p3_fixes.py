@@ -15,7 +15,7 @@ from sqlalchemy.orm import Session
 
 from app.agents.orchestrator import AgentOrchestrator
 from app.models import KnowledgeDoc, KnowledgeSlice
-from app.services.knowledge_service import KnowledgeService
+from app.domains.knowledge.service import KnowledgeService
 
 
 # ===========================================
@@ -108,9 +108,9 @@ class TestP2_22_DeleteDocConsistency:
     ):
         """向量删除失败时，DB 仍软删以保证用户体验"""
         with patch(
-            "app.services.knowledge_service._CHROMA_AVAILABLE", True
+            "app.domains.knowledge.service._CHROMA_AVAILABLE", True
         ), patch(
-            "app.services.knowledge_service._get_chroma_collection"
+            "app.domains.knowledge.service._get_chroma_collection"
         ) as mock_get:
             mock_collection = MagicMock()
             mock_collection.delete.side_effect = Exception("Chroma connection error")
@@ -129,9 +129,9 @@ class TestP2_22_DeleteDocConsistency:
         call_order = []
 
         with patch(
-            "app.services.knowledge_service._CHROMA_AVAILABLE", True
+            "app.domains.knowledge.service._CHROMA_AVAILABLE", True
         ), patch(
-            "app.services.knowledge_service._get_chroma_collection"
+            "app.domains.knowledge.service._get_chroma_collection"
         ) as mock_get:
             mock_collection = MagicMock()
 
@@ -173,9 +173,9 @@ class TestP2_22_DeleteDocConsistency:
         db_session.commit()
 
         with patch(
-            "app.services.knowledge_service._CHROMA_AVAILABLE", True
+            "app.domains.knowledge.service._CHROMA_AVAILABLE", True
         ), patch(
-            "app.services.knowledge_service._get_chroma_collection"
+            "app.domains.knowledge.service._get_chroma_collection"
         ) as mock_get:
             mock_collection = MagicMock()
             mock_get.return_value = mock_collection
@@ -195,9 +195,9 @@ class TestP2_22_DeleteDocConsistency:
         db_session.commit()
 
         with patch(
-            "app.services.knowledge_service._CHROMA_AVAILABLE", True
+            "app.domains.knowledge.service._CHROMA_AVAILABLE", True
         ), patch(
-            "app.services.knowledge_service._get_chroma_collection"
+            "app.domains.knowledge.service._get_chroma_collection"
         ) as mock_get:
             mock_collection = MagicMock()
             mock_collection.delete.side_effect = Exception("Connection refused")

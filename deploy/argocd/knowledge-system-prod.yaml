@@ -1,0 +1,51 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: knowledge-system-prod
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    notifications.argoproj.io/subscribe.on-deployed.slack: ""
+    notifications.argoproj.io/subscribe.on-health-degraded.slack: ""
+    notifications.argoproj.io/subscribe.on-sync-failed.slack: ""
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/USERNAME/knowledge-system
+    targetRevision: main
+    path: deploy/helm
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-prod.yaml
+      releaseName: knowledge-system
+      parameters:
+        - name: global.imageRegistry
+          value: ghcr.io/USERNAME
+        - name: images.frontend.repository
+          value: USERNAME/knowledge-system-frontend
+        - name: images.backend.repository
+          value: USERNAME/knowledge-system-backend
+        - name: images.frontend.pullPolicy
+          value: Always
+        - name: images.backend.pullPolicy
+          value: Always
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: knowledge-prod
+  syncPolicy:
+    # 生产环境禁用自动同步，必须手动确认 sync 以降低风险
+    # 验证通过后可改 automated.selfHeal=true
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - ApplyOutOfSyncOnly=true
+      - Validate=false
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 5m
+  revisionHistoryLimit: 20

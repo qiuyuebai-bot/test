@@ -1,0 +1,147 @@
+{{- if .Values.velero.enabled -}}
+# ===========================================
+# Phase 8.2: Velero BackupStorageLocation
+# 主备份存储位置（对象存储：阿里云 OSS / AWS S3 / MinIO）
+# ===========================================
+apiVersion: velero.io/v1
+kind: BackupStorageLocation
+metadata:
+  name: {{ include "knowledge-system.fullname" . }}-default
+  namespace: velero
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+spec:
+  provider: {{ .Values.velero.backupStorageLocation.provider | quote }}
+  default: true
+  credential:
+    name: {{ include "knowledge-system.fullname" . }}-velero-credentials
+    key: cloud
+  objectStorage:
+    bucket: {{ .Values.velero.backupStorageLocation.bucket | quote }}
+    {{- if .Values.velero.backupStorageLocation.prefix }}
+    prefix: {{ .Values.velero.backupStorageLocation.prefix | quote }}
+    {{- end }}
+  config:
+    region: {{ .Values.velero.backupStorageLocation.region | quote }}
+    {{- if .Values.velero.backupStorageLocation.endpoint }}
+    s3Url: {{ .Values.velero.backupStorageLocation.endpoint | quote }}
+    {{- end }}
+    {{- if .Values.velero.backupStorageLocation.s3ForcePathStyle }}
+    s3ForcePathStyle: "true"
+    {{- end }}
+---
+# ===========================================
+# Phase 8.2: VolumeSnapshotLocation
+# 存储快照位置（云厂商块存储快照服务）
+# ===========================================
+apiVersion: velero.io/v1
+kind: VolumeSnapshotLocation
+metadata:
+  name: {{ include "knowledge-system.fullname" . }}-default
+  namespace: velero
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+spec:
+  provider: {{ .Values.velero.volumeSnapshotLocation.provider | quote }}
+  config:
+    region: {{ .Values.velero.volumeSnapshotLocation.region | quote }}
+---
+# ===========================================
+# Phase 8.2: Schedule（定期备份计划）
+# 按 label selector 备份 knowledge-system 相关资源 + PVC
+# ===========================================
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: {{ include "knowledge-system.fullname" . }}-backup
+  namespace: velero
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+spec:
+  schedule: {{ .Values.velero.schedule | quote }}
+  template:
+    includedNamespaces:
+      - {{ .Release.Namespace }}
+    labelSelector:
+      matchLabels:
+        app.kubernetes.io/part-of: knowledge-system
+    includePersistentData: true
+    includeSecrets: true
+    includeConfigMaps: true
+    ttl: {{ .Values.velero.ttl | quote }}
+    storageLocation: {{ include "knowledge-system.fullname" . }}-default
+    {{- if .Values.velero.volumeSnapshotLocation.enabled }}
+    snapshotVolumes: true
+    volumeSnapshotLocations:
+      - {{ include "knowledge-system.fullname" . }}-default
+    {{- else }}
+    snapshotVolumes: false
+    {{- end }}
+
+{{- if not .Values.velero.backupStorageLocation.existingCredential }}
+---
+# ===========================================
+# Velero 凭证 Secret（主存储位置）
+# 生产环境推荐使用 existingCredential 指向已有 Secret
+# ===========================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "knowledge-system.fullname" . }}-velero-credentials
+  namespace: velero
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+type: Opaque
+data:
+  cloud: {{ printf "[default]\naws_access_key_id=%s\naws_secret_access_key=%s" .Values.velero.backupStorageLocation.accessKey .Values.velero.backupStorageLocation.secretKey | b64enc | quote }}
+{{- end }}
+
+{{- if and .Values.velero.replication.enabled (not .Values.velero.replication.existingCredential) }}
+---
+# ===========================================
+# Phase 8.6: 跨区域备份复制凭证 Secret
+# ===========================================
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "knowledge-system.fullname" . }}-velero-credentials-replica
+  namespace: velero
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+type: Opaque
+data:
+  cloud: {{ printf "[default]\naws_access_key_id=%s\naws_secret_access_key=%s" .Values.velero.replication.accessKey .Values.velero.replication.secretKey | b64enc | quote }}
+{{- end }}
+
+{{- if .Values.velero.replication.enabled }}
+---
+# ===========================================
+# Phase 8.6: 跨区域 BackupStorageLocation
+# 将备份复制到异地，防止单区域故障导致备份丢失
+# 通过 velero backup-location sync 或 BackupStorageLocation 的 replication 配置实现
+# ===========================================
+apiVersion: velero.io/v1
+kind: BackupStorageLocation
+metadata:
+  name: {{ include "knowledge-system.fullname" . }}-replica
+  namespace: velero
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+spec:
+  provider: {{ .Values.velero.replication.provider | quote }}
+  default: false
+  credential:
+    name: {{ include "knowledge-system.fullname" . }}-velero-credentials-replica
+    key: cloud
+  objectStorage:
+    bucket: {{ .Values.velero.replication.bucket | quote }}
+    {{- if .Values.velero.replication.prefix }}
+    prefix: {{ .Values.velero.replication.prefix | quote }}
+    {{- end }}
+  config:
+    region: {{ .Values.velero.replication.region | quote }}
+    {{- if .Values.velero.replication.endpoint }}
+    s3Url: {{ .Values.velero.replication.endpoint | quote }}
+    {{- end }}
+{{- end }}
+{{- end -}}

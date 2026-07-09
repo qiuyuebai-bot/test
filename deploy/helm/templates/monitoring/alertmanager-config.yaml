@@ -1,0 +1,93 @@
+{{- if .Values.monitoring.alertmanager.enabled -}}
+{{- $channel := .Values.monitoring.alertmanager.channel | default "dingtalk" -}}
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "knowledge-system.fullname" . }}-alertmanager
+  namespace: {{ .Values.monitoring.alertmanager.namespace | default "monitoring" }}
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monitoring
+    release: {{ .Values.monitoring.serviceMonitor.release | default "kube-prometheus-stack" }}
+type: Opaque
+stringData:
+  alertmanager.yaml: |
+    global:
+      resolve_timeout: 5m
+
+    # 告警路由与分组
+    route:
+      group_by: ['alertname', 'namespace', 'service']
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      receiver: 'default'
+      routes:
+        # critical 级别立即发送
+        - match:
+            severity: critical
+          receiver: 'critical'
+          group_wait: 10s
+          repeat_interval: 1h
+        # warning 级别按组发送
+        - match:
+            severity: warning
+          receiver: 'default'
+
+    receivers:
+      - name: 'default'
+        {{- if eq $channel "dingtalk" }}
+        webhook_configs:
+          - url: '{{ .Values.monitoring.alertmanager.webhookUrl }}'
+            send_resolved: true
+        {{- else if eq $channel "wechat" }}
+        webhook_configs:
+          - url: '{{ .Values.monitoring.alertmanager.webhookUrl }}'
+            send_resolved: true
+        {{- else if eq $channel "slack" }}
+        slack_configs:
+          - api_url: '{{ .Values.monitoring.alertmanager.webhookUrl }}'
+            send_resolved: true
+            channel: '#alerts'
+        {{- else if eq $channel "email" }}
+        email_configs:
+          - to: '{{ .Values.monitoring.alertmanager.smtp.to | default .Values.monitoring.alertmanager.smtp.from }}'
+            from: '{{ .Values.monitoring.alertmanager.smtp.from }}'
+            smarthost: '{{ .Values.monitoring.alertmanager.smtp.smarthost }}'
+            auth_username: '{{ .Values.monitoring.alertmanager.smtp.authUsername }}'
+            auth_password: '{{ .Values.monitoring.alertmanager.smtp.authPassword }}'
+            send_resolved: true
+        {{- end }}
+
+      - name: 'critical'
+        {{- if eq $channel "dingtalk" }}
+        webhook_configs:
+          - url: '{{ .Values.monitoring.alertmanager.webhookUrl }}'
+            send_resolved: true
+        {{- else if eq $channel "wechat" }}
+        webhook_configs:
+          - url: '{{ .Values.monitoring.alertmanager.webhookUrl }}'
+            send_resolved: true
+        {{- else if eq $channel "slack" }}
+        slack_configs:
+          - api_url: '{{ .Values.monitoring.alertmanager.webhookUrl }}'
+            send_resolved: true
+            channel: '#alerts-critical'
+        {{- else if eq $channel "email" }}
+        email_configs:
+          - to: '{{ .Values.monitoring.alertmanager.smtp.to | default .Values.monitoring.alertmanager.smtp.from }}'
+            from: '{{ .Values.monitoring.alertmanager.smtp.from }}'
+            smarthost: '{{ .Values.monitoring.alertmanager.smtp.smarthost }}'
+            auth_username: '{{ .Values.monitoring.alertmanager.smtp.authUsername }}'
+            auth_password: '{{ .Values.monitoring.alertmanager.smtp.authPassword }}'
+            send_resolved: true
+        {{- end }}
+
+    # 抑制规则：当 critical 触发时抑制同名的 warning
+    inhibit_rules:
+      - source_match:
+          severity: critical
+        target_match:
+          severity: warning
+        equal: ['alertname', 'namespace', 'service']
+{{- end }}

@@ -1,7 +1,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import type { KnowledgeDoc } from '@/types'
-import { configApi } from '@/api'
+import { configApi, knowledgeApi } from '@/api'
 import type { DomainOption } from '@/api/config'
 import Card from '@/components/Card'
 import Modal from '@/components/Modal'
@@ -22,10 +23,11 @@ import {
   Link,
   BookOpen,
   FileSearch,
+  AlertTriangle,
 } from 'lucide-react'
-import LoadingState from '@/components/LoadingState'
 import EmptyState from '@/components/EmptyState'
 import ErrorState from '@/components/ErrorState'
+import { PageSkeleton } from '@/components/Skeleton'
 import { toast } from '@/components/toastStore'
 
 const statusConfig = {
@@ -180,13 +182,21 @@ function UploadModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void
 }
 
 export default function KnowledgeBase() {
-  const knowledgeDocs = useStore((s) => s.knowledgeDocs)
-  const knowledgeSlices = useStore((s) => s.knowledgeSlices)
-  const knowledgeLoading = useStore((s) => s.knowledgeLoading)
-  const knowledgeError = useStore((s) => s.knowledgeError)
-  const totalKnowledgeDocs = useStore((s) => s.totalKnowledgeDocs)
-  const fetchKnowledgeDocs = useStore((s) => s.fetchKnowledgeDocs)
-  const fetchKnowledgeSlices = useStore((s) => s.fetchKnowledgeSlices)
+  const { knowledgeDocs, knowledgeSlices, knowledgeLoading, knowledgeError, totalKnowledgeDocs } = useStore(
+    useShallow((s) => ({
+      knowledgeDocs: s.knowledgeDocs,
+      knowledgeSlices: s.knowledgeSlices,
+      knowledgeLoading: s.knowledgeLoading,
+      knowledgeError: s.knowledgeError,
+      totalKnowledgeDocs: s.totalKnowledgeDocs,
+    }))
+  )
+  const { fetchKnowledgeDocs, fetchKnowledgeSlices } = useStore(
+    useShallow((s) => ({
+      fetchKnowledgeDocs: s.fetchKnowledgeDocs,
+      fetchKnowledgeSlices: s.fetchKnowledgeSlices,
+    }))
+  )
   const [searchQuery, setSearchQuery] = useState('')
   const [selectedDomain, setSelectedDomain] = useState('all')
   const [showUpload, setShowUpload] = useState(false)
@@ -244,7 +254,50 @@ export default function KnowledgeBase() {
     setShowUpload(true)
   }
 
-  if (knowledgeLoading && knowledgeDocs.length === 0) return <LoadingState />
+  const [deleteTarget, setDeleteTarget] = useState<KnowledgeDoc | null>(null)
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+
+  const handleDownload = async (doc: KnowledgeDoc) => {
+    try {
+      const res = await knowledgeApi.getPreview(doc.id) as { slices?: Array<{ content: string; title?: string }> }
+      const slices = res?.slices || []
+      const text = slices.map((s, i) => `## 切片 ${i + 1}${s.title ? ` - ${s.title}` : ''}\n\n${s.content}`).join('\n\n---\n\n')
+      const blob = new Blob([text || '暂无内容'], { type: 'text/plain;charset=utf-8' })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `${doc.title}.txt`
+      a.click()
+      URL.revokeObjectURL(url)
+      toast.success('文档已下载')
+    } catch {
+      toast.error('下载失败')
+    }
+  }
+
+  const handleDeleteClick = (doc: KnowledgeDoc) => {
+    setDeleteTarget(doc)
+    setShowDeleteConfirm(true)
+  }
+
+  const handleDeleteConfirm = async () => {
+    if (!deleteTarget) return
+    setDeleting(true)
+    try {
+      await knowledgeApi.delete(deleteTarget.id)
+      setShowDeleteConfirm(false)
+      setDeleteTarget(null)
+      await fetchKnowledgeDocs({ page: 1, pageSize: 50 })
+      toast.success('文档已删除')
+    } catch {
+      toast.error('删除失败')
+    } finally {
+      setDeleting(false)
+    }
+  }
+
+  if (knowledgeLoading && knowledgeDocs.length === 0) return <PageSkeleton type="table" />
   if (knowledgeError) return <ErrorState type="default" onRetry={() => fetchKnowledgeDocs({ page: 1, pageSize: 50 })} />
 
   return (
@@ -413,10 +466,18 @@ export default function KnowledgeBase() {
                               >
                                 <Eye className="w-4 h-4 text-text-tertiary" />
                               </button>
-                              <button className="p-2 rounded-lg hover:bg-bg-secondary transition-colors" title="下载">
+                              <button
+                                onClick={() => handleDownload(doc)}
+                                className="p-2 rounded-lg hover:bg-bg-secondary transition-colors"
+                                title="下载"
+                              >
                                 <Download className="w-4 h-4 text-text-tertiary" />
                               </button>
-                              <button className="p-2 rounded-lg hover:bg-red-50 transition-colors" title="删除">
+                              <button
+                                onClick={() => handleDeleteClick(doc)}
+                                className="p-2 rounded-lg hover:bg-red-50 transition-colors"
+                                title="删除"
+                              >
                                 <Trash2 className="w-4 h-4 text-text-tertiary" />
                               </button>
                             </div>
@@ -501,6 +562,35 @@ export default function KnowledgeBase() {
         domainToLabel={domainToLabel}
       />
       <TraceabilityModal isOpen={showTraceability} onClose={() => setShowTraceability(false)} />
+
+      {/* 删除确认弹窗 */}
+      {showDeleteConfirm && deleteTarget && (
+        <Modal isOpen={showDeleteConfirm} onClose={() => { setShowDeleteConfirm(false); setDeleteTarget(null) }} maxWidth="max-w-sm" className="p-8">
+          <div className="text-center">
+            <div className="w-12 h-12 rounded-full bg-error/10 flex items-center justify-center mx-auto mb-4">
+              <AlertTriangle className="w-6 h-6 text-error" />
+            </div>
+            <h3 className="text-base font-semibold text-text-primary mb-2">确认删除文档？</h3>
+            <p className="text-sm text-text-secondary mb-1">
+              即将删除「<span className="font-medium text-text-primary">{deleteTarget.title}</span>」
+            </p>
+            <p className="text-xs text-text-tertiary mb-5">
+              {deleteTarget.totalSlices} 个切片将被一并删除，此操作不可撤销
+            </p>
+            <div className="flex justify-center gap-2">
+              <Button variant="outline" onClick={() => { setShowDeleteConfirm(false); setDeleteTarget(null) }}>取消</Button>
+              <Button
+                variant="primary"
+                onClick={handleDeleteConfirm}
+                disabled={deleting}
+                className="!bg-error hover:!bg-error/90"
+              >
+                {deleting ? '删除中...' : '确认删除'}
+              </Button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   )
 }

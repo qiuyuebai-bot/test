@@ -1,7 +1,8 @@
 import { keysToCamel, keysToSnake } from './utils'
 import { toast } from '../components/toastStore'
+import { reportError } from './sentry'
 
-const API_BASE_URL = '/api/v1'
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
 const ACCESS_TOKEN_KEY = 'access_token'
 const REFRESH_TOKEN_KEY = 'refresh_token'
@@ -236,7 +237,12 @@ async function request<T = unknown>(path: string, options: RequestOptions = {}):
     if (!silent) {
       toast.error('网络错误', '无法连接到服务器，请检查网络连接')
     }
-    throw new NetworkError()
+    const networkErr = new NetworkError()
+    reportError(networkErr, {
+      tags: { kind: 'network', endpoint: path },
+      extra: { method, url, cause: String(err) },
+    })
+    throw networkErr
   }
 
   if (response.status === 401 && !skipAuth && !path.endsWith('/auth/login') && !path.endsWith('/auth/refresh')) {
@@ -282,7 +288,12 @@ async function request<T = unknown>(path: string, options: RequestOptions = {}):
     if (!silent) {
       toast.error('服务器错误', '服务器处理异常，请稍后重试')
     }
-    throw new ApiError(response.status, '服务器内部错误')
+    const err = new ApiError(response.status, '服务器内部错误')
+    reportError(err, {
+      tags: { httpStatus: response.status, endpoint: path },
+      extra: { method, url },
+    })
+    throw err
   }
 
   const contentType = response.headers.get('content-type') || ''

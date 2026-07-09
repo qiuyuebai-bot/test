@@ -150,6 +150,8 @@ export default function Layout() {
       <div className="p-3 border-t border-border hidden lg:block">
         <button
           onClick={toggleSidebar}
+          aria-expanded={!isSidebarCollapsed}
+          aria-label="切换侧边栏"
           className="flex items-center justify-center w-full py-2 rounded-lg text-text-tertiary hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
         >
           <Menu className="w-5 h-5" />
@@ -217,6 +219,8 @@ export default function Layout() {
             <div className="relative" ref={userMenuRef}>
               <button
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
+                aria-expanded={userMenuOpen}
+                aria-haspopup="true"
                 className="flex items-center gap-2 p-1.5 pr-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
               >
                 <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">

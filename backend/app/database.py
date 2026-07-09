@@ -4,6 +4,7 @@
 - SQLite：单线程模式（check_same_thread=False），不使用连接池
 - PostgreSQL：使用连接池（pool_size + max_overflow），pool_pre_ping 保活
 """
+from pathlib import Path
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from typing import Generator
@@ -107,13 +108,47 @@ def get_db_context() -> Generator[Session, None, None]:
 
 def init_database() -> None:
     """
-    初始化数据库
-    创建所有表结构
+    初始化数据库：运行 alembic 迁移
+
+    策略：
+    - 生产环境（APP_ENV=production）：仅运行 alembic upgrade head，迁移失败即报错
+    - 开发/预发布环境：先用 create_all 保证最低可用性，再运行 alembic upgrade head
     """
     import app.models as models
+    import warnings
 
-    logger.info(f"正在初始化数据库（已注册 {len(models.__all__)} 个模型）...")
-    Base.metadata.create_all(bind=engine)
+    logger.info(f"正在初始化数据库（已注册 {len(models.__all__)} 个模型，APP_ENV={settings.APP_ENV}）...")
+
+    is_production = settings.APP_ENV == "production"
+
+    # 开发环境保留 create_all 作为 fallback，保证首次启动开箱即用
+    if not is_production:
+        Base.metadata.create_all(bind=engine)
+        logger.info("create_all 完成（开发环境 fallback）")
+
+    # 运行 alembic 迁移（确保 schema 最新）
+    alembic_ini_path = Path(__file__).resolve().parent.parent / "alembic.ini"
+    if not alembic_ini_path.exists():
+        if is_production:
+            logger.error(f"生产环境未找到 alembic.ini: {alembic_ini_path}")
+            raise RuntimeError(f"生产环境必须配置 alembic.ini: {alembic_ini_path}")
+        logger.warning(f"未找到 alembic.ini: {alembic_ini_path}，跳过 alembic 迁移")
+    else:
+        try:
+            from alembic.config import Config
+            from alembic import command
+
+            alembic_cfg = Config(str(alembic_ini_path))
+            # 显式从 settings 注入 DATABASE_URL，避免 alembic.ini 配置漂移
+            alembic_cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
+            command.upgrade(alembic_cfg, "head")
+            logger.info("Alembic 迁移完成")
+        except Exception as e:
+            if is_production:
+                logger.error(f"生产环境 Alembic 迁移失败: {e}")
+                raise
+            warnings.warn(f"Alembic 迁移失败（不影响 create_all）: {e}")
+
     logger.info("数据库初始化完成")
 
 

@@ -1,52 +1,60 @@
-import { clsx } from 'clsx'
+import { cn } from '../lib/cn'
+import type { CSSProperties } from 'react'
 
 interface SkeletonProps {
   className?: string
-  variant?: 'text' | 'card' | 'circle' | 'rect'
-  count?: number
+  style?: CSSProperties
 }
 
-export default function Skeleton({ className, variant = 'text', count = 1 }: SkeletonProps) {
-  const base = 'animate-shimmer bg-gradient-to-r from-bg-secondary via-bg-secondary/50 to-bg-secondary bg-[length:200%_100%] rounded'
-
-  const variantStyles = {
-    text: 'h-4 w-full rounded',
-    card: 'h-40 w-full rounded-xl',
-    circle: 'h-12 w-12 rounded-full',
-    rect: 'h-20 w-full rounded-lg',
-  }
-
+/** 基础骨架元素，带 shimmer 动画 */
+export function Skeleton({ className, style }: SkeletonProps) {
   return (
-    <>
-      {Array.from({ length: count }).map((_, i) => (
-        <div
-          key={i}
-          className={clsx(base, variantStyles[variant], className)}
-          style={{ animationDelay: `${i * 0.1}s` }}
-        />
-      ))}
-    </>
+    <div
+      style={style}
+      className={cn(
+        'animate-pulse rounded-md bg-gray-200 dark:bg-gray-700',
+        className
+      )}
+    />
   )
 }
 
-// 预设骨架屏组合
-export function PageSkeleton({ rows = 4 }: { rows?: number }) {
+/** 卡片骨架（用于 Dashboard、LearnerProfile 等） */
+export function CardSkeleton({ lines = 3 }: { lines?: number }) {
   return (
-    <div className="space-y-4 p-6">
-      <Skeleton variant="text" className="h-7 w-48" />
-      <Skeleton variant="text" className="h-4 w-72" />
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6">
-        <Skeleton variant="card" />
-        <Skeleton variant="card" />
-        <Skeleton variant="card" />
+    <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-6 space-y-3">
+      <Skeleton className="h-4 w-1/3" />
+      {Array.from({ length: lines }).map((_, i) => (
+        <Skeleton key={i} className="h-3 w-full" />
+      ))}
+      <Skeleton className="h-3 w-2/3" />
+    </div>
+  )
+}
+
+/** 表格骨架（用于 LearnerProfile、EnterpriseTraining 等） */
+export function TableSkeleton({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
+  return (
+    <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
+      <div className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-4">
+        <div className="flex gap-4">
+          {Array.from({ length: cols }).map((_, i) => (
+            <Skeleton key={i} className="h-4 flex-1" />
+          ))}
+        </div>
       </div>
-      <Skeleton variant="rect" className="h-64 mt-4" />
-      {Array.from({ length: rows }).map((_, i) => (
-        <div key={i} className="flex gap-4">
-          <Skeleton variant="circle" className="h-10 w-10" />
-          <div className="flex-1 space-y-2">
-            <Skeleton variant="text" className="h-4 w-3/4" />
-            <Skeleton variant="text" className="h-3 w-1/2" />
+      {Array.from({ length: rows }).map((_, rowIdx) => (
+        <div
+          key={rowIdx}
+          className={cn(
+            'border-b border-gray-200 dark:border-gray-700 p-4',
+            rowIdx === rows - 1 && 'border-b-0'
+          )}
+        >
+          <div className="flex gap-4">
+            {Array.from({ length: cols }).map((_, i) => (
+              <Skeleton key={i} className="h-4 flex-1" />
+            ))}
           </div>
         </div>
       ))}
@@ -54,20 +62,61 @@ export function PageSkeleton({ rows = 4 }: { rows?: number }) {
   )
 }
 
-export function CardSkeleton({ count = 3 }: { count?: number }) {
+/** 图表骨架（用于 MetricsDashboard、LearningReport 等） */
+export function ChartSkeleton({ height = 300 }: { height?: number }) {
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {Array.from({ length: count }).map((_, i) => (
-        <div key={i} className="p-6 rounded-xl border border-border bg-bg-card space-y-3">
-          <Skeleton variant="text" className="h-5 w-3/4" />
-          <Skeleton variant="text" className="h-4 w-full" />
-          <Skeleton variant="text" className="h-4 w-5/6" />
-          <div className="flex gap-2 pt-2">
-            <Skeleton variant="text" className="h-6 w-16 rounded-full" />
-            <Skeleton variant="text" className="h-6 w-20 rounded-full" />
-          </div>
+    <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+      <Skeleton className="h-5 w-1/4 mb-4" />
+      <div className="flex items-end justify-between gap-2" style={{ height }}>
+        {Array.from({ length: 7 }).map((_, i) => (
+          <Skeleton
+            key={i}
+            className="flex-1"
+            // 随机高度，模拟柱状图
+            style={{ height: `${30 + Math.random() * 70}%` }}
+          />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+/** 页面骨架（完整页面占位） */
+export function PageSkeleton({ type = 'default' }: { type?: 'default' | 'table' | 'dashboard' }) {
+  if (type === 'table') {
+    return (
+      <div className="space-y-4 p-6">
+        <div className="flex justify-between items-center">
+          <Skeleton className="h-6 w-48" />
+          <Skeleton className="h-9 w-24 rounded-md" />
         </div>
-      ))}
+        <TableSkeleton />
+      </div>
+    )
+  }
+
+  if (type === 'dashboard') {
+    return (
+      <div className="space-y-6 p-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <CardSkeleton />
+          <CardSkeleton />
+          <CardSkeleton />
+        </div>
+        <ChartSkeleton />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <CardSkeleton />
+          <CardSkeleton />
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-4 p-6">
+      <Skeleton className="h-8 w-1/4" />
+      <CardSkeleton />
+      <CardSkeleton />
     </div>
   )
 }

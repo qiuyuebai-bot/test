@@ -144,7 +144,8 @@ class HallucinationUtil:
         import hashlib
         ref_excerpt = (reference_content or "")[:200]
         cache_key = hashlib.md5(
-            (content[:500] + "||" + ref_excerpt).encode("utf-8")
+            (content[:500] + "||" + ref_excerpt).encode("utf-8"),
+            usedforsecurity=False,
         ).hexdigest()
         
         if cache_key in HallucinationUtil._deep_check_cache:

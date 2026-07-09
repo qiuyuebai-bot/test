@@ -1,0 +1,6515 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "领域知识个性化生成与多智能体协同决策系统",
+    "description": "领域知识个性化生成与多智能体协同决策系统后端API\n\n## 认证方式\n- 除 `/auth/login`、`/auth/register`、健康检查外，所有接口需在请求头携带 `Authorization: Bearer <access_token>`\n- Token 通过 `POST /api/v1/auth/login` 获取，有效期由 `JWT_EXPIRE_MINUTES` 控制\n- Token 过期后通过 `POST /api/v1/auth/refresh` 刷新\n\n## 统一响应格式\n所有接口返回 `{code, message, data, timestamp}` 结构，`code=200` 表示成功",
+    "contact": {
+      "name": "知识系统团队",
+      "url": "https://github.com/knowledge-system"
+    },
+    "license": {
+      "name": "MIT",
+      "url": "https://opensource.org/licenses/MIT"
+    },
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "/api/v1",
+      "description": "当前环境（相对路径）"
+    },
+    {
+      "url": "http://localhost:8000/api/v1",
+      "description": "开发环境"
+    },
+    {
+      "url": "https://staging.example.com/api/v1",
+      "description": "预发布环境"
+    },
+    {
+      "url": "https://api.example.com/api/v1",
+      "description": "生产环境"
+    }
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "tags": [
+          "运维",
+          "基础"
+        ],
+        "summary": "Root",
+        "description": "根路径 - 系统信息",
+        "operationId": "root__get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health/live": {
+      "get": {
+        "tags": [
+          "运维",
+          "运维"
+        ],
+        "summary": "Health Liveness",
+        "description": "存活检查（Liveness Probe）",
+        "operationId": "health_liveness_api_v1_health_live_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health": {
+      "get": {
+        "tags": [
+          "运维",
+          "运维"
+        ],
+        "summary": "Health Liveness",
+        "description": "存活检查（Liveness Probe）",
+        "operationId": "health_liveness_api_v1_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/live": {
+      "get": {
+        "tags": [
+          "运维",
+          "运维"
+        ],
+        "summary": "Health Liveness",
+        "description": "存活检查（Liveness Probe）",
+        "operationId": "health_liveness_health_live_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": [
+          "运维",
+          "运维"
+        ],
+        "summary": "Health Liveness",
+        "description": "存活检查（Liveness Probe）",
+        "operationId": "health_liveness_health_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/health/ready": {
+      "get": {
+        "tags": [
+          "运维",
+          "运维"
+        ],
+        "summary": "Health Readiness",
+        "description": "就绪检查（Readiness Probe）",
+        "operationId": "health_readiness_api_v1_health_ready_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health/ready": {
+      "get": {
+        "tags": [
+          "运维",
+          "运维"
+        ],
+        "summary": "Health Readiness",
+        "description": "就绪检查（Readiness Probe）",
+        "operationId": "health_readiness_health_ready_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/metrics/prometheus": {
+      "get": {
+        "tags": [
+          "运维",
+          "运维"
+        ],
+        "summary": "Get Prometheus Metrics",
+        "description": "Prometheus /metrics 端点",
+        "operationId": "get_prometheus_metrics_api_v1_metrics_prometheus_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "tags": [
+          "运维",
+          "运维"
+        ],
+        "summary": "Get Prometheus Metrics",
+        "description": "Prometheus /metrics 端点",
+        "operationId": "get_prometheus_metrics_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/info": {
+      "get": {
+        "tags": [
+          "运维",
+          "基础"
+        ],
+        "summary": "System Info",
+        "description": "系统信息接口",
+        "operationId": "system_info_api_v1_info_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/metrics": {
+      "get": {
+        "tags": [
+          "运维",
+          "指标"
+        ],
+        "summary": "Get Core Metrics",
+        "description": "获取核心量化指标（从数据库真实统计）",
+        "operationId": "get_core_metrics_api_v1_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/register": {
+      "post": {
+        "tags": [
+          "认证"
+        ],
+        "summary": "用户注册",
+        "description": "新用户注册\n\n- 默认角色为 learner\n- 密码自动哈希存储",
+        "operationId": "register_api_v1_auth_register_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RegisterRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误（用户名已占用、邮箱已注册等）"
+          },
+          "401": {
+            "description": "未授权（凭据无效或Token过期）"
+          },
+          "422": {
+            "description": "请求体验证失败（字段格式不符合要求）"
+          },
+          "500": {
+            "description": "服务器内部错误"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "认证"
+        ],
+        "summary": "用户登录",
+        "description": "用户登录，返回访问Token和刷新Token\n\n- 支持用户名登录\n- 返回JWT Token对",
+        "operationId": "login_api_v1_auth_login_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误（用户名已占用、邮箱已注册等）"
+          },
+          "401": {
+            "description": "未授权（凭据无效或Token过期）"
+          },
+          "422": {
+            "description": "请求体验证失败（字段格式不符合要求）"
+          },
+          "500": {
+            "description": "服务器内部错误"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/refresh": {
+      "post": {
+        "tags": [
+          "认证"
+        ],
+        "summary": "刷新Token",
+        "description": "使用刷新Token获取新的访问Token\n\n- 刷新Token有效期7天\n- 返回新的访问Token和刷新Token",
+        "operationId": "refresh_token_api_v1_auth_refresh_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RefreshTokenRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误（用户名已占用、邮箱已注册等）"
+          },
+          "401": {
+            "description": "未授权（凭据无效或Token过期）"
+          },
+          "422": {
+            "description": "请求体验证失败（字段格式不符合要求）"
+          },
+          "500": {
+            "description": "服务器内部错误"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": [
+          "认证"
+        ],
+        "summary": "获取当前用户信息",
+        "description": "获取当前登录用户的详细信息\n\n- 需要登录\n- 返回用户基本信息、角色、权限等",
+        "operationId": "get_current_user_info_api_v1_auth_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误（用户名已占用、邮箱已注册等）"
+          },
+          "401": {
+            "description": "未授权（凭据无效或Token过期）"
+          },
+          "422": {
+            "description": "请求体验证失败（字段格式不符合要求）"
+          },
+          "500": {
+            "description": "服务器内部错误"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/change-password": {
+      "post": {
+        "tags": [
+          "认证"
+        ],
+        "summary": "修改密码",
+        "description": "修改当前用户密码\n\n- 需要验证旧密码\n- 新密码需满足复杂度要求",
+        "operationId": "change_password_api_v1_auth_change_password_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChangePasswordRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误（用户名已占用、邮箱已注册等）"
+          },
+          "401": {
+            "description": "未授权（凭据无效或Token过期）"
+          },
+          "422": {
+            "description": "请求体验证失败（字段格式不符合要求）"
+          },
+          "500": {
+            "description": "服务器内部错误"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "认证"
+        ],
+        "summary": "用户登出",
+        "description": "用户登出（前端清除Token即可，服务端记录登出日志）",
+        "operationId": "logout_api_v1_auth_logout_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/auth/verify": {
+      "get": {
+        "tags": [
+          "认证"
+        ],
+        "summary": "验证Token有效性",
+        "description": "验证当前Token是否有效\n\n- 用于前端检查登录状态\n- 有效Token返回用户基本信息",
+        "operationId": "verify_token_api_v1_auth_verify_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误（用户名已占用、邮箱已注册等）"
+          },
+          "401": {
+            "description": "未授权（凭据无效或Token过期）"
+          },
+          "422": {
+            "description": "请求体验证失败（字段格式不符合要求）"
+          },
+          "500": {
+            "description": "服务器内部错误"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/learners": {
+      "post": {
+        "tags": [
+          "学习者画像"
+        ],
+        "summary": "创建学习者画像",
+        "description": "创建新的学习者画像\n\n- **user_id**: 关联用户ID\n- **real_name**: 真实姓名\n- **education_level**: 学历层次\n- **major**: 专业方向\n- **theoretical_foundation**: 理论基础(0-100)\n- 以及其他能力维度、知识盲区等",
+        "operationId": "create_learner_api_v1_learners_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LearnerProfileCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "学习者画像"
+        ],
+        "summary": "获取学习者列表",
+        "description": "获取学习者列表，支持分页、搜索、筛选\n\n- **page**: 页码\n- **page_size**: 每页数量\n- **keyword**: 关键词搜索（姓名/专业/职位）\n- **education_level**: 学历过滤\n- **target_industry**: 目标行业\n- **learning_style**: 学习风格\n- **is_anonymized**: 是否脱敏",
+        "operationId": "get_learner_list_api_v1_learners_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "name": "education_level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Education Level"
+            }
+          },
+          {
+            "name": "target_industry",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Target Industry"
+            }
+          },
+          {
+            "name": "learning_style",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Learning Style"
+            }
+          },
+          {
+            "name": "is_anonymized",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "boolean"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Is Anonymized"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/learners/{learner_id}": {
+      "get": {
+        "tags": [
+          "学习者画像"
+        ],
+        "summary": "获取学习者详情",
+        "description": "根据ID获取学习者详细信息\n\n- **learner_id**: 学习者ID",
+        "operationId": "get_learner_detail_api_v1_learners__learner_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "learner_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Learner Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "学习者画像"
+        ],
+        "summary": "更新学习者画像",
+        "description": "更新学习者画像信息",
+        "operationId": "update_learner_api_v1_learners__learner_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "learner_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Learner Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LearnerProfileUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "学习者画像"
+        ],
+        "summary": "删除学习者画像",
+        "description": "删除学习者画像",
+        "operationId": "delete_learner_api_v1_learners__learner_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "learner_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Learner Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/learners/batch-import": {
+      "post": {
+        "tags": [
+          "学习者画像"
+        ],
+        "summary": "批量导入学习者",
+        "description": "批量导入多组差异化学情数据\n\n- **learners**: 学习者列表",
+        "operationId": "batch_import_learners_api_v1_learners_batch_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LearnerBatchImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/learners/batch-export": {
+      "post": {
+        "tags": [
+          "学习者画像"
+        ],
+        "summary": "批量导出学习者",
+        "description": "批量导出学习者画像，支持JSON/CSV格式\n\n- **learner_ids**: 指定导出的ID，为空则导出全部\n- **export_format**: 导出格式(json/csv)\n- **include_sensitive**: 是否包含敏感数据",
+        "operationId": "batch_export_learners_api_v1_learners_batch_export_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LearnerBatchExportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/learners/{learner_id}/analyze": {
+      "post": {
+        "tags": [
+          "学习者画像"
+        ],
+        "summary": "学情分析",
+        "description": "自动解析测试答题记录，提取理论强项、技能盲区\n\n- **learner_id**: 学习者ID",
+        "operationId": "analyze_learning_api_v1_learners__learner_id__analyze_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "learner_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Learner Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/learners/{learner_id}/anonymize": {
+      "post": {
+        "tags": [
+          "学习者画像"
+        ],
+        "summary": "数据脱敏",
+        "description": "一键对指定学习者敏感信息进行掩码处理\n\n- **learner_id**: 学习者ID\n- **fields**: 指定脱敏字段，为空则脱敏所有敏感字段",
+        "operationId": "anonymize_learner_api_v1_learners__learner_id__anonymize_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "learner_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Learner Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "allOf": [
+                  {
+                    "$ref": "#/components/schemas/AnonymizeRequest"
+                  }
+                ],
+                "title": "Anonymize Request"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/learners/{learner_id}/answers": {
+      "post": {
+        "tags": [
+          "学习者画像"
+        ],
+        "summary": "添加答题记录",
+        "description": "添加学习者答题记录（用于学情分析）",
+        "operationId": "add_answer_record_api_v1_learners__learner_id__answers_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "learner_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Learner Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnswerRecordCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "学习者画像"
+        ],
+        "summary": "获取答题记录",
+        "description": "获取学习者答题记录列表",
+        "operationId": "get_answer_records_api_v1_learners__learner_id__answers_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "learner_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Learner Id"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/learners/{learner_id}/blind-areas": {
+      "get": {
+        "tags": [
+          "学习者画像"
+        ],
+        "summary": "获取知识盲区标签云",
+        "description": "获取学习者知识盲区标签云数据",
+        "operationId": "get_blind_areas_api_v1_learners__learner_id__blind_areas_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "learner_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Learner Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/knowledge/upload": {
+      "post": {
+        "tags": [
+          "知识库"
+        ],
+        "summary": "上传知识库文档",
+        "description": "上传知识库文档，自动解析切片并建立向量索引\n\n支持 multipart/form-data（文件上传）和 application/json（纯文本创建）",
+        "operationId": "upload_document_api_v1_knowledge_upload_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误（文件格式不支持、内容为空等）"
+          },
+          "401": {
+            "description": "未授权（Token缺失或过期）"
+          },
+          "403": {
+            "description": "权限不足（需要管理员角色）"
+          },
+          "404": {
+            "description": "资源不存在（文档ID无效）"
+          },
+          "413": {
+            "description": "上传文件超出大小限制"
+          },
+          "422": {
+            "description": "请求体验证失败"
+          },
+          "500": {
+            "description": "服务器内部错误（解析失败、向量索引异常等）"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/knowledge/docs": {
+      "get": {
+        "tags": [
+          "知识库"
+        ],
+        "summary": "获取文档列表",
+        "description": "获取知识库文档列表，支持分页、搜索、筛选\n\n- **page**: 页码\n- **page_size**: 每页数量\n- **keyword**: 关键词搜索（标题/标签）\n- **industry**: 行业过滤\n- **status**: 状态过滤",
+        "operationId": "get_doc_list_api_v1_knowledge_docs_get",
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 10,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "name": "industry",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Industry"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/knowledge/docs/{doc_id}": {
+      "get": {
+        "tags": [
+          "知识库"
+        ],
+        "summary": "获取文档详情",
+        "description": "根据ID获取文档详细信息",
+        "operationId": "get_doc_detail_api_v1_knowledge_docs__doc_id__get",
+        "parameters": [
+          {
+            "name": "doc_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Doc Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "知识库"
+        ],
+        "summary": "更新文档信息",
+        "description": "更新文档信息（标题、行业、标签等）",
+        "operationId": "update_doc_api_v1_knowledge_docs__doc_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Doc Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeDocUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "知识库"
+        ],
+        "summary": "删除文档",
+        "description": "删除文档（软删除）",
+        "operationId": "delete_doc_api_v1_knowledge_docs__doc_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Doc Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/knowledge/docs/batch-delete": {
+      "post": {
+        "tags": [
+          "知识库"
+        ],
+        "summary": "批量删除文档",
+        "description": "批量删除文档",
+        "operationId": "batch_delete_docs_api_v1_knowledge_docs_batch_delete_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeBatchDeleteRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/knowledge/search": {
+      "post": {
+        "tags": [
+          "知识库"
+        ],
+        "summary": "知识库相似度检索",
+        "description": "按知识点相似度检索知识库\n\n- **query**: 检索查询\n- **industry**: 行业过滤\n- **doc_id**: 指定文档\n- **top_k**: 返回结果数量\n- **min_similarity**: 最低相似度",
+        "operationId": "search_knowledge_api_v1_knowledge_search_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgeSearchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误（文件格式不支持、内容为空等）"
+          },
+          "401": {
+            "description": "未授权（Token缺失或过期）"
+          },
+          "403": {
+            "description": "权限不足（需要管理员角色）"
+          },
+          "404": {
+            "description": "资源不存在（文档ID无效）"
+          },
+          "413": {
+            "description": "上传文件超出大小限制"
+          },
+          "422": {
+            "description": "请求体验证失败"
+          },
+          "500": {
+            "description": "服务器内部错误（解析失败、向量索引异常等）"
+          }
+        }
+      }
+    },
+    "/api/v1/knowledge/preview/{doc_id}": {
+      "get": {
+        "tags": [
+          "知识库"
+        ],
+        "summary": "文档内容预览",
+        "description": "预览文档内容，分页查看切片\n\n- **doc_id**: 文档ID\n- **slice_start**: 起始切片序号\n- **slice_count**: 切片数量",
+        "operationId": "get_doc_preview_api_v1_knowledge_preview__doc_id__get",
+        "parameters": [
+          {
+            "name": "doc_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Doc Id"
+            }
+          },
+          {
+            "name": "slice_start",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 0,
+              "title": "Slice Start"
+            }
+          },
+          {
+            "name": "slice_count",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "title": "Slice Count"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/knowledge/trace/{resource_id}": {
+      "get": {
+        "tags": [
+          "知识库"
+        ],
+        "summary": "知识溯源查询",
+        "description": "根据资源ID反向溯源知识库原始文档\n\n- **resource_id**: 学习资源ID",
+        "operationId": "trace_resource_knowledge_api_v1_knowledge_trace__resource_id__get",
+        "parameters": [
+          {
+            "name": "resource_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Resource Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/knowledge/stats/industries": {
+      "get": {
+        "tags": [
+          "知识库"
+        ],
+        "summary": "各行业知识库统计",
+        "description": "获取各行业知识库统计数据（缓存 60 秒）",
+        "operationId": "get_industry_stats_api_v1_knowledge_stats_industries_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/knowledge/docs/{doc_id}/reindex": {
+      "post": {
+        "tags": [
+          "知识库"
+        ],
+        "summary": "重新索引文档",
+        "description": "重新对文档进行切片和向量索引",
+        "operationId": "reindex_doc_api_v1_knowledge_docs__doc_id__reindex_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "doc_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Doc Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/status": {
+      "get": {
+        "tags": [
+          "Agent协同调度"
+        ],
+        "summary": "获取所有Agent状态",
+        "description": "获取三大Agent实时状态\n\n- 返回: 学情诊断Agent、领域知识生成Agent、审核裁判Agent的当前状态",
+        "operationId": "get_all_agent_status_api_v1_agent_status_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/agent/status/{agent_type}": {
+      "get": {
+        "tags": [
+          "Agent协同调度"
+        ],
+        "summary": "获取指定Agent状态",
+        "description": "获取指定Agent的状态\n\n- agent_type: diagnosis / generation / judge",
+        "operationId": "get_agent_status_api_v1_agent_status__agent_type__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "agent_type",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Agent Type"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/tasks": {
+      "post": {
+        "tags": [
+          "Agent协同调度"
+        ],
+        "summary": "创建Agent任务",
+        "description": "创建新的Agent协同任务\n\n- 支持任务类型:\n  - learner_diagnosis: 学情诊断\n  - resource_generation: 资源生成\n  - full_pipeline: 完整流水线（诊断+生成+审核+辩论）",
+        "operationId": "create_agent_task_api_v1_agent_tasks_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAgentTaskRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误（任务参数不合法、Agent类型无效等）"
+          },
+          "401": {
+            "description": "未授权（Token缺失或过期）"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "任务不存在（task_id无效）"
+          },
+          "409": {
+            "description": "任务状态冲突（任务已在运行中）"
+          },
+          "422": {
+            "description": "请求体验证失败"
+          },
+          "500": {
+            "description": "服务器内部错误（Agent执行异常、LLM调用失败等）"
+          }
+        }
+      },
+      "get": {
+        "tags": [
+          "Agent协同调度"
+        ],
+        "summary": "获取任务列表",
+        "description": "分页获取Agent任务列表\n\n- 支持按学习者、状态、类型筛选",
+        "operationId": "get_task_list_api_v1_agent_tasks_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "learner_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Learner Id"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "task_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Task Type"
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "default": 20,
+              "title": "Page Size"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/tasks/{task_id}/start": {
+      "post": {
+        "tags": [
+          "Agent协同调度"
+        ],
+        "summary": "启动任务执行",
+        "description": "启动Agent任务执行\n\n- 使用后台线程立即执行，不阻塞HTTP响应\n- 可通过 /tasks/{task_id}/status 查询进度\n- 可通过 /tasks/{task_id}/events (SSE) 实时接收进度事件",
+        "operationId": "start_agent_task_api_v1_agent_tasks__task_id__start_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误（任务参数不合法、Agent类型无效等）"
+          },
+          "401": {
+            "description": "未授权（Token缺失或过期）"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "任务不存在（task_id无效）"
+          },
+          "409": {
+            "description": "任务状态冲突（任务已在运行中）"
+          },
+          "422": {
+            "description": "请求体验证失败"
+          },
+          "500": {
+            "description": "服务器内部错误（Agent执行异常、LLM调用失败等）"
+          }
+        }
+      }
+    },
+    "/api/v1/agent/tasks/{task_id}/stream-ticket": {
+      "post": {
+        "tags": [
+          "Agent协同调度"
+        ],
+        "summary": "获取SSE短期票据",
+        "description": "签发一次性短期票据用于 SSE 连接鉴权（30 秒有效），避免 JWT Token 泄露到 URL/日志",
+        "operationId": "create_sse_ticket_api_v1_agent_tasks__task_id__stream_ticket_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/tasks/{task_id}/events": {
+      "get": {
+        "tags": [
+          "Agent协同调度"
+        ],
+        "summary": "SSE实时任务进度流",
+        "description": "Server-Sent Events 实时进度推送\n\n- 前端先调用 POST /tasks/{task_id}/stream-ticket 获取短期票据\n- 再用 ?ticket= 参数连接此端点（票据 30 秒有效，一次性消费）\n- 实时接收任务各阶段进度、辩论轮次、完成/失败事件\n- 连接关闭自动取消订阅",
+        "operationId": "task_events_stream_api_v1_agent_tasks__task_id__events_get",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          },
+          {
+            "name": "ticket",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Ticket"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/tasks/{task_id}/status": {
+      "get": {
+        "tags": [
+          "Agent协同调度"
+        ],
+        "summary": "查询任务状态",
+        "description": "查询任务实时状态和进度\n\n- 返回当前阶段、进度百分比、错误信息等",
+        "operationId": "get_task_status_api_v1_agent_tasks__task_id__status_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/tasks/{task_id}/logs": {
+      "get": {
+        "tags": [
+          "Agent协同调度"
+        ],
+        "summary": "查询任务执行日志",
+        "description": "查询任务执行日志（供前端可视化）\n\n- 返回按时间排序的执行日志列表",
+        "operationId": "get_task_logs_api_v1_agent_tasks__task_id__logs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/diagnose": {
+      "post": {
+        "tags": [
+          "Agent协同调度"
+        ],
+        "summary": "执行学情诊断",
+        "description": "调用学情诊断Agent分析学习者画像\n\n- 输出: 能力评分、知识盲区、难度推荐、学习建议",
+        "operationId": "run_diagnosis_api_v1_agent_diagnose_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiagnosisRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误（任务参数不合法、Agent类型无效等）"
+          },
+          "401": {
+            "description": "未授权（Token缺失或过期）"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "任务不存在（task_id无效）"
+          },
+          "409": {
+            "description": "任务状态冲突（任务已在运行中）"
+          },
+          "422": {
+            "description": "请求体验证失败"
+          },
+          "500": {
+            "description": "服务器内部错误（Agent执行异常、LLM调用失败等）"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/agent/debate/{task_id}": {
+      "get": {
+        "tags": [
+          "Agent协同调度"
+        ],
+        "summary": "获取辩论记录",
+        "description": "获取指定任务的辩论交叉验证记录\n\n- 返回所有辩论轮次的完整记录\n- 包含: 裁判观点、生成Agent回应、冲突点、修正方案",
+        "operationId": "get_debate_records_api_v1_agent_debate__task_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/agent/metrics/hallucination": {
+      "get": {
+        "tags": [
+          "Agent协同调度"
+        ],
+        "summary": "幻觉率统计",
+        "description": "统计幻觉率等核心指标\n\n- 幻觉率 = 检出幻觉的内容数 / 总内容数\n- 返回: 总数量、幻觉数量、幻觉率、平均得分、通过率",
+        "operationId": "get_hallucination_metrics_api_v1_agent_metrics_hallucination_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/agent/metrics/performance": {
+      "get": {
+        "tags": [
+          "Agent协同调度"
+        ],
+        "summary": "Agent性能统计",
+        "description": "Agent执行性能统计\n\n- 总任务数、成功数、失败数\n- 平均执行时长",
+        "operationId": "get_agent_performance_api_v1_agent_metrics_performance_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/agent/run/full-pipeline": {
+      "post": {
+        "tags": [
+          "Agent协同调度"
+        ],
+        "summary": "一键执行完整流水线",
+        "description": "一键执行完整Agent协同流水线\n\n流程: 学情诊断 → 知识库检索 → 内容生成 → 初次审核 → 辩论交叉验证 → 最终输出\n\n- 后台线程立即异步执行\n- 返回任务ID，用于查询进度或订阅SSE事件流",
+        "operationId": "run_full_pipeline_api_v1_agent_run_full_pipeline_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerationRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "请求参数错误（任务参数不合法、Agent类型无效等）"
+          },
+          "401": {
+            "description": "未授权（Token缺失或过期）"
+          },
+          "403": {
+            "description": "权限不足"
+          },
+          "404": {
+            "description": "任务不存在（task_id无效）"
+          },
+          "409": {
+            "description": "任务状态冲突（任务已在运行中）"
+          },
+          "422": {
+            "description": "请求体验证失败"
+          },
+          "500": {
+            "description": "服务器内部错误（Agent执行异常、LLM调用失败等）"
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/resources/generate": {
+      "post": {
+        "tags": [
+          "个性化资源生成"
+        ],
+        "summary": "生成三类个性化学习资源（Celery异步）",
+        "description": "一次性生成三类学习资源：定制实操指南、分阶训练测试题、专属知识讲义\n\n- 传入学情画像ID，自动调度多Agent协同\n- 复用诊断+检索阶段，避免重复执行\n- 自动计算资源匹配度\n- 优先使用 Celery 异步队列，不可用时降级为 BackgroundTasks",
+        "operationId": "generate_resources_api_v1_resources_generate_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateResourcesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/resources/generate/batch": {
+      "post": {
+        "tags": [
+          "个性化资源生成"
+        ],
+        "summary": "批量生成资源（Celery异步）",
+        "description": "批量生成资源（多个学习者）\n\n请求体:\n{\n    \"learner_ids\": [1, 2, 3],\n    \"target_topic\": \"Python机器学习\",\n    \"industry\": \"人工智能训练\"\n}",
+        "operationId": "batch_generate_resources_api_v1_resources_generate_batch_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "title": "Request"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tasks/{task_id}/status": {
+      "get": {
+        "tags": [
+          "个性化资源生成"
+        ],
+        "summary": "查询 Celery 任务进度",
+        "description": "查询异步任务进度\n\n- 返回当前阶段、进度百分比、状态信息\n- 支持 resource_generation / batch_generation 等任务类型",
+        "operationId": "get_task_status_api_v1_tasks__task_id__status_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Task Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/resources/generate/sync": {
+      "post": {
+        "tags": [
+          "个性化资源生成"
+        ],
+        "summary": "同步生成三类资源",
+        "description": "同步生成三类学习资源（演示用）\n\n- 传入学情画像ID，自动调度多Agent协同\n- 返回完整生成结果",
+        "operationId": "generate_resources_sync_api_v1_resources_generate_sync_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateResourcesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/resources": {
+      "get": {
+        "tags": [
+          "个性化资源生成"
+        ],
+        "summary": "获取资源列表",
+        "description": "获取资源列表（支持分页、筛选）\n\n- 支持按学习者、类型、难度、状态筛选\n- 返回资源匹配度等关键指标",
+        "operationId": "get_resource_list_api_v1_resources_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "learner_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "学习者ID",
+              "title": "Learner Id"
+            },
+            "description": "学习者ID"
+          },
+          {
+            "name": "resource_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "资源类型",
+              "title": "Resource Type"
+            },
+            "description": "资源类型"
+          },
+          {
+            "name": "difficulty_level",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "难度等级",
+              "title": "Difficulty Level"
+            },
+            "description": "难度等级"
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "状态",
+              "title": "Status"
+            },
+            "description": "状态"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "页码",
+              "default": 1,
+              "title": "Page"
+            },
+            "description": "页码"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "每页大小",
+              "default": 20,
+              "title": "Page Size"
+            },
+            "description": "每页大小"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/resources/{resource_id}": {
+      "get": {
+        "tags": [
+          "个性化资源生成"
+        ],
+        "summary": "获取资源详情",
+        "description": "获取资源详情（含完整内容）\n\n- 返回资源完整信息，包括内容、匹配度、来源切片等",
+        "operationId": "get_resource_detail_api_v1_resources__resource_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "resource_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Resource Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/resources/{resource_id}/export": {
+      "get": {
+        "tags": [
+          "个性化资源生成"
+        ],
+        "summary": "导出资源",
+        "description": "导出资源文件\n\n- 支持txt和md两种格式\n- 返回纯文本内容，可直接下载",
+        "operationId": "export_resource_api_v1_resources__resource_id__export_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "resource_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Resource Id"
+            }
+          },
+          {
+            "name": "format",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "description": "导出格式: txt/md",
+              "default": "txt",
+              "title": "Format"
+            },
+            "description": "导出格式: txt/md"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/report/learner/{learner_id}": {
+      "get": {
+        "tags": [
+          "学情可视化报告"
+        ],
+        "summary": "生成完整学情报告",
+        "description": "生成完整学情报告（前端可视化看板直接渲染）\n\n返回结构化数据：\n- 知识盲区热力图\n- 资源难度匹配曲线\n- 学习路径节点拓扑\n- 能力雷达图\n- 核心指标统计",
+        "operationId": "generate_learner_report_api_v1_report_learner__learner_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "learner_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Learner Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/report/learner/{learner_id}/pdf": {
+      "get": {
+        "tags": [
+          "学情可视化报告"
+        ],
+        "summary": "导出学情报告 PDF",
+        "description": "一键导出学情报告为 PDF 文件\n\n- 包含学习者基本信息、核心指标、知识盲区分析、能力评估、学习路径规划\n- 返回 PDF 文件流，浏览器自动下载",
+        "operationId": "export_learner_report_pdf_api_v1_report_learner__learner_id__pdf_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "learner_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Learner Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/report/heatmap/{learner_id}": {
+      "get": {
+        "tags": [
+          "学情可视化报告"
+        ],
+        "summary": "获取知识盲区热力图数据",
+        "description": "获取知识盲区热力图数据（对齐前端 Recharts HeatmapChart 需求）",
+        "operationId": "get_blind_area_heatmap_api_v1_report_heatmap__learner_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "learner_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Learner Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/report/match-curve/{learner_id}": {
+      "get": {
+        "tags": [
+          "学情可视化报告"
+        ],
+        "summary": "获取难度匹配曲线数据",
+        "description": "获取资源难度匹配曲线数据（对齐前端 Recharts LineChart 需求）",
+        "operationId": "get_match_curve_api_v1_report_match_curve__learner_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "learner_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Learner Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/report/ability-trend/{learner_id}": {
+      "get": {
+        "tags": [
+          "学情可视化报告"
+        ],
+        "summary": "获取能力发展趋势数据",
+        "description": "获取学习者能力发展趋势数据（从答题记录按周聚合平均分，用于前端 AreaChart）",
+        "operationId": "get_ability_trend_api_v1_report_ability_trend__learner_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "learner_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Learner Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/report/learning-path/{learner_id}": {
+      "get": {
+        "tags": [
+          "学情可视化报告"
+        ],
+        "summary": "获取学习路径拓扑数据",
+        "description": "获取学习路径节点拓扑数据（返回节点和边信息，用于前端绘制路径图）",
+        "operationId": "get_learning_path_api_v1_report_learning_path__learner_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "learner_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Learner Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/report/ability-radar/{learner_id}": {
+      "get": {
+        "tags": [
+          "学情可视化报告"
+        ],
+        "summary": "获取能力雷达图数据",
+        "description": "获取能力雷达图数据（对齐前端 Recharts RadarChart 需求）",
+        "operationId": "get_ability_radar_api_v1_report_ability_radar__learner_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "learner_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Learner Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/report/metrics": {
+      "get": {
+        "tags": [
+          "学情可视化报告"
+        ],
+        "summary": "获取系统核心指标",
+        "description": "获取系统级核心指标（对齐前端 SystemMetrics 类型）\n\n- 幻觉率、资源匹配准确率、知识点覆盖率\n- 趋势数据（最近7天）",
+        "operationId": "get_system_metrics_api_v1_report_metrics_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/report/metrics/update": {
+      "post": {
+        "tags": [
+          "学情可视化报告"
+        ],
+        "summary": "更新指标统计",
+        "description": "更新指标统计（定时任务调用）\n\n- 自动计算资源匹配准确率、知识点覆盖率\n- 更新到指标统计表",
+        "operationId": "update_metrics_api_v1_report_metrics_update_post",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tutoring/questions": {
+      "get": {
+        "tags": [
+          "自适应导学"
+        ],
+        "summary": "获取导学题库",
+        "description": "获取自适应导学题库",
+        "operationId": "get_tutoring_questions_api_v1_tutoring_questions_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tutoring/answer": {
+      "post": {
+        "tags": [
+          "自适应导学"
+        ],
+        "summary": "提交答题结果",
+        "description": "提交答题结果，触发多Agent协同自适应决策\n\n双分支逻辑：\n- 正确率≥70% → 生成高阶进阶挑战任务\n- 正确率<70% → 生成简化通俗知识点解释\n\n完整留存交互记录，支持历史回溯",
+        "operationId": "submit_answer_api_v1_tutoring_answer_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitAnswerRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/tutoring/history/{learner_id}": {
+      "get": {
+        "tags": [
+          "自适应导学"
+        ],
+        "summary": "获取交互历史记录",
+        "description": "获取历史交互记录（支持回溯查询）\n\n- 返回每轮答题、Agent决策、新生成资源的完整记录\n- 支持按会话筛选",
+        "operationId": "get_interaction_history_api_v1_tutoring_history__learner_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "learner_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Learner Id"
+            }
+          },
+          {
+            "name": "session_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "会话ID",
+              "title": "Session Id"
+            },
+            "description": "会话ID"
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "页码",
+              "default": 1,
+              "title": "Page"
+            },
+            "description": "页码"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "每页大小",
+              "default": 20,
+              "title": "Page Size"
+            },
+            "description": "每页大小"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/tutoring/decision-logic": {
+      "get": {
+        "tags": [
+          "自适应导学"
+        ],
+        "summary": "获取自适应决策逻辑说明",
+        "description": "获取自适应决策逻辑说明（双分支触发条件、Agent协同流程）",
+        "operationId": "get_decision_logic_api_v1_tutoring_decision_logic_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/config/options": {
+      "get": {
+        "tags": [
+          "业务配置"
+        ],
+        "summary": "获取前端业务配置选项",
+        "description": "聚合返回前端需要的业务选项（行业/领域/培训模板/脱敏规则）\n\n- 数据来源：backend/app/data/business_config.json\n- 前端各页面通过 configApi.getOptions() 获取，避免硬编码\n- 缓存 5 分钟，减少文件 IO",
+        "operationId": "get_config_options_api_v1_config_options_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/trainings": {
+      "get": {
+        "tags": [
+          "企业培训"
+        ],
+        "summary": "获取培训任务列表",
+        "description": "获取企业培训任务列表，支持分页、搜索、筛选",
+        "operationId": "get_training_list_api_v1_trainings_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 10,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Keyword"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "training_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Training Type"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "企业培训"
+        ],
+        "summary": "创建培训任务",
+        "description": "创建新的企业培训任务",
+        "operationId": "create_training_api_v1_trainings_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainingCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trainings/stats/overview": {
+      "get": {
+        "tags": [
+          "企业培训"
+        ],
+        "summary": "获取培训统计",
+        "description": "获取培训统计概览（缓存 30 秒）",
+        "operationId": "get_training_stats_api_v1_trainings_stats_overview_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/trainings/transfers/list": {
+      "get": {
+        "tags": [
+          "企业培训"
+        ],
+        "summary": "获取转岗培训列表",
+        "description": "获取所有转岗培训记录",
+        "operationId": "get_transfers_api_v1_trainings_transfers_list_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/trainings/skill-gaps/analysis": {
+      "get": {
+        "tags": [
+          "企业培训"
+        ],
+        "summary": "获取技能差距分析",
+        "description": "获取技能差距分析数据",
+        "operationId": "get_skill_gaps_api_v1_trainings_skill_gaps_analysis_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "training_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Training Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/trainings/batch-import": {
+      "post": {
+        "tags": [
+          "企业培训"
+        ],
+        "summary": "批量导入培训任务",
+        "description": "批量导入培训任务",
+        "operationId": "batch_import_api_v1_trainings_batch_import_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainingBatchImportRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/trainings/{training_id}": {
+      "get": {
+        "tags": [
+          "企业培训"
+        ],
+        "summary": "获取培训任务详情",
+        "description": "根据ID获取培训任务详情",
+        "operationId": "get_training_detail_api_v1_trainings__training_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "training_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Training Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "企业培训"
+        ],
+        "summary": "更新培训任务",
+        "description": "更新培训任务信息",
+        "operationId": "update_training_api_v1_trainings__training_id__put",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "training_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Training Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/TrainingUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "企业培训"
+        ],
+        "summary": "删除培训任务",
+        "description": "删除培训任务",
+        "operationId": "delete_training_api_v1_trainings__training_id__delete",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "training_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Training Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/privacy/overview": {
+      "get": {
+        "tags": [
+          "数据隐私与合规"
+        ],
+        "summary": "获取隐私合规总览",
+        "description": "获取隐私合规总览状态",
+        "operationId": "get_overview_api_v1_privacy_overview_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/privacy/compliance": {
+      "get": {
+        "tags": [
+          "数据隐私与合规"
+        ],
+        "summary": "获取隐私合规检查项",
+        "description": "获取隐私合规检查项列表",
+        "operationId": "get_compliance_api_v1_privacy_compliance_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/privacy/anonymization": {
+      "get": {
+        "tags": [
+          "数据隐私与合规"
+        ],
+        "summary": "获取数据脱敏规则",
+        "description": "获取数据脱敏规则列表",
+        "operationId": "get_anonymization_api_v1_privacy_anonymization_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/privacy/anonymization/test": {
+      "post": {
+        "tags": [
+          "数据隐私与合规"
+        ],
+        "summary": "测试数据脱敏",
+        "description": "根据字段类型对输入值进行脱敏测试（仅管理员）",
+        "operationId": "test_anonymization_api_v1_privacy_anonymization_test_post",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AnonymizationTestRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/privacy/permissions": {
+      "get": {
+        "tags": [
+          "数据隐私与合规"
+        ],
+        "summary": "获取数据权限配置",
+        "description": "获取数据权限配置列表（基于系统角色模型）",
+        "operationId": "get_permissions_api_v1_privacy_permissions_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/privacy/keys": {
+      "get": {
+        "tags": [
+          "数据隐私与合规"
+        ],
+        "summary": "获取密钥管理信息（脱敏展示）",
+        "description": "获取密钥管理信息，仅返回掩码后的密钥值（仅管理员）",
+        "operationId": "get_keys_api_v1_privacy_keys_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/privacy/documents": {
+      "get": {
+        "tags": [
+          "数据隐私与合规"
+        ],
+        "summary": "获取合规文档列表",
+        "description": "获取合规文档列表",
+        "operationId": "get_documents_api_v1_privacy_documents_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
+    "/api/v1/audit/logs": {
+      "get": {
+        "tags": [
+          "审计日志"
+        ],
+        "summary": "查询审计日志（分页）",
+        "description": "分页查询审计日志，支持多维度筛选",
+        "operationId": "get_audit_logs_api_v1_audit_logs_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "页码",
+              "default": 1,
+              "title": "Page"
+            },
+            "description": "页码"
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "description": "每页数量",
+              "default": 20,
+              "title": "Page Size"
+            },
+            "description": "每页数量"
+          },
+          {
+            "name": "user_id",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按用户ID筛选",
+              "title": "User Id"
+            },
+            "description": "按用户ID筛选"
+          },
+          {
+            "name": "action",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按操作类型筛选",
+              "title": "Action"
+            },
+            "description": "按操作类型筛选"
+          },
+          {
+            "name": "resource_type",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "按资源类型筛选",
+              "title": "Resource Type"
+            },
+            "description": "按资源类型筛选"
+          },
+          {
+            "name": "start_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "开始日期(YYYY-MM-DD)",
+              "title": "Start Date"
+            },
+            "description": "开始日期(YYYY-MM-DD)"
+          },
+          {
+            "name": "end_date",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string",
+                  "format": "date"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "结束日期(YYYY-MM-DD)",
+              "title": "End Date"
+            },
+            "description": "结束日期(YYYY-MM-DD)"
+          },
+          {
+            "name": "keyword",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "路径关键词搜索",
+              "title": "Keyword"
+            },
+            "description": "路径关键词搜索"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/audit/stats": {
+      "get": {
+        "tags": [
+          "审计日志"
+        ],
+        "summary": "审计日志统计",
+        "description": "审计日志统计概览：操作分布、活跃用户、趋势",
+        "operationId": "get_audit_stats_api_v1_audit_stats_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "days",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 90,
+              "minimum": 1,
+              "description": "统计最近N天",
+              "default": 7,
+              "title": "Days"
+            },
+            "description": "统计最近N天"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/audit/actions": {
+      "get": {
+        "tags": [
+          "审计日志"
+        ],
+        "summary": "获取操作类型列表",
+        "description": "获取所有已记录的操作类型，用于前端筛选下拉框",
+        "operationId": "get_audit_actions_api_v1_audit_actions_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AnonymizationTestRequest": {
+        "properties": {
+          "field": {
+            "type": "string",
+            "title": "Field",
+            "description": "字段类型(name/phone/idcard/email/address)"
+          },
+          "value": {
+            "type": "string",
+            "title": "Value",
+            "description": "待脱敏的原始值"
+          }
+        },
+        "type": "object",
+        "required": [
+          "field",
+          "value"
+        ],
+        "title": "AnonymizationTestRequest",
+        "description": "脱敏测试请求"
+      },
+      "AnonymizeRequest": {
+        "properties": {
+          "learner_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Learner Id",
+            "description": "学习者ID"
+          },
+          "fields": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fields",
+            "description": "指定脱敏字段，为空则脱敏所有敏感字段"
+          }
+        },
+        "type": "object",
+        "title": "AnonymizeRequest",
+        "description": "脱敏请求"
+      },
+      "AnswerRecordCreate": {
+        "properties": {
+          "learner_id": {
+            "type": "integer",
+            "title": "Learner Id"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "question_type": {
+            "type": "string",
+            "title": "Question Type"
+          },
+          "question_topic": {
+            "type": "string",
+            "title": "Question Topic"
+          },
+          "question_difficulty": {
+            "type": "integer",
+            "title": "Question Difficulty",
+            "default": 3
+          },
+          "question_content": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question Content"
+          },
+          "user_answer": {
+            "title": "User Answer"
+          },
+          "correct_answer": {
+            "title": "Correct Answer"
+          },
+          "result": {
+            "type": "string",
+            "title": "Result"
+          },
+          "score": {
+            "type": "number",
+            "title": "Score",
+            "default": 0
+          },
+          "time_spent_ms": {
+            "type": "integer",
+            "title": "Time Spent Ms",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "learner_id",
+          "question_type",
+          "question_topic",
+          "user_answer",
+          "correct_answer",
+          "result"
+        ],
+        "title": "AnswerRecordCreate",
+        "description": "创建答题记录请求"
+      },
+      "BaseResponse": {
+        "properties": {
+          "code": {
+            "type": "integer",
+            "title": "Code",
+            "description": "状态码",
+            "default": 200
+          },
+          "message": {
+            "type": "string",
+            "title": "Message",
+            "description": "提示消息",
+            "default": "操作成功"
+          },
+          "data": {
+            "anyOf": [
+              {},
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data",
+            "description": "业务数据"
+          },
+          "timestamp": {
+            "type": "string",
+            "title": "Timestamp",
+            "description": "响应时间戳"
+          }
+        },
+        "type": "object",
+        "title": "BaseResponse",
+        "description": "统一返回结果基类",
+        "example": {
+          "code": 200,
+          "message": "操作成功",
+          "timestamp": "2024-03-15 14:30:00"
+        }
+      },
+      "ChangePasswordRequest": {
+        "properties": {
+          "old_password": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Old Password",
+            "description": "旧密码"
+          },
+          "new_password": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "New Password",
+            "description": "新密码（至少8位，包含字母和数字）"
+          }
+        },
+        "type": "object",
+        "required": [
+          "old_password",
+          "new_password"
+        ],
+        "title": "ChangePasswordRequest",
+        "description": "修改密码请求"
+      },
+      "CreateAgentTaskRequest": {
+        "properties": {
+          "learner_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Learner Id",
+            "description": "学习者ID"
+          },
+          "task_name": {
+            "type": "string",
+            "maxLength": 200,
+            "minLength": 1,
+            "title": "Task Name",
+            "description": "任务名称"
+          },
+          "task_type": {
+            "type": "string",
+            "title": "Task Type",
+            "description": "任务类型: learner_diagnosis/resource_generation/full_pipeline"
+          },
+          "target_topic": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Topic",
+            "description": "目标主题"
+          },
+          "resource_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Resource Type",
+            "description": "资源类型: guide/exercise/lecture",
+            "default": "guide"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry",
+            "description": "行业领域"
+          },
+          "input_data": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Input Data",
+            "description": "额外输入数据"
+          }
+        },
+        "type": "object",
+        "required": [
+          "learner_id",
+          "task_name",
+          "task_type"
+        ],
+        "title": "CreateAgentTaskRequest",
+        "description": "创建Agent任务请求"
+      },
+      "DiagnosisRequest": {
+        "properties": {
+          "learner_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Learner Id",
+            "description": "学习者ID"
+          }
+        },
+        "type": "object",
+        "required": [
+          "learner_id"
+        ],
+        "title": "DiagnosisRequest",
+        "description": "学情诊断请求"
+      },
+      "GenerateResourcesRequest": {
+        "properties": {
+          "learner_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Learner Id",
+            "description": "学习者ID"
+          },
+          "target_topic": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Target Topic",
+            "description": "目标主题"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry",
+            "description": "行业领域"
+          }
+        },
+        "type": "object",
+        "required": [
+          "learner_id",
+          "target_topic"
+        ],
+        "title": "GenerateResourcesRequest",
+        "description": "生成资源请求"
+      },
+      "GenerationRequest": {
+        "properties": {
+          "learner_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Learner Id",
+            "description": "学习者ID"
+          },
+          "target_topic": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Target Topic",
+            "description": "目标主题"
+          },
+          "resource_type": {
+            "type": "string",
+            "title": "Resource Type",
+            "description": "资源类型: guide/exercise/lecture",
+            "default": "guide"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry",
+            "description": "行业领域"
+          }
+        },
+        "type": "object",
+        "required": [
+          "learner_id",
+          "target_topic"
+        ],
+        "title": "GenerationRequest",
+        "description": "资源生成请求"
+      },
+      "HTTPValidationError": {
+        "properties": {
+          "detail": {
+            "items": {
+              "$ref": "#/components/schemas/ValidationError"
+            },
+            "type": "array",
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "title": "HTTPValidationError"
+      },
+      "KnowledgeBatchDeleteRequest": {
+        "properties": {
+          "doc_ids": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "minItems": 1,
+            "title": "Doc Ids"
+          }
+        },
+        "type": "object",
+        "required": [
+          "doc_ids"
+        ],
+        "title": "KnowledgeBatchDeleteRequest",
+        "description": "批量删除请求"
+      },
+      "KnowledgeDocUpdate": {
+        "properties": {
+          "title": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200,
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          },
+          "category": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Category"
+          },
+          "tags": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Tags"
+          },
+          "is_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Enabled"
+          }
+        },
+        "type": "object",
+        "title": "KnowledgeDocUpdate",
+        "description": "更新文档请求"
+      },
+      "KnowledgeSearchRequest": {
+        "properties": {
+          "query": {
+            "type": "string",
+            "maxLength": 500,
+            "minLength": 1,
+            "title": "Query",
+            "description": "检索查询"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry",
+            "description": "行业过滤"
+          },
+          "doc_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Doc Id",
+            "description": "指定文档ID"
+          },
+          "top_k": {
+            "type": "integer",
+            "maximum": 50.0,
+            "minimum": 1.0,
+            "title": "Top K",
+            "description": "返回结果数量",
+            "default": 5
+          },
+          "min_similarity": {
+            "type": "number",
+            "maximum": 1.0,
+            "minimum": 0.0,
+            "title": "Min Similarity",
+            "description": "最低相似度",
+            "default": 0.6
+          },
+          "search_type": {
+            "type": "string",
+            "title": "Search Type",
+            "description": "检索类型(vector/keyword/hybrid)",
+            "default": "hybrid"
+          }
+        },
+        "type": "object",
+        "required": [
+          "query"
+        ],
+        "title": "KnowledgeSearchRequest",
+        "description": "知识库检索请求"
+      },
+      "LearnerBatchExportRequest": {
+        "properties": {
+          "learner_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Learner Ids",
+            "description": "指定导出的学习者ID，为空则导出全部"
+          },
+          "export_format": {
+            "type": "string",
+            "title": "Export Format",
+            "description": "导出格式(json/csv)",
+            "default": "json"
+          },
+          "include_sensitive": {
+            "type": "boolean",
+            "title": "Include Sensitive",
+            "description": "是否包含敏感数据",
+            "default": false
+          }
+        },
+        "type": "object",
+        "title": "LearnerBatchExportRequest",
+        "description": "批量导出请求"
+      },
+      "LearnerBatchImportItem": {
+        "properties": {
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id"
+          },
+          "real_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Real Name"
+          },
+          "education_level": {
+            "type": "string",
+            "title": "Education Level"
+          },
+          "major": {
+            "type": "string",
+            "title": "Major"
+          },
+          "learning_style": {
+            "type": "string",
+            "title": "Learning Style",
+            "default": "visual"
+          },
+          "theoretical_foundation": {
+            "type": "number",
+            "title": "Theoretical Foundation",
+            "default": 0
+          },
+          "programming_ability": {
+            "type": "number",
+            "title": "Programming Ability",
+            "default": 0
+          },
+          "algorithm_design": {
+            "type": "number",
+            "title": "Algorithm Design",
+            "default": 0
+          },
+          "system_architecture": {
+            "type": "number",
+            "title": "System Architecture",
+            "default": 0
+          },
+          "data_analysis": {
+            "type": "number",
+            "title": "Data Analysis",
+            "default": 0
+          },
+          "engineering_practice": {
+            "type": "number",
+            "title": "Engineering Practice",
+            "default": 0
+          },
+          "knowledge_blind_areas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Knowledge Blind Areas",
+            "default": []
+          },
+          "target_industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Industry"
+          }
+        },
+        "type": "object",
+        "required": [
+          "education_level",
+          "major"
+        ],
+        "title": "LearnerBatchImportItem",
+        "description": "批量导入项"
+      },
+      "LearnerBatchImportRequest": {
+        "properties": {
+          "learners": {
+            "items": {
+              "$ref": "#/components/schemas/LearnerBatchImportItem"
+            },
+            "type": "array",
+            "maxItems": 100,
+            "title": "Learners"
+          },
+          "items": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/LearnerBatchImportItem"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Items",
+            "description": "兼容旧版字段名"
+          }
+        },
+        "type": "object",
+        "title": "LearnerBatchImportRequest",
+        "description": "批量导入请求"
+      },
+      "LearnerProfileCreate": {
+        "properties": {
+          "real_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Real Name",
+            "description": "真实姓名"
+          },
+          "education_level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Education Level",
+            "description": "学历层次"
+          },
+          "major": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Major",
+            "description": "专业方向"
+          },
+          "graduation_year": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 2030.0,
+                "minimum": 1980.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Graduation Year",
+            "description": "毕业年份"
+          },
+          "current_position": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Position",
+            "description": "当前职位"
+          },
+          "learning_style": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Learning Style",
+            "description": "学习风格",
+            "default": "visual"
+          },
+          "preferred_difficulty": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 5.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Difficulty",
+            "description": "偏好难度等级",
+            "default": 3
+          },
+          "daily_study_time": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 480.0,
+                "minimum": 10.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Study Time",
+            "description": "每日学习时间(分钟)",
+            "default": 60
+          },
+          "target_industry": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Industry",
+            "description": "目标行业"
+          },
+          "target_position": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Position",
+            "description": "目标岗位"
+          },
+          "learning_goal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Learning Goal",
+            "description": "学习目标描述"
+          },
+          "user_id": {
+            "type": "integer",
+            "title": "User Id",
+            "description": "关联用户ID"
+          },
+          "theoretical_foundation": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Theoretical Foundation",
+            "description": "理论基础",
+            "default": 0.0
+          },
+          "programming_ability": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Programming Ability",
+            "description": "编程能力",
+            "default": 0.0
+          },
+          "algorithm_design": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Algorithm Design",
+            "description": "算法设计",
+            "default": 0.0
+          },
+          "system_architecture": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "System Architecture",
+            "description": "系统架构",
+            "default": 0.0
+          },
+          "data_analysis": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Data Analysis",
+            "description": "数据分析",
+            "default": 0.0
+          },
+          "engineering_practice": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Engineering Practice",
+            "description": "工程实践",
+            "default": 0.0
+          },
+          "knowledge_blind_areas": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Knowledge Blind Areas",
+            "description": "知识盲区标签"
+          }
+        },
+        "type": "object",
+        "required": [
+          "user_id"
+        ],
+        "title": "LearnerProfileCreate",
+        "description": "创建学习者画像请求"
+      },
+      "LearnerProfileUpdate": {
+        "properties": {
+          "real_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Real Name"
+          },
+          "education_level": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Education Level"
+          },
+          "major": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Major"
+          },
+          "graduation_year": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Graduation Year"
+          },
+          "current_position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Current Position"
+          },
+          "learning_style": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Learning Style"
+          },
+          "preferred_difficulty": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Preferred Difficulty"
+          },
+          "daily_study_time": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Study Time"
+          },
+          "target_industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Industry"
+          },
+          "target_position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Position"
+          },
+          "learning_goal": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Learning Goal"
+          },
+          "theoretical_foundation": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Theoretical Foundation"
+          },
+          "programming_ability": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Programming Ability"
+          },
+          "algorithm_design": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Algorithm Design"
+          },
+          "system_architecture": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "System Architecture"
+          },
+          "data_analysis": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Data Analysis"
+          },
+          "engineering_practice": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Engineering Practice"
+          },
+          "knowledge_blind_areas": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Knowledge Blind Areas"
+          }
+        },
+        "type": "object",
+        "title": "LearnerProfileUpdate",
+        "description": "更新学习者画像请求"
+      },
+      "LoginRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 3,
+            "title": "Username",
+            "description": "用户名",
+            "example": "admin"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Password",
+            "description": "密码",
+            "example": "admin123"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "LoginRequest",
+        "description": "登录请求"
+      },
+      "RefreshTokenRequest": {
+        "properties": {
+          "refresh_token": {
+            "type": "string",
+            "title": "Refresh Token",
+            "description": "刷新Token"
+          }
+        },
+        "type": "object",
+        "required": [
+          "refresh_token"
+        ],
+        "title": "RefreshTokenRequest",
+        "description": "刷新Token请求"
+      },
+      "RegisterRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "maxLength": 50,
+            "minLength": 3,
+            "title": "Username",
+            "description": "用户名",
+            "example": "new_user"
+          },
+          "password": {
+            "type": "string",
+            "maxLength": 128,
+            "minLength": 8,
+            "title": "Password",
+            "description": "密码（至少8位，包含字母和数字）",
+            "example": "password123"
+          },
+          "email": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Email",
+            "description": "邮箱",
+            "example": "user@example.com"
+          },
+          "role": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Role",
+            "description": "角色: learner/teacher（admin角色仅由管理员创建）",
+            "default": "learner"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "RegisterRequest",
+        "description": "注册请求"
+      },
+      "SubmitAnswerRequest": {
+        "properties": {
+          "learner_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Learner Id",
+            "description": "学习者ID"
+          },
+          "user_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "User Id",
+            "description": "用户ID"
+          },
+          "question_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Question Id",
+            "description": "题目ID"
+          },
+          "question_type": {
+            "type": "string",
+            "title": "Question Type",
+            "description": "题目类型"
+          },
+          "question_topic": {
+            "type": "string",
+            "title": "Question Topic",
+            "description": "题目主题"
+          },
+          "question_difficulty": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 1.0,
+            "title": "Question Difficulty",
+            "description": "题目难度"
+          },
+          "question_content": {
+            "type": "string",
+            "title": "Question Content",
+            "description": "题目内容"
+          },
+          "user_answer": {
+            "title": "User Answer",
+            "description": "用户答案"
+          },
+          "correct_answer": {
+            "title": "Correct Answer",
+            "description": "正确答案"
+          },
+          "result": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Result",
+            "description": "答题结果"
+          },
+          "score": {
+            "type": "number",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Score",
+            "description": "得分"
+          },
+          "time_spent_ms": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Time Spent Ms",
+            "description": "答题耗时(毫秒)"
+          },
+          "hints_used": {
+            "type": "integer",
+            "title": "Hints Used",
+            "description": "使用提示次数",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "required": [
+          "learner_id",
+          "question_type",
+          "question_topic",
+          "question_difficulty",
+          "question_content",
+          "user_answer",
+          "correct_answer",
+          "score",
+          "time_spent_ms"
+        ],
+        "title": "SubmitAnswerRequest",
+        "description": "提交答题请求"
+      },
+      "TrainingBatchImportItem": {
+        "properties": {
+          "company_name": {
+            "type": "string",
+            "title": "Company Name"
+          },
+          "training_name": {
+            "type": "string",
+            "title": "Training Name"
+          },
+          "training_type": {
+            "type": "string",
+            "title": "Training Type",
+            "default": "standard"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          },
+          "participant_count": {
+            "type": "integer",
+            "title": "Participant Count",
+            "default": 0
+          },
+          "responsible_person": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsible Person"
+          }
+        },
+        "type": "object",
+        "required": [
+          "company_name",
+          "training_name"
+        ],
+        "title": "TrainingBatchImportItem",
+        "description": "批量导入单条"
+      },
+      "TrainingBatchImportRequest": {
+        "properties": {
+          "trainings": {
+            "items": {
+              "$ref": "#/components/schemas/TrainingBatchImportItem"
+            },
+            "type": "array",
+            "title": "Trainings"
+          }
+        },
+        "type": "object",
+        "required": [
+          "trainings"
+        ],
+        "title": "TrainingBatchImportRequest",
+        "description": "批量导入请求"
+      },
+      "TrainingCreate": {
+        "properties": {
+          "company_name": {
+            "type": "string",
+            "maxLength": 100,
+            "title": "Company Name",
+            "description": "企业名称"
+          },
+          "training_name": {
+            "type": "string",
+            "maxLength": 200,
+            "title": "Training Name",
+            "description": "培训名称"
+          },
+          "training_type": {
+            "type": "string",
+            "title": "Training Type",
+            "description": "培训类型(standard/transfer)",
+            "default": "standard"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description",
+            "description": "培训描述"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry",
+            "description": "所属行业"
+          },
+          "modules": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Modules",
+            "description": "培训模块列表"
+          },
+          "participant_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Participant Count",
+            "description": "参与人数",
+            "default": 0
+          },
+          "participants": {
+            "items": {
+              "type": "integer"
+            },
+            "type": "array",
+            "title": "Participants",
+            "description": "参与学员ID列表"
+          },
+          "responsible_person": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 50
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsible Person",
+            "description": "负责人"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date",
+            "description": "开始日期"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date",
+            "description": "结束日期"
+          },
+          "estimated_duration": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Estimated Duration",
+            "description": "预计时长(天)",
+            "default": 0
+          },
+          "is_transfer_training": {
+            "type": "boolean",
+            "title": "Is Transfer Training",
+            "description": "是否转岗培训",
+            "default": false
+          },
+          "transfer_from_position": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transfer From Position",
+            "description": "原岗位"
+          },
+          "transfer_to_position": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 100
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transfer To Position",
+            "description": "目标岗位"
+          },
+          "skill_gap_analysis": {
+            "type": "object",
+            "title": "Skill Gap Analysis",
+            "description": "技能差距分析"
+          }
+        },
+        "type": "object",
+        "required": [
+          "company_name",
+          "training_name"
+        ],
+        "title": "TrainingCreate",
+        "description": "创建培训任务"
+      },
+      "TrainingUpdate": {
+        "properties": {
+          "training_name": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 200
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Training Name"
+          },
+          "description": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Description"
+          },
+          "industry": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Industry"
+          },
+          "modules": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Modules"
+          },
+          "participant_count": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Participant Count"
+          },
+          "participants": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "integer"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Participants"
+          },
+          "responsible_person": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Responsible Person"
+          },
+          "start_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Start Date"
+          },
+          "end_date": {
+            "anyOf": [
+              {
+                "type": "string",
+                "format": "date-time"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "End Date"
+          },
+          "estimated_duration": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Estimated Duration"
+          },
+          "status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "pattern": "^(planning|ongoing|completed|cancelled)$"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Status"
+          },
+          "progress_percentage": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress Percentage"
+          },
+          "completed_modules": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Completed Modules"
+          },
+          "is_transfer_training": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Is Transfer Training"
+          },
+          "transfer_from_position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transfer From Position"
+          },
+          "transfer_to_position": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Transfer To Position"
+          },
+          "skill_gap_analysis": {
+            "anyOf": [
+              {
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Skill Gap Analysis"
+          },
+          "pass_rate": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pass Rate"
+          },
+          "average_score": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Average Score"
+          },
+          "satisfaction_rate": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Satisfaction Rate"
+          }
+        },
+        "type": "object",
+        "title": "TrainingUpdate",
+        "description": "更新培训任务"
+      },
+      "ValidationError": {
+        "properties": {
+          "loc": {
+            "items": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "integer"
+                }
+              ]
+            },
+            "type": "array",
+            "title": "Location"
+          },
+          "msg": {
+            "type": "string",
+            "title": "Message"
+          },
+          "type": {
+            "type": "string",
+            "title": "Error Type"
+          }
+        },
+        "type": "object",
+        "required": [
+          "loc",
+          "msg",
+          "type"
+        ],
+        "title": "ValidationError"
+      }
+    },
+    "securitySchemes": {
+      "HTTPBearer": {
+        "type": "http",
+        "scheme": "bearer"
+      },
+      "OAuth2PasswordBearer": {
+        "type": "oauth2",
+        "flows": {
+          "password": {
+            "scopes": {},
+            "tokenUrl": "/api/v1/auth/login"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "认证",
+      "description": "用户登录、注册、Token 刷新、个人信息与密码管理"
+    },
+    {
+      "name": "学习者画像",
+      "description": "学习者画像采集、查询、更新与自适应学习能力评估"
+    },
+    {
+      "name": "知识库",
+      "description": "知识文档上传、解析、切片、向量检索与溯源"
+    },
+    {
+      "name": "Agent协同调度",
+      "description": "多智能体任务编排、进度追踪与协同决策"
+    },
+    {
+      "name": "核心业务",
+      "description": "资源生成、学习报告、自适应导学等核心业务流程"
+    },
+    {
+      "name": "企业培训",
+      "description": "企业培训任务导入、管理与学员进度跟踪"
+    },
+    {
+      "name": "数据隐私与合规",
+      "description": "数据脱敏、合规检查与隐私保护接口"
+    },
+    {
+      "name": "审计日志",
+      "description": "审计日志查询、统计与操作追溯（管理员权限）"
+    },
+    {
+      "name": "运维",
+      "description": "健康检查、存活/就绪探针、Prometheus 指标采集"
+    },
+    {
+      "name": "基础",
+      "description": "系统根路径信息与应用元数据"
+    },
+    {
+      "name": "指标",
+      "description": "系统运行指标与核心业务指标查询"
+    }
+  ]
+}

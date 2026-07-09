@@ -1,13 +1,14 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import { coreApi } from '@/api'
 import type { TutoringQuestion } from '@/api/core'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
-import LoadingState from '@/components/LoadingState'
 import EmptyState from '@/components/EmptyState'
 import ErrorState from '@/components/ErrorState'
+import { PageSkeleton } from '@/components/Skeleton'
 import {
   Brain,
   User,
@@ -139,8 +140,12 @@ function mapHistoryRecord(r: HistoryRecordRaw): HistoryRecord {
 }
 
 export default function AdaptiveGuidance() {
-  const currentLearner = useStore((s) => s.currentLearner)
-  const learners = useStore((s) => s.learners)
+  const { currentLearner, learners } = useStore(
+    useShallow((s) => ({
+      currentLearner: s.currentLearner,
+      learners: s.learners,
+    }))
+  )
   const learner = currentLearner || learners[0]
 
   const [questions, setQuestions] = useState<TutoringQuestion[]>([])
@@ -329,7 +334,7 @@ export default function AdaptiveGuidance() {
     }
   }
 
-  if (loading) return <LoadingState type="analyzing" />
+  if (loading) return <PageSkeleton type="default" />
 
   if (error) {
     return <ErrorState type="default" onRetry={() => loadData()} />
@@ -422,7 +427,7 @@ export default function AdaptiveGuidance() {
                 <span className="text-text-tertiary">学习进度</span>
                 <span className="text-primary font-medium">{Math.round(progress)}%</span>
               </div>
-              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                 <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
               </div>
             </div>
@@ -682,7 +687,7 @@ export default function AdaptiveGuidance() {
 
             {isAdjusting && (
               <div className="mb-4">
-                <div className="h-1 bg-gray-100 rounded-full overflow-hidden">
+                <div className="h-1 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-primary rounded-full transition-all duration-300"
                     style={{ width: `${adjustmentProgress}%` }}
@@ -714,7 +719,7 @@ export default function AdaptiveGuidance() {
                           ? 'bg-success/10'
                           : agent.status === 'running'
                           ? 'bg-primary/10'
-                          : 'bg-gray-100'
+                          : 'bg-gray-100 dark:bg-gray-800'
                       }`}>
                         <Icon className={`w-4 h-4 ${
                           agent.status === 'complete'
@@ -784,7 +789,7 @@ export default function AdaptiveGuidance() {
                 <span className="text-sm text-text-secondary">理论基础</span>
                 <span className="text-sm font-medium text-text-primary">{learner?.theoreticalFoundation ?? 0}%</span>
               </div>
-              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                 <div className="h-full bg-primary rounded-full" style={{ width: `${learner?.theoreticalFoundation ?? 0}%` }} />
               </div>
               <div className="flex items-center justify-between">

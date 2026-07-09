@@ -1,0 +1,163 @@
+{{- if .Values.monitoring.prometheusRule.enabled -}}
+{{- $lb := "{{" -}}
+{{- $rb := "}}" -}}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "knowledge-system.fullname" . }}-alerts
+  namespace: {{ .Values.monitoring.prometheusRule.namespace | default "monitoring" }}
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monitoring
+    release: {{ .Values.monitoring.serviceMonitor.release | default "kube-prometheus-stack" }}
+spec:
+  groups:
+    # ===========================================
+    # API 健康与性能告警
+    # ===========================================
+    - name: knowledge-system.api
+      rules:
+        # HTTP 5xx 错误率 > 5% 持续 5 分钟
+        - alert: KnowledgeSystemHighErrorRate
+          expr: |
+            (
+              sum(rate(http_requests_total{status_code=~"5.."}[5m])) by (namespace, service)
+              /
+              clamp_min(sum(rate(http_requests_total[5m])) by (namespace, service), 1)
+            ) > 0.05
+          for: 5m
+          labels:
+            severity: critical
+            category: api
+          annotations:
+            summary: "{{ $lb }} $labels.service {{ $rb }} 5xx 错误率过高"
+            description: "{{ $lb }} $labels.service {{ $rb }} 5xx 错误率 {{ $lb }} $value | humanizePercentage {{ $rb }}（> 5% 持续 5 分钟），可能存在后端异常。"
+
+        # HTTP P99 延迟 > 2s 持续 5 分钟
+        - alert: KnowledgeSystemHighLatency
+          expr: |
+            histogram_quantile(0.99,
+              sum(rate(http_request_duration_seconds_bucket[5m])) by (le, namespace, service)
+            ) > 2
+          for: 5m
+          labels:
+            severity: warning
+            category: api
+          annotations:
+            summary: "{{ $lb }} $labels.service {{ $rb }} P99 延迟过高"
+            description: "{{ $lb }} $labels.service {{ $rb }} HTTP P99 延迟 {{ $lb }} $value {{ $rb }}s（> 2s 持续 5 分钟），可能存在性能瓶颈。"
+
+        # 当前在处理请求数 > 100
+        - alert: KnowledgeSystemHighInProgress
+          expr: http_requests_in_progress > 100
+          for: 10m
+          labels:
+            severity: warning
+            category: api
+          annotations:
+            summary: "在处理请求数过高"
+            description: "当前在处理 HTTP 请求 {{ $lb }} $value {{ $rb }} 个（> 100 持续 10 分钟），可能存在请求堆积。"
+
+    # ===========================================
+    # LLM 调用告警
+    # ===========================================
+    - name: knowledge-system.llm
+      rules:
+        # LLM 调用错误率 > 30%
+        - alert: KnowledgeSystemLLMHighErrorRate
+          expr: |
+            (
+              sum(rate(llm_calls_total{status="error"}[10m]))
+              /
+              clamp_min(sum(rate(llm_calls_total[10m])), 1)
+            ) > 0.30
+          for: 10m
+          labels:
+            severity: critical
+            category: llm
+          annotations:
+            summary: "LLM 调用错误率过高"
+            description: "LLM 调用错误率 {{ $lb }} $value | humanizePercentage {{ $rb }}（> 30% 持续 10 分钟），可能存在 API Key 失效或限流。"
+
+        # LLM P99 延迟 > 30s
+        - alert: KnowledgeSystemLLMHighLatency
+          expr: |
+            histogram_quantile(0.99,
+              sum(rate(llm_call_duration_seconds_bucket[10m])) by (le, model)
+            ) > 30
+          for: 10m
+          labels:
+            severity: warning
+            category: llm
+          annotations:
+            summary: "LLM {{ $lb }} $labels.model {{ $rb }} 调用延迟过高"
+            description: "LLM {{ $lb }} $labels.model {{ $rb }} P99 延迟 {{ $lb }} $value {{ $rb }}s（> 30s 持续 10 分钟）。"
+
+    # ===========================================
+    # 数据库与基础设施告警
+    # ===========================================
+    - name: knowledge-system.infra
+      rules:
+        # DB 活跃连接数 > 25
+        - alert: KnowledgeSystemDBConnectionsHigh
+          expr: db_connections_active > 25
+          for: 5m
+          labels:
+            severity: warning
+            category: database
+          annotations:
+            summary: "数据库活跃连接数过高"
+            description: "当前活跃连接 {{ $lb }} $value {{ $rb }} 个（> 25 持续 5 分钟），可能存在连接泄漏或需扩容 pool。"
+
+        # Pod CrashLoopBackOff
+        - alert: KnowledgeSystemPodCrashLooping
+          expr: |
+            increase(kube_pod_container_status_restarts_total{namespace=~"knowledge-.*"}[10m]) > 5
+          for: 5m
+          labels:
+            severity: critical
+            category: pod
+          annotations:
+            summary: "Pod {{ $lb }} $labels.pod {{ $rb }} 频繁重启"
+            description: "Pod {{ $lb }} $labels.pod {{ $rb }} 在 10 分钟内重启 {{ $lb }} $value {{ $rb }} 次，可能存在启动失败或 OOM。"
+
+        # Pod 未就绪
+        - alert: KnowledgeSystemPodNotReady
+          expr: |
+            kube_pod_status_ready{condition="true", namespace=~"knowledge-.*"} == 0
+            unless on(namespace, pod)
+            kube_pod_status_phase{phase=~"Succeeded|Failed", namespace=~"knowledge-.*"} == 1
+          for: 10m
+          labels:
+            severity: warning
+            category: pod
+          annotations:
+            summary: "Pod {{ $lb }} $labels.pod {{ $rb }} 长时间未就绪"
+            description: "Pod {{ $lb }} $labels.pod {{ $rb }} 在 namespace {{ $lb }} $labels.namespace {{ $rb }} 中已 10 分钟未就绪。"
+
+        # PVC 磁盘使用 > 85%
+        - alert: KnowledgeSystemPVCDiskRunningFull
+          expr: |
+            kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes > 0.85
+          for: 10m
+          labels:
+            severity: warning
+            category: storage
+          annotations:
+            summary: "PVC {{ $lb }} $labels.persistentvolumeclaim {{ $rb }} 磁盘使用率高"
+            description: "PVC {{ $lb }} $labels.persistentvolumeclaim {{ $rb }} 磁盘使用率 {{ $lb }} $value | humanizePercentage {{ $rb }}（> 85% 持续 10 分钟）。"
+
+        # 容器内存使用率 > 85%（OOM 预警）
+        - alert: KnowledgeSystemContainerMemoryHigh
+          expr: |
+            container_memory_working_set_bytes{namespace=~"knowledge-.*", container!=""}
+            /
+            container_spec_memory_limit_bytes{namespace=~"knowledge-.*", container!=""} > 0.85
+          for: 5m
+          labels:
+            severity: warning
+            category: memory
+          annotations:
+            summary: "容器 {{ $lb }} $labels.container {{ $rb }} 内存使用率高"
+            description: "容器 {{ $lb }} $labels.container {{ $rb }}（Pod {{ $lb }} $labels.pod {{ $rb }}）内存使用率 {{ $lb }} $value | humanizePercentage {{ $rb }}（> 85% 持续 5 分钟），可能即将 OOM，请检查资源 limits 或扩容。"
+{{- end }}

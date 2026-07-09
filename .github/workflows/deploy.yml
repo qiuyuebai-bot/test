@@ -1,0 +1,204 @@
+name: Deploy to Kubernetes
+
+on:
+  workflow_call:
+    inputs:
+      image-tag:
+        description: '镜像 tag（如 main-abc1234 或 v1.0.0）'
+        required: true
+        type: string
+      environment:
+        description: '目标环境（development / staging / production）'
+        required: true
+        type: string
+      image-digest:
+        description: '镜像 digest（用于通知，可选）'
+        required: false
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  RELEASE_NAME: knowledge-system
+  CHART_PATH: ./deploy/helm
+
+jobs:
+  deploy:
+    name: Deploy (${{ inputs.environment }})
+    environment: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.0'
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Map environment to namespace
+        id: ns
+        run: |
+          case "${{ inputs.environment }}" in
+            development) NAMESPACE="knowledge-dev" ;;
+            staging)     NAMESPACE="knowledge-staging" ;;
+            production)  NAMESPACE="knowledge-prod" ;;
+            *)           echo "Unknown environment: ${{ inputs.environment }}"; exit 1 ;;
+          esac
+          echo "namespace=${NAMESPACE}" >> $GITHUB_OUTPUT
+          echo "Deploying to namespace: ${NAMESPACE}"
+
+      - name: Configure kubeconfig
+        env:
+          KUBECONFIG_DEV: ${{ secrets.KUBECONFIG_DEVELOPMENT }}
+          KUBECONFIG_STG: ${{ secrets.KUBECONFIG_STAGING }}
+          KUBECONFIG_PROD: ${{ secrets.KUBECONFIG_PRODUCTION }}
+        run: |
+          case "${{ inputs.environment }}" in
+            development) KCFG="${KUBECONFIG_DEV}" ;;
+            staging)     KCFG="${KUBECONFIG_STG}" ;;
+            production)  KCFG="${KUBECONFIG_PROD}" ;;
+          esac
+          if [ -z "${KCFG}" ]; then
+            echo "::error::KUBECONFIG_${{ inputs.environment }} secret 未配置"
+            exit 1
+          fi
+          echo "${KCFG}" | base64 -d > "${HOME}/.kube/config"
+          chmod 600 "${HOME}/.kube/config"
+          echo "kubeconfig 已写入"
+
+      - name: Helm upgrade --install
+        env:
+          NAMESPACE: ${{ steps.ns.outputs.namespace }}
+          IMAGE_TAG: ${{ inputs.image-tag }}
+        run: |
+          ENV_SUFFIX="${{ inputs.environment }}"
+          case "${ENV_SUFFIX}" in
+            development) VALUES_FILE="values-dev.yaml" ;;
+            staging)     VALUES_FILE="values-staging.yaml" ;;
+            production)  VALUES_FILE="values-prod.yaml" ;;
+          esac
+
+          echo "部署 ${RELEASE_NAME} 到 ${NAMESPACE}，镜像 tag=${IMAGE_TAG}，values=${VALUES_FILE}"
+
+          helm upgrade --install "${RELEASE_NAME}" "${CHART_PATH}" \
+            -f "${CHART_PATH}/values.yaml" \
+            -f "${CHART_PATH}/${VALUES_FILE}" \
+            --set images.frontend.tag="${IMAGE_TAG}" \
+            --set images.backend.tag="${IMAGE_TAG}" \
+            -n "${NAMESPACE}" --create-namespace \
+            --atomic --timeout 5m \
+            --history-max 10
+
+      - name: Wait for backend rollout
+        env:
+          NAMESPACE: ${{ steps.ns.outputs.namespace }}
+        run: |
+          echo "等待 backend rollout 就绪..."
+          kubectl rollout status deploy/${RELEASE_NAME}-backend \
+            -n "${NAMESPACE}" --timeout=300s
+
+      - name: Wait for frontend rollout
+        env:
+          NAMESPACE: ${{ steps.ns.outputs.namespace }}
+        run: |
+          echo "等待 frontend rollout 就绪..."
+          kubectl rollout status deploy/${RELEASE_NAME}-frontend \
+            -n "${NAMESPACE}" --timeout=300s
+
+      - name: Smoke test
+        env:
+          NAMESPACE: ${{ steps.ns.outputs.namespace }}
+        run: |
+          echo "启动 port-forward 到 backend..."
+          kubectl port-forward svc/${RELEASE_NAME}-backend 8000:8000 -n "${NAMESPACE}" &
+          PF_PID=$!
+          # 等待 port-forward 就绪
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/health/live >/dev/null 2>&1; then
+              echo "port-forward 就绪"
+              break
+            fi
+            sleep 2
+          done
+
+          echo "执行冒烟测试..."
+          chmod +x ./deploy/scripts/smoke-test.sh
+          ./deploy/scripts/smoke-test.sh \
+            --host http://localhost:8000 \
+            --retry 5 --interval 10 --timeout 15
+
+          # 确保 port-forward 清理
+          kill ${PF_PID} 2>/dev/null || true
+
+      - name: Rollback on failure
+        if: failure()
+        env:
+          NAMESPACE: ${{ steps.ns.outputs.namespace }}
+        run: |
+          echo "::error::部署或冒烟测试失败，执行 helm rollback..."
+          helm rollback "${RELEASE_NAME}" -n "${NAMESPACE}" || true
+          echo "回滚完成，请检查历史 revision：helm history ${RELEASE_NAME} -n ${NAMESPACE}"
+          exit 1
+
+  notify:
+    name: Notify Deployment Result
+    needs: deploy
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Slack notification
+        if: ${{ env.SLACK_WEBHOOK_URL != '' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          STATUS="${{ needs.deploy.result }}"
+          ENV="${{ inputs.environment }}"
+          TAG="${{ inputs.image-tag }}"
+          REPO="${{ github.repository }}"
+          RUN_URL="https://github.com/${REPO}/actions/runs/${{ github.run_id }}"
+
+          if [ "${STATUS}" = "success" ]; then
+            COLOR="good"
+            EMOJI=":white_check_mark:"
+            TITLE="部署成功"
+          else
+            COLOR="danger"
+            EMOJI=":x:"
+            TITLE="部署失败（已自动回滚）"
+          fi
+
+          PAYLOAD=$(cat <<EOF
+          {
+            "attachments": [{
+              "color": "${COLOR}",
+              "title": "${EMOJI} ${TITLE}: ${ENV}",
+              "text": "镜像 tag: \`${TAG}\`\n仓库: ${REPO}\n环境: ${ENV}\n状态: ${STATUS}\n查看详情: ${RUN_URL}",
+              "ts": $(date +%s)
+            }]
+          }
+          EOF
+          )
+
+          curl -X POST -H "Content-Type: application/json" \
+            -d "${PAYLOAD}" "${SLACK_WEBHOOK_URL}" \
+            || echo "Slack 通知发送失败（不影响部署结果）"
+
+      - name: Summary
+        run: |
+          echo "## 部署结果" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 项 | 值 |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| 环境 | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 镜像 tag | ${{ inputs.image-tag }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 命名空间 | ${{ steps.ns.outputs.namespace }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 状态 | ${{ needs.deploy.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Run | ${{ github.run_id }} |" >> $GITHUB_STEP_SUMMARY

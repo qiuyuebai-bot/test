@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import { SCORE_EXCELLENT_THRESHOLD, SCORE_GOOD_THRESHOLD } from '@/lib/constants'
@@ -22,10 +23,11 @@ import {
   Users,
   Crosshair,
 } from 'lucide-react'
-import LoadingState from '@/components/LoadingState'
 import EmptyState from '@/components/EmptyState'
 import ErrorState from '@/components/ErrorState'
+import { PageSkeleton } from '@/components/Skeleton'
 import { coreApi } from '@/api'
+import { useNavigate } from 'react-router-dom'
 import {
   RadarChart as RechartsRadar,
   PolarGrid,
@@ -177,8 +179,13 @@ function formatTestDate(isoString: string | null): string {
 }
 
 export default function LearningReport() {
-  const currentLearner = useStore((s) => s.currentLearner)
-  const learners = useStore((s) => s.learners)
+  const navigate = useNavigate()
+  const { currentLearner, learners } = useStore(
+    useShallow((s) => ({
+      currentLearner: s.currentLearner,
+      learners: s.learners,
+    }))
+  )
   const learner = currentLearner || learners[0]
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
@@ -219,7 +226,7 @@ export default function LearningReport() {
     loadReport()
   }, [loadReport])
 
-  if (loading) return <LoadingState.Analyzing />
+  if (loading) return <PageSkeleton type="dashboard" />
   if (error) return <ErrorState type="default" onRetry={() => { setError(null); loadReport() }} />
   if (!learner) return <EmptyState type="default" title="暂无报告数据" description="请先选择学习者以生成报告" />
 
@@ -317,11 +324,17 @@ export default function LearningReport() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            <button className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm text-text-secondary hover:bg-bg-secondary transition-colors">
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm text-text-secondary hover:bg-bg-secondary transition-colors"
+            >
               <Printer className="w-4 h-4" />
               打印报告
             </button>
-            <button className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition-colors">
+            <button
+              onClick={() => window.print()}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition-colors"
+            >
               <Download className="w-4 h-4" />
               导出 PDF
             </button>
@@ -398,7 +411,7 @@ export default function LearningReport() {
                 <span className="text-sm text-text-primary">已完成任务</span>
                 <span className="text-sm font-semibold text-success">{stats.completedTasks}</span>
               </div>
-              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-success rounded-full transition-all"
                   style={{
@@ -410,7 +423,7 @@ export default function LearningReport() {
                 <span className="text-sm text-text-primary">进行中任务</span>
                 <span className="text-sm font-semibold text-primary">{stats.pendingTasks}</span>
               </div>
-              <div className="h-1.5 bg-gray-100 rounded-full overflow-hidden">
+              <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                 <div
                   className="h-full bg-primary rounded-full transition-all"
                   style={{
@@ -456,7 +469,7 @@ export default function LearningReport() {
             </div>
             <div className="px-4 pb-4 flex items-center gap-4">
               <div className="flex items-center gap-1.5">
-                <div className="w-6 h-0.5 bg-gray-300" style={{ backgroundImage: 'repeating-linear-gradient(90deg, #cbd5e1 0, #cbd5e1 6px, transparent 6px, transparent 10px)' }} />
+                <div className="w-6 h-0.5 bg-gray-300 dark:bg-gray-600" style={{ backgroundImage: 'repeating-linear-gradient(90deg, #cbd5e1 0, #cbd5e1 6px, transparent 6px, transparent 10px)' }} />
                 <span className="text-xs text-text-tertiary">推荐匹配</span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -485,7 +498,7 @@ export default function LearningReport() {
                         key={item.dimension}
                         className="relative p-3 rounded-xl transition-all hover:scale-105 hover:shadow-soft cursor-pointer group"
                         style={{ backgroundColor: `${color}15`, border: `1px solid ${color}30` }}
-                        onClick={() => {}}
+                        onClick={() => navigate('/resources')}
                         title={item.description}
                       >
                         <div className="flex flex-col items-center gap-1">
@@ -581,7 +594,7 @@ export default function LearningReport() {
                     <div key={node.id} className="relative">
                       {idx < learningPathNodes.length - 1 && (
                         <div className={`absolute left-[18px] top-10 w-0.5 h-5 ${
-                          node.status === 'completed' ? 'bg-primary/40' : 'bg-gray-200'
+                          node.status === 'completed' ? 'bg-primary/40' : 'bg-gray-200 dark:bg-gray-700'
                         }`} />
                       )}
                       <div
@@ -600,7 +613,7 @@ export default function LearningReport() {
                               ? 'bg-success/10'
                               : node.status === 'current'
                               ? 'bg-primary/10'
-                              : 'bg-gray-100'
+                              : 'bg-gray-100 dark:bg-gray-800'
                           }`}>
                             <Icon className={`w-4 h-4 ${statusIcon.color}`} />
                           </div>

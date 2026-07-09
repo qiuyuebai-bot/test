@@ -1,0 +1,18 @@
+--- SYSTEM ---
+你是一位专业的命题专家，擅长按难度等级命制高质量测试题与解析。
+请输出严格的JSON格式，不要添加任何其他文字或markdown代码块。
+--- USER ---
+## 目标知识点
+{knowledge_topic}
+
+## 难度等级（1-5）
+{difficulty_level}
+
+## 题目数量
+{question_count}
+
+## 参考知识库
+{reference_knowledge}
+
+请按以上要求生成 {question_count} 道测试题，输出JSON：
+{{"questions": [{{"question": "题干", "options": ["A. ...", "B. ...", "C. ...", "D. ..."], "correct_answer": "A/B/C/D", "explanation": "解析", "difficulty_level": 1-5, "knowledge_points": ["知识点1"]}}]}}

@@ -273,9 +273,9 @@ def get_token_from_request(
     token: Optional[str] = None,
 ) -> Optional[str]:
     """
-    从请求中提取 Token（支持多种方式）
+    从请求中提取 Token
     
-    优先级: Header > OAuth2 > Query参数
+    仅支持 Authorization Header 方式，避免 token 出现在 URL/日志中导致泄露
     
     Args:
         request: FastAPI Request对象
@@ -285,23 +285,18 @@ def get_token_from_request(
     Returns:
         Token字符串或None
     """
-    # 方式1: Authorization Header (Bearer)
+    # 方式1: HTTPBearer 凭据（标准 Authorization: Bearer <token>）
     if credentials:
         return credentials.credentials
     
-    # 方式2: OAuth2PasswordBearer
+    # 方式2: OAuth2PasswordBearer 提取
     if token:
         return token
     
-    # 方式3: 从请求头直接读取
+    # 方式3: 从请求头直接读取（兜底）
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         return auth_header.replace("Bearer ", "")
-    
-    # 方式4: 从查询参数读取（用于WebSocket或文件下载等场景）
-    query_token = request.query_params.get("token")
-    if query_token:
-        return query_token
     
     return None
 

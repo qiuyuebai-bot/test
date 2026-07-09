@@ -1,0 +1,68 @@
+{{- if .Values.migration.enabled -}}
+{{- if .Values.backend.enabled -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "knowledge-system.fullname" . }}-db-rollback
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: db-rollback
+  annotations:
+    # Helm hook：回滚时执行 alembic downgrade
+    "helm.sh/hook": post-rollback
+    # 在其他资源回滚后执行
+    "helm.sh/hook-weight": "10"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: {{ .Values.migration.backoffLimit }}
+  ttlSecondsAfterFinished: {{ .Values.migration.ttlSecondsAfterFinished }}
+  template:
+    metadata:
+      labels:
+        {{- include "knowledge-system.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: db-rollback
+    spec:
+      serviceAccountName: {{ include "knowledge-system.serviceAccountName" . }}
+      restartPolicy: Never
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: db-rollback
+          image: {{ include "knowledge-system.image" (list .Values.images.backend .Values.global) }}
+          imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
+          workingDir: /app
+          # 等待数据库就绪后执行 alembic downgrade
+          # 默认回退到上一版本（-1），可通过 values.migration.rollbackRevision 调整
+          # 注意：生产环境回滚前务必先备份数据库
+          command:
+            - /bin/sh
+            - -c
+            - |
+              echo "WARNING: Database rollback in progress. Ensure you have a recent backup."
+              echo "Waiting for database to be ready..."
+              until python -c "import os; from sqlalchemy import create_engine; create_engine(os.environ['DATABASE_URL']).connect(); print('DB ready')" 2>/dev/null; do
+                echo "Database not ready, retrying in 3s..."
+                sleep 3
+              done
+              echo "Database is ready. Current Alembic revision:"
+              alembic current
+              echo "Rolling back to revision: {{ .Values.migration.rollbackRevision }}"
+              exec alembic downgrade {{ .Values.migration.rollbackRevision }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "knowledge-system.configMapName" . }}
+            - secretRef:
+                name: {{ include "knowledge-system.secretName" . }}
+          {{- with .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- include "knowledge-system.resources" .Values.migration.resources | nindent 10 }}
+{{- end }}
+{{- end }}

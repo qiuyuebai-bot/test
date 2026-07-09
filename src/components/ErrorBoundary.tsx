@@ -1,6 +1,7 @@
 import { Component, ErrorInfo, ReactNode } from 'react'
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react'
 import Button from './Button'
+import { reportError } from '@/lib/sentry'
 
 interface ErrorBoundaryProps {
   children: ReactNode
@@ -25,6 +26,10 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
     console.error('ErrorBoundary caught an error:', error, errorInfo)
+    reportError(error, {
+      tags: { component: 'ErrorBoundary' },
+      extra: { componentStack: errorInfo.componentStack },
+    })
     this.props.onError?.(error, errorInfo)
   }
 

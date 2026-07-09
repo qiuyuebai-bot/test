@@ -1,0 +1,27 @@
+apiVersion: v2
+name: knowledge-system
+description: |
+  领域知识个性化生成与多智能体协同决策系统
+  Helm Chart for Kubernetes deployment (dev / staging / prod)
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+home: https://github.com/qiuyuebai-bot/test
+maintainers:
+  - name: knowledge-system-team
+    email: maintainer@knowledge-system.com
+keywords:
+  - education
+  - multi-agent
+  - llm
+  - fastapi
+  - react
+  - challenge-cup
+icon: https://raw.githubusercontent.com/qiuyuebai-bot/test/main/docs/assets/logo.png
+sources:
+  - https://github.com/qiuyuebai-bot/test
+annotations:
+  "artifacthub.io/changes": |
+    - kind: added
+      description: "Initial Helm chart with frontend/backend/postgres/redis"
+  "artifacthub.io/category": "ai-machine-learning"

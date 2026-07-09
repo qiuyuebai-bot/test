@@ -1,0 +1,300 @@
+{{- if .Values.monitoring.grafanaDashboard.enabled -}}
+{{- $lb := "{{" -}}
+{{- $rb := "}}" -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "knowledge-system.fullname" . }}-grafana-dashboards
+  namespace: {{ .Values.monitoring.grafanaDashboard.namespace | default "monitoring" }}
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: monitoring
+    grafana_dashboard: "1"
+  annotations:
+    # 让 kube-prometheus-stack 的 Grafana sidecar 自动加载
+    "k8s-sidecar-target-kind": "ConfigMap"
+data:
+  # ===========================================
+  # Dashboard 1: API 核心指标
+  # ===========================================
+  knowledge-system-api.json: |
+    {
+      "annotations": {"list": []},
+      "editable": true,
+      "graphTooltip": 1,
+      "title": "知识系统 - API 核心指标",
+      "uid": "ks-api",
+      "version": 1,
+      "schemaVersion": 39,
+      "tags": ["knowledge-system", "api"],
+      "time": {"from": "now-1h", "to": "now"},
+      "timepicker": {},
+      "timezone": "browser",
+      "panels": [
+        {
+          "id": 1,
+          "title": "QPS (每秒请求数)",
+          "type": "stat",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0},
+          "targets": [
+            {"expr": "sum(rate(http_requests_total[1m]))", "legendFormat": "QPS"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "reqps"}, "overrides": []}
+        },
+        {
+          "id": 2,
+          "title": "5xx 错误率",
+          "type": "stat",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 6, "w": 6, "x": 6, "y": 0},
+          "targets": [
+            {"expr": "sum(rate(http_requests_total{status_code=~\"5..\"}[5m])) / clamp_min(sum(rate(http_requests_total[5m])), 1)"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "percentunit", "thresholds": {"mode": "absolute", "steps": [{"color": "green"}, {"color": "yellow", "value": 0.01}, {"color": "red", "value": 0.05}]}}}
+        },
+        {
+          "id": 3,
+          "title": "P99 / P95 / P50 延迟",
+          "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "targets": [
+            {"expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P99"},
+            {"expr": "histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P95"},
+            {"expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))", "legendFormat": "P50"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "s"}}
+        },
+        {
+          "id": 4,
+          "title": "当前在处理请求数",
+          "type": "stat",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 6, "w": 6, "x": 0, "y": 6},
+          "targets": [{"expr": "http_requests_in_progress"}]
+        },
+        {
+          "id": 5,
+          "title": "请求速率 (按状态码)",
+          "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 18, "x": 6, "y": 6},
+          "targets": [
+            {"expr": "sum(rate(http_requests_total[5m])) by (status_code)", "legendFormat": "{{ $lb }}status_code{{ $rb }}"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "reqps"}}
+        },
+        {
+          "id": 6,
+          "title": "Top 10 慢端点 (P99)",
+          "type": "table",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 14},
+          "targets": [
+            {"expr": "topk(10, histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket[5m])) by (le, endpoint)))", "format": "table", "instant": true}
+          ]
+        }
+      ],
+      "templating": {
+        "list": [
+          {
+            "name": "DS_PROMETHEUS",
+            "type": "datasource",
+            "query": "prometheus"
+          }
+        ]
+      }
+    }
+
+  # ===========================================
+  # Dashboard 2: 业务指标 (LLM + Agent + 知识库)
+  # ===========================================
+  knowledge-system-business.json: |
+    {
+      "annotations": {"list": []},
+      "editable": true,
+      "graphTooltip": 1,
+      "title": "知识系统 - 业务指标",
+      "uid": "ks-biz",
+      "version": 1,
+      "schemaVersion": 39,
+      "tags": ["knowledge-system", "business"],
+      "time": {"from": "now-6h", "to": "now"},
+      "timepicker": {},
+      "timezone": "browser",
+      "panels": [
+        {
+          "id": 1,
+          "title": "LLM 调用次数 (按模型)",
+          "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+          "targets": [
+            {"expr": "sum(rate(llm_calls_total[5m])) by (model)", "legendFormat": "{{ $lb }}model{{ $rb }}"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "ops"}}
+        },
+        {
+          "id": 2,
+          "title": "LLM Token 使用量",
+          "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+          "targets": [
+            {"expr": "sum(rate(llm_tokens_total[5m])) by (type)", "legendFormat": "{{ $lb }}type{{ $rb }}"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "ops"}}
+        },
+        {
+          "id": 3,
+          "title": "LLM 调用延迟 (按模型)",
+          "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+          "targets": [
+            {"expr": "histogram_quantile(0.95, sum(rate(llm_call_duration_seconds_bucket[5m])) by (le, model))", "legendFormat": "{{ $lb }}model{{ $rb }} P95"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "s"}}
+        },
+        {
+          "id": 4,
+          "title": "LLM 错误率",
+          "type": "stat",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 6, "x": 12, "y": 8},
+          "targets": [
+            {"expr": "sum(rate(llm_calls_total{status=\"error\"}[10m])) / clamp_min(sum(rate(llm_calls_total[10m])), 1)"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "percentunit", "thresholds": {"mode": "absolute", "steps": [{"color": "green"}, {"color": "yellow", "value": 0.10}, {"color": "red", "value": 0.30}]}}}
+        },
+        {
+          "id": 5,
+          "title": "Agent 任务数 (按状态)",
+          "type": "stat",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 6, "x": 18, "y": 8},
+          "targets": [
+            {"expr": "sum(agent_tasks_total)", "legendFormat": "总任务"}
+          ]
+        },
+        {
+          "id": 6,
+          "title": "知识库文档数",
+          "type": "stat",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 6, "w": 8, "x": 0, "y": 16},
+          "targets": [{"expr": "knowledge_docs_total"}]
+        },
+        {
+          "id": 7,
+          "title": "知识切片数",
+          "type": "stat",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 6, "w": 8, "x": 8, "y": 16},
+          "targets": [{"expr": "knowledge_slices_total"}]
+        },
+        {
+          "id": 8,
+          "title": "生成资源数",
+          "type": "stat",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 6, "w": 8, "x": 16, "y": 16},
+          "targets": [{"expr": "learning_resources_total"}]
+        }
+      ],
+      "templating": {
+        "list": [
+          {"name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus"}
+        ]
+      }
+    }
+
+  # ===========================================
+  # Dashboard 3: 资源与基础设施
+  # ===========================================
+  knowledge-system-infra.json: |
+    {
+      "annotations": {"list": []},
+      "editable": true,
+      "graphTooltip": 1,
+      "title": "知识系统 - 资源与基础设施",
+      "uid": "ks-infra",
+      "version": 1,
+      "schemaVersion": 39,
+      "tags": ["knowledge-system", "infra"],
+      "time": {"from": "now-1h", "to": "now"},
+      "timepicker": {},
+      "timezone": "browser",
+      "panels": [
+        {
+          "id": 1,
+          "title": "DB 活跃连接数",
+          "type": "stat",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0},
+          "targets": [{"expr": "db_connections_active"}],
+          "fieldConfig": {"defaults": {"unit": "short", "thresholds": {"mode": "absolute", "steps": [{"color": "green"}, {"color": "yellow", "value": 20}, {"color": "red", "value": 25}]}}}
+        },
+        {
+          "id": 2,
+          "title": "Pod CPU 使用率 (按容器)",
+          "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 12, "x": 6, "y": 0},
+          "targets": [
+            {"expr": "sum(rate(container_cpu_usage_seconds_total{namespace=~\"knowledge-.*\"}[5m])) by (pod)", "legendFormat": "{{ $lb }}pod{{ $rb }}"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "cores"}}
+        },
+        {
+          "id": 3,
+          "title": "Pod 内存使用 (按容器)",
+          "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 12, "x": 18, "y": 0},
+          "targets": [
+            {"expr": "container_memory_working_set_bytes{namespace=~\"knowledge-.*\"}", "legendFormat": "{{ $lb }}pod{{ $rb }}"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "bytes"}}
+        },
+        {
+          "id": 4,
+          "title": "PVC 磁盘使用率",
+          "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 24, "x": 0, "y": 8},
+          "targets": [
+            {"expr": "kubelet_volume_stats_used_bytes / kubelet_volume_stats_capacity_bytes", "legendFormat": "{{ $lb }}persistentvolumeclaim{{ $rb }}"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "percentunit"}}
+        },
+        {
+          "id": 5,
+          "title": "Pod 状态",
+          "type": "table",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 12, "x": 0, "y": 16},
+          "targets": [
+            {"expr": "kube_pod_status_phase{namespace=~\"knowledge-.*\"}", "format": "table", "instant": true}
+          ]
+        },
+        {
+          "id": 6,
+          "title": "Pod 重启次数",
+          "type": "timeseries",
+          "datasource": {"type": "prometheus", "uid": "${DS_PROMETHEUS}"},
+          "gridPos": {"h": 8, "w": 12, "x": 12, "y": 16},
+          "targets": [
+            {"expr": "increase(kube_pod_container_status_restarts_total{namespace=~\"knowledge-.*\"}[1h])", "legendFormat": "{{ $lb }}pod{{ $rb }}"}
+          ],
+          "fieldConfig": {"defaults": {"unit": "short"}}
+        }
+      ],
+      "templating": {
+        "list": [
+          {"name": "DS_PROMETHEUS", "type": "datasource", "query": "prometheus"}
+        ]
+      }
+    }
+{{- end }}

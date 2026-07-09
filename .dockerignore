@@ -48,7 +48,13 @@ docs
 # Docker 自身
 Dockerfile
 docker-compose*.yml
-deploy
+# 排除 deploy 子目录（Helm chart、K8s 清单等部署清单无需进入镜像）
+deploy/helm
+deploy/k8s
+deploy/argocd
+# 但保留 deploy/nginx/nginx.conf（前端镜像构建需要）
+!deploy/nginx
+!deploy/nginx/nginx.conf
 
 # 测试与覆盖率
 coverage

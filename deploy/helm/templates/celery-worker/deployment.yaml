@@ -1,0 +1,92 @@
+{{- if .Values.celeryWorker.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "knowledge-system.fullname" . }}-celery-worker
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: celery-worker
+spec:
+  replicas: {{ .Values.celeryWorker.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "knowledge-system.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: celery-worker
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        {{- include "knowledge-system.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: celery-worker
+    spec:
+      serviceAccountName: {{ include "knowledge-system.serviceAccountName" . }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.podAntiAffinity.enabled }}
+      {{- include "knowledge-system.podAntiAffinity" (list . "celery-worker") | nindent 8 }}
+      {{- else }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: celery-worker
+          image: {{ include "knowledge-system.image" (list .Values.images.backend .Values.global) }}
+          imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
+          {{- if .Values.celeryWorker.command }}
+          command: {{ toYaml .Values.celeryWorker.command | nindent 12 }}
+          {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "knowledge-system.configMapName" . }}
+            - secretRef:
+                name: {{ include "knowledge-system.secretName" . }}
+          {{- with .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- include "knowledge-system.resources" .Values.celeryWorker.resources | nindent 10 }}
+          # Celery worker 健康检查：检查 worker 进程是否存活
+          livenessProbe:
+            exec:
+              command:
+                - sh
+                - -c
+                - celery -A app.celery_app inspect ping -d celery@$$HOSTNAME || exit 1
+            initialDelaySeconds: 60
+            periodSeconds: 60
+            timeoutSeconds: 30
+            failureThreshold: 3
+          volumeMounts:
+            - name: backend-data
+              mountPath: /app/data
+            - name: backend-logs
+              mountPath: /app/logs
+      volumes:
+        - name: backend-data
+          persistentVolumeClaim:
+            claimName: {{ include "knowledge-system.fullname" . }}-backend-data
+        - name: backend-logs
+          persistentVolumeClaim:
+            claimName: {{ include "knowledge-system.fullname" . }}-backend-logs
+{{- end -}}

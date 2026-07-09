@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import Progress from '@/components/Progress'
-import { CardSkeleton } from '@/components/Skeleton'
+import { PageSkeleton } from '@/components/Skeleton'
 import EmptyState from '@/components/EmptyState'
 import ErrorState from '@/components/ErrorState'
 import {
@@ -32,8 +33,12 @@ import {
 } from 'recharts'
 
 export default function MetricsDashboard() {
-  const systemMetrics = useStore((s) => s.systemMetrics)
-  const metricsLoading = useStore((s) => s.metricsLoading)
+  const { systemMetrics, metricsLoading } = useStore(
+    useShallow((s) => ({
+      systemMetrics: s.systemMetrics,
+      metricsLoading: s.metricsLoading,
+    }))
+  )
   const fetchSystemMetrics = useStore((s) => s.fetchSystemMetrics)
   const [error, setError] = useState<string | null>(null)
   const [loaded, setLoaded] = useState(false)
@@ -104,14 +109,7 @@ export default function MetricsDashboard() {
   ]
 
   if (metricsLoading && !loaded) {
-    return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-          <CardSkeleton count={4} />
-        </div>
-        <CardSkeleton count={2} />
-      </div>
-    )
+    return <PageSkeleton type="dashboard" />
   }
 
   if (error) {

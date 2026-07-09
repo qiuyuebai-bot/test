@@ -1,0 +1,28 @@
+{{- if .Values.monitoring.serviceMonitor.enabled -}}
+{{- if .Values.backend.enabled -}}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "knowledge-system.backendServiceName" . }}
+  namespace: {{ .Values.monitoring.serviceMonitor.namespace | default "monitoring" }}
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+    # 该标签让 kube-prometheus-stack 自动发现 ServiceMonitor
+    release: {{ .Values.monitoring.serviceMonitor.release | default "kube-prometheus-stack" }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "knowledge-system.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  namespaceSelector:
+    matchNames:
+      - {{ .Release.Namespace }}
+  endpoints:
+    - port: http
+      path: {{ .Values.monitoring.serviceMonitor.path | default "/metrics" }}
+      interval: {{ .Values.monitoring.serviceMonitor.interval | default "30s" }}
+      scrapeTimeout: {{ .Values.monitoring.serviceMonitor.scrapeTimeout | default "10s" }}
+      honorLabels: true
+{{- end }}
+{{- end }}

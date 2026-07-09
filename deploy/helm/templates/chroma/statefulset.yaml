@@ -1,0 +1,82 @@
+{{- if .Values.chroma.enabled -}}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "knowledge-system.fullname" . }}-chroma
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: chroma
+spec:
+  serviceName: {{ include "knowledge-system.fullname" . }}-chroma
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "knowledge-system.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: chroma
+  template:
+    metadata:
+      labels:
+        {{- include "knowledge-system.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: chroma
+    spec:
+      serviceAccountName: {{ include "knowledge-system.serviceAccountName" . }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: chroma
+          image: {{ include "knowledge-system.image" (list .Values.chroma.image .Values.global) }}
+          imagePullPolicy: {{ .Values.chroma.image.pullPolicy | default "IfNotPresent" }}
+          env:
+            - name: IS_PERSISTENT
+              value: {{ .Values.chroma.env.isPersistent | quote }}
+            - name: ANONYMIZED_TELEMETRY
+              value: {{ .Values.chroma.env.anonymizedTelemetry | quote }}
+            - name: PERSIST_DIRECTORY
+              value: /chroma/chroma
+          ports:
+            - name: http-chroma
+              containerPort: 8000
+              protocol: TCP
+          {{- include "knowledge-system.resources" .Values.chroma.resources | nindent 10 }}
+          livenessProbe:
+            httpGet:
+              path: /api/v1/heartbeat
+              port: http-chroma
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 10
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /api/v1/heartbeat
+              port: http-chroma
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+          volumeMounts:
+            - name: chroma-data
+              mountPath: /chroma/chroma
+  volumeClaimTemplates:
+    - metadata:
+        name: chroma-data
+        labels:
+          {{- include "knowledge-system.labels" . | nindent 10 }}
+          app.kubernetes.io/component: chroma
+      spec:
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: {{ .Values.chroma.persistence.size }}
+        {{- if .Values.global.storageClass }}
+        storageClassName: {{ .Values.global.storageClass }}
+        {{- end }}
+{{- end -}}

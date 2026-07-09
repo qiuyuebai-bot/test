@@ -1,6 +1,8 @@
+# syntax=docker/dockerfile:1
 # ===========================================
 # 领域知识个性化生成与多智能体协同决策系统 - 前端
 # 多阶段构建 Dockerfile (Node构建 + Nginx托管)
+# 启用 BuildKit 高级特性：inline cache、--mount=type=cache
 # ===========================================
 
 # ---- 构建阶段 ----
@@ -12,13 +14,25 @@ WORKDIR /app
 COPY package.json package-lock.json* ./
 
 # 安装依赖（使用 npm ci 保证确定性；无 lockfile 时回退到 npm install）
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+# 使用 BuildKit cache mount 加速重复构建（npm 缓存跨构建复用）
+RUN --mount=type=cache,target=/root/.npm \
+    if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 # 复制源代码
 COPY . .
 
-# 构建生产版本
-RUN npm run build
+# 构建参数：Vite 构建模式（production / staging / development）
+ARG VITE_MODE=production
+ENV VITE_MODE=${VITE_MODE}
+
+# 按 VITE_MODE 执行对应构建命令
+RUN if [ "${VITE_MODE}" = "staging" ]; then \
+        npm run build:staging; \
+    elif [ "${VITE_MODE}" = "development" ]; then \
+        npm run build:dev; \
+    else \
+        npm run build; \
+    fi
 
 # ---- 运行阶段 ----
 FROM nginx:1.25-alpine AS runtime

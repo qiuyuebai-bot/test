@@ -112,7 +112,7 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
     import importlib
     modules_to_patch = [
         'app.services.common',
-        'app.services.resource_service',
+        'app.domains.resource.service',
         'app.services.report_service',
         'app.services.tutoring_service',
         'app.agents.orchestrator',
@@ -221,7 +221,7 @@ def admin_auth_headers(admin_auth_token: str) -> dict:
 def _disable_chroma_for_tests():
     """禁用 ChromaDB，避免测试时下载 79.3MB ONNX 模型。
     search() 会回退到数据库关键词 LIKE 检索路径。"""
-    from app.services import knowledge_service as ks
+    from app.domains.knowledge import service as ks
     original = ks._CHROMA_AVAILABLE
     ks._CHROMA_AVAILABLE = False
     ks._chroma_client = None

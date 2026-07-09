@@ -28,7 +28,12 @@ export default function ToastContainer() {
   if (items.length === 0) return null
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex flex-col-reverse gap-2 max-w-sm w-full pointer-events-none">
+    <div
+      role="status"
+      aria-live="polite"
+      aria-atomic="false"
+      className="fixed bottom-6 right-6 z-50 flex flex-col-reverse gap-2 max-w-sm w-full pointer-events-none"
+    >
       {items.map((item) => {
         const colors = colorMap[item.type]
         const Icon = iconMap[item.type]

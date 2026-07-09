@@ -1,0 +1,51 @@
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: knowledge-system-staging
+  namespace: argocd
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+  annotations:
+    notifications.argoproj.io/subscribe.on-deployed.slack: ""
+    notifications.argoproj.io/subscribe.on-health-degraded.slack: ""
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/USERNAME/knowledge-system
+    targetRevision: main
+    path: deploy/helm
+    helm:
+      valueFiles:
+        - values.yaml
+        - values-staging.yaml
+      releaseName: knowledge-system
+      parameters:
+        - name: global.imageRegistry
+          value: ghcr.io/USERNAME
+        - name: images.frontend.repository
+          value: USERNAME/knowledge-system-frontend
+        - name: images.backend.repository
+          value: USERNAME/knowledge-system-backend
+        - name: images.frontend.pullPolicy
+          value: Always
+        - name: images.backend.pullPolicy
+          value: Always
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: knowledge-staging
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+      allowEmpty: false
+    syncOptions:
+      - CreateNamespace=true
+      - PrunePropagationPolicy=foreground
+      - ApplyOutOfSyncOnly=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 5s
+        factor: 2
+        maxDuration: 3m
+  revisionHistoryLimit: 10

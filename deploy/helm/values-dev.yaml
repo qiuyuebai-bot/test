@@ -1,0 +1,90 @@
+# ===========================================
+# 开发环境覆盖配置（minikube / kind 本地集群）
+# 用法: helm install knowledge-system ./deploy/helm -f deploy/helm/values-dev.yaml -n knowledge-dev --create-namespace
+# ===========================================
+
+global:
+  # 本地集群无需镜像仓库
+  imageRegistry: ""
+  storageClass: ""  # minikube 默认 storageclass-provisioner；kind 用 standard
+
+# 开发环境用低资源
+frontend:
+  replicaCount: 1  # 单副本节省资源
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+
+backend:
+  replicaCount: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+postgresql:
+  persistence:
+    size: 5Gi  # 开发环境用小存储
+  resources:
+    requests:
+      cpu: 25m
+      memory: 128Mi
+    limits:
+      cpu: 250m
+      memory: 256Mi
+
+redis:
+  persistence:
+    size: 1Gi
+  resources:
+    requests:
+      cpu: 25m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 64Mi
+
+# 开发环境开启 Ingress（minikube tunnel 或 kind port-forward）
+ingress:
+  enabled: true
+  className: nginx  # minikube addons enable ingress
+  hosts:
+    - host: knowledge-system.local
+      paths:
+        - path: /
+          pathType: Prefix
+          service: frontend
+        - path: /api
+          pathType: Prefix
+          service: backend
+        - path: /docs
+          pathType: Prefix
+          service: backend
+        - path: /health
+          pathType: Prefix
+          service: backend
+
+# 开发环境开启调试模式
+appConfig:
+  DEBUG_MODE: "true"
+  CORS_ORIGINS: "*"
+  # 开发环境使用 LLM Mock 模式（不消耗 API 配额）
+  OPENAI_API_BASE: "https://api.openai.com/v1"
+  OPENAI_MODEL_NAME: "gpt-4-turbo-preview"
+
+# 开发环境使用简单的内置 Secret（仅本地）
+secrets:
+  existingSecret: ""
+  data:
+    SECRET_KEY: "dev-only-secret-key-not-for-production-use-32-chars"
+    OPENAI_API_KEY: "sk-dev-placeholder-key-replace-with-real-key"
+    DEFAULT_ADMIN_PASSWORD: "admin123"
+    POSTGRES_PASSWORD: "devPassword123"
+    REDIS_PASSWORD: ""

@@ -16,6 +16,8 @@ from app.middleware.prometheus import (
     knowledge_slices_total,
     learning_resources_total,
 )
+from app.middleware.security_headers import SecurityHeadersMiddleware
+from app.middleware.audit import AuditMiddleware
 
 __all__ = [
     "RequestTracingMiddleware",
@@ -35,4 +37,6 @@ __all__ = [
     "knowledge_docs_total",
     "knowledge_slices_total",
     "learning_resources_total",
+    "SecurityHeadersMiddleware",
+    "AuditMiddleware",
 ]

@@ -1,0 +1,200 @@
+name: Rollback Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: '回滚目标环境（development / staging / production）'
+        required: true
+        type: choice
+        options:
+          - development
+          - staging
+          - production
+      revision:
+        description: '目标 revision 号（留空则回滚到上一个版本）'
+        required: false
+        type: string
+        default: ''
+      skip-smoke-test:
+        description: '跳过冒烟测试（紧急回滚时使用）'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  RELEASE_NAME: knowledge-system
+
+jobs:
+  rollback:
+    name: Rollback (${{ inputs.environment }})
+    environment: ${{ inputs.environment }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.0'
+
+      - name: Setup kubectl
+        uses: azure/setup-kubectl@v4
+
+      - name: Map environment to namespace
+        id: ns
+        run: |
+          case "${{ inputs.environment }}" in
+            development) NAMESPACE="knowledge-dev" ;;
+            staging)     NAMESPACE="knowledge-staging" ;;
+            production)  NAMESPACE="knowledge-prod" ;;
+            *)           echo "Unknown environment: ${{ inputs.environment }}"; exit 1 ;;
+          esac
+          echo "namespace=${NAMESPACE}" >> $GITHUB_OUTPUT
+          echo "回滚目标命名空间: ${NAMESPACE}"
+
+      - name: Configure kubeconfig
+        env:
+          KUBECONFIG_DEV: ${{ secrets.KUBECONFIG_DEVELOPMENT }}
+          KUBECONFIG_STG: ${{ secrets.KUBECONFIG_STAGING }}
+          KUBECONFIG_PROD: ${{ secrets.KUBECONFIG_PRODUCTION }}
+        run: |
+          case "${{ inputs.environment }}" in
+            development) KCFG="${KUBECONFIG_DEV}" ;;
+            staging)     KCFG="${KUBECONFIG_STG}" ;;
+            production)  KCFG="${KUBECONFIG_PROD}" ;;
+          esac
+          if [ -z "${KCFG}" ]; then
+            echo "::error::KUBECONFIG_${{ inputs.environment }} secret 未配置"
+            exit 1
+          fi
+          echo "${KCFG}" | base64 -d > "${HOME}/.kube/config"
+          chmod 600 "${HOME}/.kube/config"
+
+      - name: List release history
+        env:
+          NAMESPACE: ${{ steps.ns.outputs.namespace }}
+        run: |
+          echo "当前 ${RELEASE_NAME} 在 ${NAMESPACE} 的历史 revision："
+          helm history "${RELEASE_NAME}" -n "${NAMESPACE}" || echo "未找到 release，可能首次部署"
+
+      - name: Execute rollback
+        env:
+          NAMESPACE: ${{ steps.ns.outputs.namespace }}
+          REVISION: ${{ inputs.revision }}
+        run: |
+          chmod +x ./deploy/scripts/rollback.sh
+
+          if [ -n "${REVISION}" ]; then
+            echo "回滚到指定 revision: ${REVISION}"
+            ./deploy/scripts/rollback.sh \
+              --release "${RELEASE_NAME}" \
+              --namespace "${NAMESPACE}" \
+              --revision "${REVISION}" \
+              --timeout 300
+          else
+            echo "回滚到上一个 revision"
+            ./deploy/scripts/rollback.sh \
+              --release "${RELEASE_NAME}" \
+              --namespace "${NAMESPACE}" \
+              --timeout 300
+          fi
+
+      - name: Wait for rollout
+        env:
+          NAMESPACE: ${{ steps.ns.outputs.namespace }}
+        run: |
+          echo "等待 backend rollout 就绪..."
+          kubectl rollout status deploy/${RELEASE_NAME}-backend \
+            -n "${NAMESPACE}" --timeout=300s
+
+          echo "等待 frontend rollout 就绪..."
+          kubectl rollout status deploy/${RELEASE_NAME}-frontend \
+            -n "${NAMESPACE}" --timeout=300s
+
+      - name: Smoke test
+        if: ${{ inputs.skip-smoke-test != true }}
+        env:
+          NAMESPACE: ${{ steps.ns.outputs.namespace }}
+        run: |
+          echo "启动 port-forward 验证..."
+          kubectl port-forward svc/${RELEASE_NAME}-backend 8000:8000 -n "${NAMESPACE}" &
+          PF_PID=$!
+
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8000/health/live >/dev/null 2>&1; then
+              echo "port-forward 就绪"
+              break
+            fi
+            sleep 2
+          done
+
+          chmod +x ./deploy/scripts/smoke-test.sh
+          ./deploy/scripts/smoke-test.sh \
+            --host http://localhost:8000 \
+            --retry 5 --interval 10 --timeout 15
+
+          kill ${PF_PID} 2>/dev/null || true
+
+  notify:
+    name: Notify Rollback Result
+    needs: rollback
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send Slack notification
+        if: ${{ env.SLACK_WEBHOOK_URL != '' }}
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        run: |
+          STATUS="${{ needs.rollback.result }}"
+          ENV="${{ inputs.environment }}"
+          REVISION="${{ inputs.revision }}"
+          REPO="${{ github.repository }}"
+          RUN_URL="https://github.com/${REPO}/actions/runs/${{ github.run_id }}"
+          TRIGGERED_BY="${{ github.actor }}"
+
+          if [ "${STATUS}" = "success" ]; then
+            COLOR="warning"
+            EMOJI=":rewind:"
+            TITLE="回滚成功"
+          else
+            COLOR="danger"
+            EMOJI=":x:"
+            TITLE="回滚失败"
+          fi
+
+          PAYLOAD=$(cat <<EOF
+          {
+            "attachments": [{
+              "color": "${COLOR}",
+              "title": "${EMOJI} ${TITLE}: ${ENV}",
+              "text": "操作人: ${TRIGGERED_BY}\n环境: ${ENV}\n目标 revision: ${REVISION:-上一版本}\n状态: ${STATUS}\n查看详情: ${RUN_URL}",
+              "ts": $(date +%s)
+            }]
+          }
+          EOF
+          )
+
+          curl -X POST -H "Content-Type: application/json" \
+            -d "${PAYLOAD}" "${SLACK_WEBHOOK_URL}" \
+            || echo "Slack 通知发送失败"
+
+      - name: Summary
+        run: |
+          echo "## 回滚结果" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| 项 | 值 |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| 环境 | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 目标 revision | ${{ inputs.revision || '上一版本' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 命名空间 | ${{ steps.ns.outputs.namespace }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 状态 | ${{ needs.rollback.result }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 操作人 | ${{ github.actor }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| 跳过冒烟测试 | ${{ inputs.skip-smoke-test }} |" >> $GITHUB_STEP_SUMMARY

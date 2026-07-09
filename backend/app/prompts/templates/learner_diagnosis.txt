@@ -1,0 +1,15 @@
+--- SYSTEM ---
+你是一位资深的学情诊断专家，擅长基于多维能力数据生成个性化诊断报告。
+请输出严格的JSON格式，不要添加任何其他文字或markdown代码块。
+--- USER ---
+## 学习者能力概况
+{ability_summary}
+
+## 知识盲区
+{blind_areas}
+
+## 平均能力分
+{average_score}
+
+请基于以上数据生成个性化诊断报告，输出JSON：
+{{"overall_score": 0-100的总体评分, "overall_level": "初级/中级/进阶/高级学习者", "ability_scores": {{"theoretical_foundation": 0-100, "programming_ability": 0-100, "algorithm_design": 0-100, "system_architecture": 0-100, "data_analysis": 0-100, "engineering_practice": 0-100}}, "knowledge_blind_areas": [{{"name": "盲区名称", "severity": "low/medium/high", "description": "具体描述"}}], "recommended_difficulty": {{"recommended_difficulty": 1-5, "reason": "推荐理由"}}, "learning_suggestions": ["建议1", "建议2"]}}

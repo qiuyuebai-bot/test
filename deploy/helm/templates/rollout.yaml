@@ -1,0 +1,187 @@
+{{- if and .Values.backend.enabled .Values.rollouts.enabled -}}
+{{- $root := . -}}
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: {{ include "knowledge-system.backendServiceName" . }}
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  replicas: {{ .Values.backend.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "knowledge-system.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  strategy:
+    {{- if eq .Values.rollouts.strategy "canary" }}
+    canary:
+      canaryService: {{ include "knowledge-system.backendServiceName" . }}-canary
+      stableService: {{ include "knowledge-system.backendServiceName" . }}-stable
+      {{- with .Values.rollouts.canary.steps }}
+      steps:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.rollouts.canary.analysis.enabled }}
+      analysis:
+        templates:
+          - templateName: {{ include "knowledge-system.fullname" . }}-analysis
+        startingStep: 2
+      {{- end }}
+    {{- else }}
+    blueGreen:
+      activeService: {{ include "knowledge-system.backendServiceName" . }}
+      previewService: {{ include "knowledge-system.backendServiceName" . }}-preview
+      autoPromotionEnabled: false
+    {{- end }}
+  template:
+    metadata:
+      labels:
+        {{- include "knowledge-system.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backend
+        {{- if .Values.deployment.slot }}
+        slot: {{ .Values.deployment.slot | quote }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "knowledge-system.serviceAccountName" . }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if .Values.podAntiAffinity.enabled }}
+      {{- include "knowledge-system.podAntiAffinity" (list . "backend") | nindent 8 }}
+      {{- else }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: backend
+          image: {{ include "knowledge-system.image" (list .Values.images.backend .Values.global) }}
+          imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
+          {{- if .Values.backend.command }}
+          command: {{ toYaml .Values.backend.command | nindent 12 }}
+          {{- end }}
+          ports:
+            - name: http
+              containerPort: 8000
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: {{ include "knowledge-system.configMapName" . }}
+            - secretRef:
+                name: {{ include "knowledge-system.secretName" . }}
+          {{- with .Values.backend.extraEnv }}
+          env:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with .Values.containerSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- include "knowledge-system.resources" .Values.backend.resources | nindent 10 }}
+          livenessProbe:
+            {{- toYaml .Values.backend.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.backend.readinessProbe | nindent 12 }}
+          volumeMounts:
+            - name: backend-data
+              mountPath: /app/data
+            - name: backend-logs
+              mountPath: /app/logs
+      volumes:
+        - name: backend-data
+          persistentVolumeClaim:
+            claimName: {{ include "knowledge-system.fullname" . }}-backend-data
+        - name: backend-logs
+          persistentVolumeClaim:
+            claimName: {{ include "knowledge-system.fullname" . }}-backend-logs
+---
+# ===========================================
+# AnalysisTemplate: 基于指标的自动分析
+# 当指标超过阈值时自动回滚金丝雀版本
+# ===========================================
+{{- if .Values.rollouts.canary.analysis.enabled }}
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: {{ include "knowledge-system.fullname" . }}-analysis
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: rollout
+spec:
+  metrics:
+    {{- range .Values.rollouts.canary.analysis.metrics }}
+    - name: {{ .name }}
+      interval: 30s
+      count: 5
+      successCondition: result[0] < {{ .threshold }}
+      failureLimit: 2
+      provider:
+        prometheus:
+          address: {{ $root.Values.rollouts.canary.analysis.prometheusAddress | quote }}
+          query: {{ .query | quote }}
+    {{- end }}
+{{- end }}
+---
+# ===========================================
+# Canary Service: 金丝雀流量指向此 Service
+# ===========================================
+{{- if eq .Values.rollouts.strategy "canary" }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "knowledge-system.backendServiceName" . }}-canary
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+    rollout-role: canary
+spec:
+  type: {{ .Values.backend.service.type }}
+  ports:
+    - port: {{ .Values.backend.service.port }}
+      targetPort: {{ .Values.backend.service.targetPort }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "knowledge-system.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+---
+# ===========================================
+# Stable Service: 稳定版本流量指向此 Service
+# 主 Service（backendServiceName）由 Rollout 管理流量切分
+# ===========================================
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "knowledge-system.backendServiceName" . }}-stable
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+    rollout-role: stable
+spec:
+  type: {{ .Values.backend.service.type }}
+  ports:
+    - port: {{ .Values.backend.service.port }}
+      targetPort: {{ .Values.backend.service.targetPort }}
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "knowledge-system.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+{{- end }}
+{{- end }}

@@ -1,0 +1,54 @@
+{{- if and .Values.argocd.syncHooks.enabled .Values.argocd.syncHooks.preSync.enabled -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "knowledge-system.fullname" . }}-presync-migrate
+  labels:
+    {{- include "knowledge-system.labels" . | nindent 4 }}
+    app.kubernetes.io/component: migration
+  annotations:
+    # ArgoCD sync hook：在主资源同步前执行
+    argocd.argoproj.io/hook: PreSync
+    # hook 执行成功后自动删除（保留日志在 ArgoCD UI）
+    argocd.argoproj.io/hook-delete-policy: {{ .Values.argocd.syncHooks.hookDeletePolicy | quote }}
+spec:
+  ttlSecondsAfterFinished: {{ .Values.argocd.syncHooks.ttlSecondsAfterFinished }}
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        {{- include "knowledge-system.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: migration
+    spec:
+      restartPolicy: OnFailure
+      serviceAccountName: {{ include "knowledge-system.serviceAccountName" . }}
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: migrate
+          image: {{ include "knowledge-system.image" (list .Values.images.backend .Values.global) }}
+          imagePullPolicy: {{ .Values.images.backend.pullPolicy }}
+          command: ["/bin/sh", "-c"]
+          envFrom:
+            - configMapRef:
+                name: {{ include "knowledge-system.configMapName" . }}
+            - secretRef:
+                name: {{ include "knowledge-system.secretName" . }}
+          args:
+            - |
+              echo "等待数据库就绪..."
+              for i in $(seq 1 30); do
+                python -c "import sqlalchemy; sqlalchemy.create_engine('$DATABASE_URL').connect()" 2>/dev/null && break
+                echo "数据库未就绪，重试 $i/30..."
+                sleep 2
+              done
+              echo "数据库已就绪，执行迁移..."
+              exec {{ join " " .Values.argocd.syncHooks.preSync.command }}
+          {{- with .Values.podSecurityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- include "knowledge-system.resources" .Values.argocd.syncHooks.preSync.resources | nindent 10 }}
+{{- end -}}

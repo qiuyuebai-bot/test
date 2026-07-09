@@ -49,7 +49,7 @@ services:
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - CHROMA_DB_PATH=/app/data/chroma_db
       - DEBUG_MODE=${DEBUG_MODE:-false}
-      - SECRET_KEY=${SECRET_KEY:-change-me-in-production-please}
+      - SECRET_KEY=${SECRET_KEY:-}
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
       - OPENAI_API_BASE=${OPENAI_API_BASE:-https://api.openai.com/v1}
       - OPENAI_MODEL_NAME=${OPENAI_MODEL_NAME:-gpt-4-turbo-preview}
@@ -62,6 +62,12 @@ services:
     restart: unless-stopped
     networks:
       - knowledge-network
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health/live').read()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
 
   # ---- PostgreSQL 数据库（完整模式） ----
   postgres:
@@ -116,7 +122,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
-      - SECRET_KEY=${SECRET_KEY:-change-me-in-production-please}
+      - SECRET_KEY=${SECRET_KEY:-}
     volumes:
       - backend-data:/app/data
       - backend-logs:/app/logs
@@ -147,6 +153,36 @@ services:
       - knowledge-network
     profiles:
       - full
+
+  # ---- 数据备份服务（完整模式，定时备份 PostgreSQL） ----
+  backup:
+    profiles: ["full"]
+    image: python:3.11-slim
+    container_name: knowledge-backup
+    volumes:
+      - ./backend:/app
+      - ./data:/app/data
+    working_dir: /app
+    command: >
+      sh -c "pip install -r requirements.txt &&
+             python -c '
+             import schedule
+             import time
+             import subprocess
+             schedule.every().day.at(\"02:00\").do(
+                 lambda: subprocess.run([\"python\", \"scripts/backup_db.py\"])
+             )
+             while True:
+                 schedule.run_pending()
+                 time.sleep(60)
+             '"
+    environment:
+      - DATABASE_URL=postgresql://postgres:password@postgres:5432/knowledge_system
+    depends_on:
+      - postgres
+    restart: unless-stopped
+    networks:
+      - knowledge-network
 
 # ---- 数据卷 ----
 volumes:

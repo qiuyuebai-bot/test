@@ -35,7 +35,16 @@ celery_app.conf.update(
 celery_app.autodiscover_tasks(["app.celery_tasks"])
 
 
-@celery_app.task(bind=True, name="agent_tasks.full_pipeline")
+@celery_app.task(
+    bind=True,
+    name="agent_tasks.full_pipeline",
+    autoretry_for=(Exception,),
+    max_retries=3,
+    default_retry_delay=60,
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+)
 def full_pipeline_task(
     self,
     task_id: int,
@@ -85,7 +94,15 @@ def full_pipeline_task(
         raise
 
 
-@celery_app.task(name="agent_tasks.batch_generation")
+@celery_app.task(
+    name="agent_tasks.batch_generation",
+    autoretry_for=(Exception,),
+    max_retries=3,
+    default_retry_delay=60,
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+)
 def batch_generation_task(
     learner_ids: list,
     target_topic: str,
@@ -159,7 +176,16 @@ def batch_generation_task(
     }
 
 
-@celery_app.task(bind=True, name="agent_tasks.generate_resources")
+@celery_app.task(
+    bind=True,
+    name="agent_tasks.generate_resources",
+    autoretry_for=(Exception,),
+    max_retries=3,
+    default_retry_delay=60,
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+)
 def generate_resources_task(
     self,
     learner_id: int,
@@ -177,7 +203,7 @@ def generate_resources_task(
         target_topic: 目标主题
         industry: 行业
     """
-    from app.services.resource_service import ResourceGenerationService
+    from app.domains.resource.service import ResourceGenerationService
     
     logger.info(f"[Celery] 开始资源生成: learner_id={learner_id}, topic={target_topic}")
     
@@ -240,7 +266,16 @@ def generate_resources_task(
         raise
 
 
-@celery_app.task(bind=True, name="agent_tasks.batch_generate_resources")
+@celery_app.task(
+    bind=True,
+    name="agent_tasks.batch_generate_resources",
+    autoretry_for=(Exception,),
+    max_retries=3,
+    default_retry_delay=60,
+    retry_backoff=True,
+    retry_backoff_max=600,
+    retry_jitter=True,
+)
 def batch_generate_resources_task(
     self,
     learner_ids: list,
@@ -258,7 +293,7 @@ def batch_generate_resources_task(
         target_topic: 目标主题
         industry: 行业
     """
-    from app.services.resource_service import ResourceGenerationService
+    from app.domains.resource.service import ResourceGenerationService
     
     total = len(learner_ids)
     results = []

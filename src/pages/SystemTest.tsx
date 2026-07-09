@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useStore } from '@/store'
+import { useShallow } from 'zustand/react/shallow'
 import { agentApi, knowledgeApi } from '@/api'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
-import LoadingState from '@/components/LoadingState'
 import EmptyState from '@/components/EmptyState'
 import ErrorState from '@/components/ErrorState'
+import { PageSkeleton } from '@/components/Skeleton'
 import { SCORE_EXCELLENT_THRESHOLD } from '@/lib/constants'
 import {
   FlaskConical,
@@ -49,8 +50,12 @@ const TASK_TYPE_LABEL: Record<string, string> = {
 }
 
 export default function SystemTest() {
-  const systemMetrics = useStore((s) => s.systemMetrics)
-  const fetchSystemMetrics = useStore((s) => s.fetchSystemMetrics)
+  const { systemMetrics, fetchSystemMetrics } = useStore(
+    useShallow((s) => ({
+      systemMetrics: s.systemMetrics,
+      fetchSystemMetrics: s.fetchSystemMetrics,
+    }))
+  )
   const [isRunning, setIsRunning] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -171,7 +176,7 @@ export default function SystemTest() {
     runTestsTimeoutRef.current = setTimeout(() => setIsRunning(false), 800)
   }
 
-  if (loading) return <LoadingState type="default" />
+  if (loading) return <PageSkeleton type="default" />
 
   if (error) {
     return <ErrorState type="default" onRetry={() => loadData()} />
@@ -347,7 +352,7 @@ export default function SystemTest() {
                         <td className="px-4 py-3 text-sm text-text-secondary">{slice.indexed}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            <div className="w-16 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                            <div className="w-16 h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
                               <div className="h-full bg-primary rounded-full" style={{ width: `${slice.coverage}%` }} />
                             </div>
                             <span className="text-xs text-text-secondary">{slice.coverage}%</span>

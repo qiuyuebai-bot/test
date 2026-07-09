@@ -6,34 +6,37 @@ from app.database import Base
 
 # 用户相关模型
 from app.models.user import User, UserRoleEnum
-from app.models.learner_profile import LearnerProfile, EducationLevelEnum, LearningStyleEnum, LearningPhaseEnum
+from app.domains.learner.models import LearnerProfile, EducationLevelEnum, LearningStyleEnum, LearningPhaseEnum
 
 # 知识库相关模型
-from app.models.knowledge_doc import KnowledgeDoc, IndustryEnum, DocStatusEnum
-from app.models.knowledge_slice import KnowledgeSlice
+from app.domains.knowledge.models import KnowledgeDoc, IndustryEnum, DocStatusEnum
+from app.domains.knowledge.models import KnowledgeSlice
 
 # 智能体相关模型
-from app.models.agent_task import AgentTask, AgentTypeEnum, TaskStatusEnum
-from app.models.debate_record import DebateRecord, ConflictSeverityEnum, ResolutionStatusEnum
+from app.domains.agent.models import AgentTask, AgentTypeEnum, TaskStatusEnum
+from app.domains.agent.models import DebateRecord, ConflictSeverityEnum, ResolutionStatusEnum
 
 # 学习资源相关模型
-from app.models.learning_resource import LearningResource, ResourceTypeEnum, ResourceDifficultyEnum, ResourceStatusEnum, ResourceFormatEnum
-from app.models.resource_section import ResourceSection, SectionTypeEnum
-from app.models.resource_exercise import ResourceExercise, ExerciseLevelEnum, ExerciseTypeEnum
-from app.models.resource_media import ResourceMedia, MediaTypeEnum
-from app.models.resource_template import ResourceTemplate, TemplateCategoryEnum
-from app.models.resource_version import ResourceVersion
-from app.models.answer_record import AnswerRecord, QuestionTypeEnum, AnswerResultEnum, AdaptiveDecisionEnum
-from app.models.learning_path import LearningPath, PathNodeTypeEnum, NodeStatusEnum
+from app.domains.resource.models import LearningResource, ResourceTypeEnum, ResourceDifficultyEnum, ResourceStatusEnum, ResourceFormatEnum
+from app.domains.resource.models import ResourceSection, SectionTypeEnum
+from app.domains.resource.models import ResourceExercise, ExerciseLevelEnum, ExerciseTypeEnum
+from app.domains.resource.models import ResourceMedia, MediaTypeEnum
+from app.domains.resource.models import ResourceTemplate, TemplateCategoryEnum
+from app.domains.resource.models import ResourceVersion
+from app.domains.learner.models import AnswerRecord, QuestionTypeEnum, AnswerResultEnum, AdaptiveDecisionEnum
+from app.domains.learner.models import LearningPath, PathNodeTypeEnum, NodeStatusEnum
 
 # 企业培训相关模型
-from app.models.enterprise_training import EnterpriseTraining, TrainingStatusEnum, TransferStatusEnum
+from app.domains.training.models import EnterpriseTraining, TrainingStatusEnum, TransferStatusEnum
 
 # 系统统计相关模型
 from app.models.test_metrics import TestMetrics
 
 # 脱敏数据相关模型
 from app.models.anonymized_data import AnonymizedData, AnonymizeMethodEnum, DataTypeEnum
+
+# 审计日志相关模型
+from app.models.audit_log import AuditLog
 
 
 # 所有模型列表（用于Alembic迁移）
@@ -91,4 +94,6 @@ __all__ = [
     "AnonymizedData",
     "AnonymizeMethodEnum",
     "DataTypeEnum",
+    # 审计日志相关
+    "AuditLog",
 ]

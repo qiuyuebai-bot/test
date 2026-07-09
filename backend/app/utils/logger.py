@@ -16,6 +16,65 @@ except ImportError:
 from app.config import settings
 
 
+# ===========================================
+# 敏感字段脱敏
+# ===========================================
+
+# 敏感字段列表（小写匹配）
+SENSITIVE_FIELDS = {"password", "token", "secret", "api_key", "api_secret", "authorization"}
+
+
+def _sanitize_value(value: Any) -> Any:
+    """脱敏单个值
+
+    保留首尾各 2 字符，中间以 *** 替代；
+    长度不足 5 的值统一返回 ***，避免通过长度反推敏感内容。
+
+    Args:
+        value: 原始值
+
+    Returns:
+        脱敏后的字符串
+    """
+    if value is None:
+        return None
+    s = str(value)
+    if len(s) <= 4:
+        return "***"
+    return s[:2] + "***" + s[-2:]
+
+
+def _sanitize_dict(data: Any) -> Any:
+    """递归脱敏字典中的敏感字段
+
+    - 键名命中 SENSITIVE_FIELDS 时，值替换为 "***REDACTED***"
+    - 支持嵌套 dict 与 list 递归处理
+    - 非 dict 输入原样返回
+
+    Args:
+        data: 原始数据（通常为 dict）
+
+    Returns:
+        脱敏后的数据
+    """
+    if isinstance(data, dict):
+        sanitized = {}
+        for k, v in data.items():
+            if isinstance(k, str) and k.lower() in SENSITIVE_FIELDS:
+                sanitized[k] = "***REDACTED***"
+            elif isinstance(v, dict):
+                sanitized[k] = _sanitize_dict(v)
+            elif isinstance(v, list):
+                sanitized[k] = [
+                    _sanitize_dict(item) if isinstance(item, dict) else item
+                    for item in v
+                ]
+            else:
+                sanitized[k] = v
+        return sanitized
+    return data
+
+
 class _StdLoggerCompat:
     """标准库 logging 到 loguru 接口的兼容层"""
 
@@ -192,6 +251,9 @@ class LoggerUtil:
         """
         记录API请求日志
 
+        自动对请求体中的敏感字段（password/token/secret/api_key 等）进行脱敏处理，
+        避免敏感信息泄露到日志文件。
+
         Args:
             method: 请求方法
             path: 请求路径
@@ -202,7 +264,7 @@ class LoggerUtil:
         if params:
             log_msg += f" | params={params}"
         if body:
-            log_msg += f" | body={body}"
+            log_msg += f" | body={_sanitize_dict(body)}"
 
         logger.debug(log_msg)
 
@@ -212,17 +274,23 @@ class LoggerUtil:
         path: str,
         status_code: int,
         duration_ms: float,
+        body: dict = None,
     ):
         """
         记录API响应日志
+
+        自动对响应体中的敏感字段进行脱敏处理。
 
         Args:
             method: 请求方法
             path: 请求路径
             status_code: 状态码
             duration_ms: 响应耗时（毫秒）
+            body: 响应体（可选）
         """
         log_msg = f"API响应: {method} {path} | status={status_code} | duration={duration_ms}ms"
+        if body:
+            log_msg += f" | body={_sanitize_dict(body)}"
 
         if status_code >= 400:
             logger.warning(log_msg)
