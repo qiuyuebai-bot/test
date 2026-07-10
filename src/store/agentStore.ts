@@ -40,6 +40,9 @@ export interface MetricsSlice {
   fetchSystemMetrics: (options?: { silent?: boolean }) => Promise<void>
 }
 
+let _latestAgentStatusesReqId = 0
+let _latestTasksReqId = 0
+
 export const createAgentSlice: StateCreator<AppState, [], [], AgentSlice> = (set, get) => ({
   agentStatuses: [],
   tasks: [],
@@ -48,9 +51,11 @@ export const createAgentSlice: StateCreator<AppState, [], [], AgentSlice> = (set
   agentsLoading: false,
 
   fetchAgentStatuses: async (options) => {
+    const reqId = ++_latestAgentStatusesReqId
     set({ agentsLoading: true })
     try {
       const result = await agentApi.getAllStatus(options)
+      if (reqId !== _latestAgentStatusesReqId) return
       const agents = result.agents.map((a: AgentStatusRaw) => ({
         ...a,
         agentType: (a.agentType as string) === 'judge' ? 'review' : a.agentType,
@@ -60,6 +65,7 @@ export const createAgentSlice: StateCreator<AppState, [], [], AgentSlice> = (set
       })) as AgentStatus[]
       set({ agentStatuses: agents, agentsLoading: false })
     } catch (err) {
+      if (reqId !== _latestAgentStatusesReqId) return
       if (!options?.silent) {
         console.error('fetchAgentStatuses failed:', err)
       }
@@ -68,12 +74,14 @@ export const createAgentSlice: StateCreator<AppState, [], [], AgentSlice> = (set
   },
 
   fetchTasks: async (params) => {
+    const reqId = ++_latestTasksReqId
     try {
       const result = await agentApi.getTaskList({
         page: 1,
         pageSize: 20,
         ...params,
       })
+      if (reqId !== _latestTasksReqId) return
       const items = result.items.map((t: AgentTaskRaw) => ({
         ...t,
         taskType: (t.taskType === 'learner_diagnosis' ? 'diagnosis' :
@@ -85,6 +93,7 @@ export const createAgentSlice: StateCreator<AppState, [], [], AgentSlice> = (set
       })) as AgentTask[]
       set({ tasks: items, tasksTotal: result.total })
     } catch (err) {
+      if (reqId !== _latestTasksReqId) return
       console.error('fetchTasks failed:', err)
     }
   },
@@ -122,6 +131,7 @@ export const createAgentSlice: StateCreator<AppState, [], [], AgentSlice> = (set
 
   pollTaskStatus: (taskId: number, onUpdate?: (task: AgentTask) => void) => {
     let stopped = false
+    let timeoutId: ReturnType<typeof setTimeout> | null = null
     const poll = async () => {
       if (stopped) return
       try {
@@ -138,14 +148,17 @@ export const createAgentSlice: StateCreator<AppState, [], [], AgentSlice> = (set
         set({ currentTask: task })
         onUpdate?.(task)
         if (task.status === 'running' || task.status === 'pending') {
-          setTimeout(poll, 2000)
+          timeoutId = setTimeout(poll, 2000)
         }
       } catch (err) {
         console.error('pollTaskStatus failed:', err)
       }
     }
     poll()
-    return () => { stopped = true }
+    return () => {
+      stopped = true
+      if (timeoutId) clearTimeout(timeoutId)
+    }
   },
 
   setCurrentTask: (task) => set({ currentTask: task }),

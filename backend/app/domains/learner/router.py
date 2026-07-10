@@ -199,6 +199,9 @@ def update_learner(
     """
     更新学习者画像信息
     """
+    if not current_user.is_admin:
+        if not LearnerService.check_data_permission(db, current_user.user_id, learner_id):
+            return unauthorized("无权限修改该学习者数据")
     learner = LearnerService.update_learner(db, learner_id, update_data)
     if not learner:
         return not_found("学习者不存在")
@@ -219,6 +222,9 @@ def delete_learner(
     """
     删除学习者画像
     """
+    if not current_user.is_admin:
+        if not LearnerService.check_data_permission(db, current_user.user_id, learner_id):
+            return unauthorized("无权限删除该学习者数据")
     result = LearnerService.delete_learner(db, learner_id)
     if not result:
         return not_found("学习者不存在")
@@ -283,9 +289,12 @@ def analyze_learning(
 ):
     """
     自动解析测试答题记录，提取理论强项、技能盲区
-    
+
     - **learner_id**: 学习者ID
     """
+    if not current_user.is_admin:
+        if not LearnerService.check_data_permission(db, current_user.user_id, learner_id):
+            return unauthorized("无权限分析该学习者数据")
     analysis = LearnerService.analyze_learning(db, learner_id)
     if not analysis:
         return not_found("学习者不存在")
@@ -310,6 +319,9 @@ def anonymize_learner(
     - **learner_id**: 学习者ID
     - **fields**: 指定脱敏字段，为空则脱敏所有敏感字段
     """
+    if not current_user.is_admin:
+        if not LearnerService.check_data_permission(db, current_user.user_id, learner_id):
+            return unauthorized("无权限脱敏该学习者数据")
     if anonymize_request is None:
         anonymize_request = AnonymizeRequest(learner_id=learner_id)
     else:
@@ -336,6 +348,9 @@ def add_answer_record(
     """
     添加学习者答题记录（用于学情分析）
     """
+    if not current_user.is_admin:
+        if not LearnerService.check_data_permission(db, current_user.user_id, learner_id):
+            return unauthorized("无权限为该学习者添加答题记录")
     answer_data.learner_id = learner_id
     answer_data.user_id = current_user.user_id
     record = LearnerService.add_answer_record(db, answer_data)
@@ -354,6 +369,9 @@ def get_answer_records(
     """
     获取学习者答题记录列表
     """
+    if not current_user.is_admin:
+        if not LearnerService.check_data_permission(db, current_user.user_id, learner_id):
+            return unauthorized("无权限查看该学习者答题记录")
     records, total = LearnerService.get_answer_records(db, learner_id, page, page_size)
     
     response_items = [
@@ -395,6 +413,9 @@ def get_blind_areas(
     """
     获取学习者知识盲区标签云数据
     """
+    if not current_user.is_admin:
+        if not LearnerService.check_data_permission(db, current_user.user_id, learner_id):
+            return unauthorized("无权限查看该学习者盲区数据")
     learner = LearnerService.get_learner_by_id(db, learner_id)
     if not learner:
         return not_found("学习者不存在")

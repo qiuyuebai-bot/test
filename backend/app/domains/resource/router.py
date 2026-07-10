@@ -15,10 +15,13 @@ from app.schemas.response import (
     bad_request,
     not_found,
     paged_success,
+    unauthorized,
     BaseResponse,
 )
 from app.schemas.core import GenerateResourcesRequest
 from app.domains.resource.service import ResourceGenerationService
+from app.domains.learner.service import LearnerService
+from app.models import LearningResource
 from app.utils.logger import LoggerUtil
 from app.utils.auth import get_current_user, CurrentUser, require_admin
 
@@ -289,6 +292,19 @@ def get_resource_detail(
         if not result:
             return not_found(message=f"资源不存在: {resource_id}")
 
+        # IDOR 防护：校验资源归属（资源关联的 learner_id 必须属于当前用户）
+        resource_learner_id = result.get("learner_id")
+        if resource_learner_id is None:
+            # 无关联学习者的资源仅管理员可访问
+            if not current_user.is_admin:
+                return unauthorized("无权限查看该资源")
+        else:
+            if not current_user.is_admin:
+                if not LearnerService.check_data_permission(
+                    db, current_user.user_id, resource_learner_id
+                ):
+                    return unauthorized("无权限查看该资源")
+
         return success(data=result)
     except Exception as e:
         LoggerUtil.log_error("获取资源详情失败", e)
@@ -309,6 +325,25 @@ def export_resource(
     - 返回纯文本内容，可直接下载
     """
     try:
+        # IDOR 防护：先校验资源归属再导出（直接查询模型，避免触发 view_count 副作用）
+        resource = db.query(LearningResource).filter(
+            LearningResource.id == resource_id
+        ).first()
+        if not resource:
+            return not_found(message=f"资源不存在或无法导出: {resource_id}")
+
+        resource_learner_id = resource.learner_id
+        if resource_learner_id is None:
+            # 无关联学习者的资源仅管理员可访问
+            if not current_user.is_admin:
+                return unauthorized("无权限导出该资源")
+        else:
+            if not current_user.is_admin:
+                if not LearnerService.check_data_permission(
+                    db, current_user.user_id, resource_learner_id
+                ):
+                    return unauthorized("无权限导出该资源")
+
         content = ResourceGenerationService.export_resource(resource_id, format)
         if not content:
             return not_found(message=f"资源不存在或无法导出: {resource_id}")

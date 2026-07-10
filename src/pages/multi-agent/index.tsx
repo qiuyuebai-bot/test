@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react'
+import { useState, useRef, useCallback, useEffect } from 'react'
 import {
   Play,
   ZoomIn,
@@ -40,7 +40,9 @@ export default function MultiAgentVisualization() {
   const [scale, setScale] = useState(1)
   const svgRef = useRef<SVGSVGElement>(null)
 
-  data.setAddLog(addLog)
+  useEffect(() => {
+    data.setAddLog(addLog)
+  }, [data, addLog])
 
   const handleZoomIn = () => setScale(prev => Math.min(prev + 0.1, 1.5))
   const handleZoomOut = () => setScale(prev => Math.max(prev - 0.1, 0.5))

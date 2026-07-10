@@ -292,6 +292,7 @@ class AgentOrchestrator:
                 generated_content=current_content,
                 reference_knowledge=reference_knowledge,
                 previous_debates=debate_records,
+                max_rounds=max_rounds,
             )
             debate_records.append(debate_result)
 

@@ -19,6 +19,8 @@ export interface LearnerSlice {
   deleteLearner: (id: number) => Promise<void>
 }
 
+let _latestLearnerReqId = 0
+
 export const createLearnerSlice: StateCreator<AppState, [], [], LearnerSlice> = (set, get) => ({
   learners: [],
   currentLearner: null,
@@ -54,7 +56,9 @@ export const createLearnerSlice: StateCreator<AppState, [], [], LearnerSlice> = 
   },
 
   fetchLearnerById: async (id: number) => {
+    const reqId = ++_latestLearnerReqId
     const learner = await learnerApi.getById(id)
+    if (reqId !== _latestLearnerReqId) return learner
     set({ currentLearner: learner })
     return learner
   },

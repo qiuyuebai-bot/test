@@ -17,9 +17,11 @@ from app.schemas.response import (
     success,
     error,
     not_found,
+    unauthorized,
     BaseResponse,
 )
 from app.services.report_service import ReportService
+from app.domains.learner.service import LearnerService
 from app.utils.logger import LoggerUtil
 from app.utils.auth import get_current_user, CurrentUser, require_admin
 
@@ -42,6 +44,9 @@ def generate_learner_report(
     - 能力雷达图
     - 核心指标统计
     """
+    if not current_user.is_admin:
+        if not LearnerService.check_data_permission(db, current_user.user_id, learner_id):
+            return unauthorized("无权限查看该学习者报告")
     try:
         result = ReportService.generate_learner_report(learner_id)
 
@@ -66,6 +71,9 @@ def export_learner_report_pdf(
     - 包含学习者基本信息、核心指标、知识盲区分析、能力评估、学习路径规划
     - 返回 PDF 文件流，浏览器自动下载
     """
+    if not current_user.is_admin:
+        if not LearnerService.check_data_permission(db, current_user.user_id, learner_id):
+            return unauthorized("无权限导出该学习者报告")
     try:
         pdf_bytes = ReportService.export_report_pdf(learner_id)
 
@@ -96,6 +104,9 @@ def get_blind_area_heatmap(
     current_user: CurrentUser = Depends(get_current_user),
 ) -> BaseResponse:
     """获取知识盲区热力图数据（对齐前端 Recharts HeatmapChart 需求）"""
+    if not current_user.is_admin:
+        if not LearnerService.check_data_permission(db, current_user.user_id, learner_id):
+            return unauthorized("无权限查看该学习者数据")
     try:
         learner = db.query(LearnerProfile).filter(
             LearnerProfile.id == learner_id
@@ -130,6 +141,9 @@ def get_match_curve(
     current_user: CurrentUser = Depends(get_current_user),
 ) -> BaseResponse:
     """获取资源难度匹配曲线数据（对齐前端 Recharts LineChart 需求）"""
+    if not current_user.is_admin:
+        if not LearnerService.check_data_permission(db, current_user.user_id, learner_id):
+            return unauthorized("无权限查看该学习者数据")
     try:
         learner = db.query(LearnerProfile).filter(
             LearnerProfile.id == learner_id
@@ -157,6 +171,9 @@ def get_ability_trend(
     current_user: CurrentUser = Depends(get_current_user),
 ) -> BaseResponse:
     """获取学习者能力发展趋势数据（从答题记录按周聚合平均分，用于前端 AreaChart）"""
+    if not current_user.is_admin:
+        if not LearnerService.check_data_permission(db, current_user.user_id, learner_id):
+            return unauthorized("无权限查看该学习者数据")
     try:
         learner = db.query(LearnerProfile).filter(
             LearnerProfile.id == learner_id
@@ -194,6 +211,9 @@ def get_learning_path(
     current_user: CurrentUser = Depends(get_current_user),
 ) -> BaseResponse:
     """获取学习路径节点拓扑数据（返回节点和边信息，用于前端绘制路径图）"""
+    if not current_user.is_admin:
+        if not LearnerService.check_data_permission(db, current_user.user_id, learner_id):
+            return unauthorized("无权限查看该学习者数据")
     try:
         learner = db.query(LearnerProfile).filter(
             LearnerProfile.id == learner_id
@@ -216,6 +236,9 @@ def get_ability_radar(
     current_user: CurrentUser = Depends(get_current_user),
 ) -> BaseResponse:
     """获取能力雷达图数据（对齐前端 Recharts RadarChart 需求）"""
+    if not current_user.is_admin:
+        if not LearnerService.check_data_permission(db, current_user.user_id, learner_id):
+            return unauthorized("无权限查看该学习者数据")
     try:
         learner = db.query(LearnerProfile).filter(
             LearnerProfile.id == learner_id

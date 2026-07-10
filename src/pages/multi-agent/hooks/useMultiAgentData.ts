@@ -103,6 +103,7 @@ export function useMultiAgentData() {
   }, [])
 
   useEffect(() => {
+    let cancelled = false
     const loadData = async () => {
       setLoading(true)
       try {
@@ -111,11 +112,13 @@ export function useMultiAgentData() {
           fetchTasks(),
           fetchLearners({ page: 1, pageSize: 50 }),
         ])
+        if (cancelled) return
         setError(null)
       } catch {
+        if (cancelled) return
         setError('加载数据失败')
       } finally {
-        setLoading(false)
+        if (!cancelled) setLoading(false)
       }
     }
     loadData()
@@ -126,6 +129,7 @@ export function useMultiAgentData() {
     }, 15000)
 
     return () => {
+      cancelled = true
       clearInterval(refreshInterval)
     }
   }, [fetchAgentStatuses, fetchTasks, fetchLearners])

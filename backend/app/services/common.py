@@ -6,6 +6,7 @@ import json
 import time
 import random
 import threading
+from collections import OrderedDict
 from typing import Any, Callable, Dict, List, Optional, Type, TypeVar
 
 from app.database import get_db_context
@@ -48,10 +49,11 @@ class BaseService:
     ]
     
     # 缓存配置
-    _cache: Dict[str, Any] = {}
+    _cache: OrderedDict[str, Any] = OrderedDict()
     _cache_ttl: int = 300  # 基础 TTL: 5 分钟
     _cache_jitter: int = 30  # TTL 随机抖动范围（±30s），防止缓存雪崩
     _cache_empty_ttl: int = 60  # 空值缓存短 TTL: 60 秒，防止缓存穿透
+    _CACHE_MAX_SIZE = 1024  # LRU 最大条目数
     # 用 RLock 支持 get_or_set 内部嵌套调用
     _cache_lock: threading.RLock = threading.RLock()
     
@@ -247,6 +249,7 @@ class BaseService:
             if entry is None:
                 return _CACHE_MISS
             if time.time() - entry["timestamp"] < entry["ttl"]:
+                cls._cache.move_to_end(key)
                 return entry["value"]
             del cls._cache[key]
         return _CACHE_MISS
@@ -295,6 +298,10 @@ class BaseService:
                 "timestamp": time.time(),
                 "ttl": ttl,
             }
+            cls._cache.move_to_end(key)
+            if len(cls._cache) > cls._CACHE_MAX_SIZE:
+                oldest_key = next(iter(cls._cache))
+                del cls._cache[oldest_key]
 
     @classmethod
     def get_or_set(
@@ -349,10 +356,10 @@ class BaseService:
             if pattern is None:
                 cls._cache.clear()
             else:
-                cls._cache = {
-                    k: v for k, v in cls._cache.items()
+                cls._cache = OrderedDict(
+                    (k, v) for k, v in cls._cache.items()
                     if not k.startswith(pattern)
-                }
+                )
 
 
 class LearnerServiceHelper(BaseService):

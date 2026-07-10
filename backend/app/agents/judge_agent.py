@@ -132,6 +132,7 @@ class JudgeAgent(BaseAgent):
         generated_content: str,
         reference_knowledge: List[Dict],
         previous_debates: List[Dict] = None,
+        max_rounds: int = 3,
     ) -> Dict[str, Any]:
         """
         与生成Agent进行辩论交叉验证（核心创新机制）
@@ -176,8 +177,7 @@ class JudgeAgent(BaseAgent):
             "confidence": audit_result.get("overall_score", 0) / 100,
         }
         
-        # 最多辩论3轮
-        if current_round >= 3:
+        if current_round >= max_rounds:
             debate_result["final_decision"] = "final_decision"
             debate_result["debate_ended"] = True
             debate_result["reason"] = "达到最大辩论轮次"

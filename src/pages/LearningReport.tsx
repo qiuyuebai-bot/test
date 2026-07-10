@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import Card from '@/components/Card'
@@ -195,6 +195,7 @@ export default function LearningReport() {
   const [testHistory, setTestHistory] = useState<TestHistoryItem[]>([])
   const [systemHallucinationRate, setSystemHallucinationRate] = useState(0)
   const [abilityTrendData, setAbilityTrendData] = useState<{ week: string; score: number }[]>([])
+  const cancelledRef = useRef(false)
 
   const loadReport = useCallback(async () => {
     if (!learner?.id) {
@@ -210,6 +211,7 @@ export default function LearningReport() {
         coreApi.getSystemMetrics().catch(() => null),
         coreApi.getAbilityTrend(learner.id).catch(() => []),
       ])
+      if (cancelledRef.current) return
       setReport((reportData as LearnerReportData | null) ?? null)
       setTestHistory((historyData?.items as TestHistoryItem[]) ?? [])
       setAbilityTrendData((abilityTrend as { week: string; score: number }[]) ?? [])
@@ -217,14 +219,19 @@ export default function LearningReport() {
         setSystemHallucinationRate(sysMetrics.hallucinationRate)
       }
     } catch (err) {
+      if (cancelledRef.current) return
       setError(err instanceof Error ? err.message : '加载报告数据失败')
     } finally {
-      setLoading(false)
+      if (!cancelledRef.current) setLoading(false)
     }
   }, [learner?.id])
 
   useEffect(() => {
+    cancelledRef.current = false
     loadReport()
+    return () => {
+      cancelledRef.current = true
+    }
   }, [loadReport])
 
   if (loading) return <PageSkeleton type="dashboard" />

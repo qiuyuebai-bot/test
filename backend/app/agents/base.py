@@ -3,6 +3,7 @@ Agent 基类
 定义所有智能体的通用接口和基础能力
 """
 import time
+import threading
 from abc import ABC, abstractmethod
 from typing import Dict, Any, Optional
 from loguru import logger
@@ -37,6 +38,7 @@ class BaseAgent(ABC):
         self.current_task_id: Optional[int] = None
         self.last_error: Optional[str] = None
         self.execution_log = []
+        self._lock = threading.Lock()
     
     @abstractmethod
     def execute(self, input_data: Dict[str, Any], context: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -64,10 +66,11 @@ class BaseAgent(ABC):
         Returns:
             执行结果字典
         """
-        self.status = AgentStatus.RUNNING
-        self.current_task_id = task_id
-        self.last_error = None
-        
+        with self._lock:
+            self.status = AgentStatus.RUNNING
+            self.current_task_id = task_id
+            self.last_error = None
+
         start_time = time.time()
         
         log_entry = {
@@ -92,8 +95,9 @@ class BaseAgent(ABC):
                 "success": True,
             }
             
-            self.status = AgentStatus.IDLE
-            
+            with self._lock:
+                self.status = AgentStatus.IDLE
+
             log_entry = {
                 "agent_type": self.agent_type,
                 "agent_name": self.agent_name,
@@ -109,9 +113,10 @@ class BaseAgent(ABC):
             return result
             
         except Exception as e:
-            self.status = AgentStatus.ERROR
-            self.last_error = str(e)
-            
+            with self._lock:
+                self.status = AgentStatus.ERROR
+                self.last_error = str(e)
+
             duration_ms = int((time.time() - start_time) * 1000)
             
             log_entry = {
@@ -137,7 +142,11 @@ class BaseAgent(ABC):
                     "success": False,
                 }
             }
-    
+        finally:
+            with self._lock:
+                self.status = AgentStatus.IDLE
+                self.current_task_id = None
+
     def validate(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
         校验输出数据质量

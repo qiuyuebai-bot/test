@@ -36,6 +36,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    let cancelled = false
     const loadData = async () => {
       setLoading(true)
       await Promise.all([
@@ -45,6 +46,7 @@ export default function Dashboard() {
         fetchResources({ page: 1, pageSize: 50 }),
         fetchTasks({ page: 1, pageSize: 10 }),
       ])
+      if (cancelled) return
       setLoading(false)
     }
     loadData()
@@ -74,6 +76,7 @@ export default function Dashboard() {
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
     return () => {
+      cancelled = true
       clearInterval(refreshInterval)
       document.removeEventListener('visibilitychange', handleVisibilityChange)
     }

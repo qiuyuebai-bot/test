@@ -162,16 +162,20 @@ function doFetch(url: string, config: RequestInit, timeoutMs: number): Promise<R
   const timeoutId = setTimeout(() => controller.abort(), timeoutMs)
 
   const signal = config.signal
+  const onAbort = () => controller.abort()
   if (signal) {
     if (signal.aborted) {
       clearTimeout(timeoutId)
       return Promise.reject(new DOMException('Aborted', 'AbortError'))
     }
-    signal.addEventListener('abort', () => controller.abort(), { once: true })
+    signal.addEventListener('abort', onAbort, { once: true })
   }
 
   return fetch(url, { ...config, signal: controller.signal }).finally(() => {
     clearTimeout(timeoutId)
+    if (signal) {
+      signal.removeEventListener('abort', onAbort)
+    }
   })
 }
 

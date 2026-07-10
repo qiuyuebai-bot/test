@@ -15,6 +15,7 @@ import atexit
 import hashlib
 import time
 import threading
+from collections import OrderedDict
 
 import httpx
 from loguru import logger
@@ -40,8 +41,9 @@ class LLMUtil:
     # ===========================================
     # 仅缓存 temperature ≤ 0.3 的调用结果，避免缓存创造性输出
     # 流式调用（async_stream）不参与缓存
-    _response_cache: Dict[str, Dict[str, Any]] = {}
+    _response_cache: OrderedDict[str, Dict[str, Any]] = OrderedDict()
     _response_cache_ttl: int = 3600  # 默认 1 小时
+    _response_cache_max_size: int = 1024  # LRU 最大条目数
     _response_cache_lock: threading.RLock = threading.RLock()
     _cache_enabled_threshold: float = 0.3  # temperature ≤ 此值才启用缓存
     _cache_hits: int = 0
@@ -277,6 +279,7 @@ class LLMUtil:
                 cls._cache_misses += 1
                 return None
             cls._cache_hits += 1
+            cls._response_cache.move_to_end(cache_key)
             return entry["value"]
 
     @classmethod
@@ -293,6 +296,10 @@ class LLMUtil:
                 "timestamp": time.time(),
                 "ttl": ttl or cls._response_cache_ttl,
             }
+            cls._response_cache.move_to_end(cache_key)
+            if len(cls._response_cache) > cls._response_cache_max_size:
+                oldest_key = next(iter(cls._response_cache))
+                del cls._response_cache[oldest_key]
 
     @classmethod
     def _record_usage(cls, usage: Dict[str, int]) -> None:

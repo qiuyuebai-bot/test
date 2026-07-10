@@ -19,6 +19,7 @@ from app.schemas.response import (
     error,
     bad_request,
     not_found,
+    unauthorized,
     paged_success,
     BaseResponse,
 )
@@ -27,12 +28,21 @@ from app.domains.agent.schemas import (
     DiagnosisRequest,
     GenerationRequest,
 )
+from app.domains.learner.service import LearnerService
 from app.agents.orchestrator import orchestrator
 from app.models import AgentTask, DebateRecord, LearnerProfile
 from app.utils.logger import LoggerUtil
 from app.utils.auth import get_current_user, CurrentUser
 
 router = APIRouter(prefix="/agent", tags=["Agent协同调度"])
+
+
+def _check_task_permission(db: Session, current_user: CurrentUser, task: AgentTask) -> bool:
+    if current_user.is_admin:
+        return True
+    if task.learner_id is None:
+        return False
+    return LearnerService.check_data_permission(db, current_user.user_id, task.learner_id)
 
 _AGENT_RESPONSES = {
     400: {"description": "请求参数错误（任务参数不合法、Agent类型无效等）"},
@@ -47,22 +57,25 @@ _AGENT_RESPONSES = {
 # SSE 短期票据存储（30 秒有效，一次性使用，避免 JWT Token 泄露到 URL/日志）
 _SSE_TICKETS: Dict[str, Dict] = {}
 _SSE_TICKET_TTL = 30
+_SSE_TICKETS_LOCK = threading.Lock()
 
 
 def _issue_sse_ticket(user_id: int, task_id: int) -> str:
-    _cleanup_sse_tickets()
     ticket = secrets.token_urlsafe(32)
-    _SSE_TICKETS[ticket] = {
-        "user_id": user_id,
-        "task_id": task_id,
-        "expires_at": time.time() + _SSE_TICKET_TTL,
-    }
+    with _SSE_TICKETS_LOCK:
+        _cleanup_sse_tickets_locked()
+        _SSE_TICKETS[ticket] = {
+            "user_id": user_id,
+            "task_id": task_id,
+            "expires_at": time.time() + _SSE_TICKET_TTL,
+        }
     return ticket
 
 
 def _consume_sse_ticket(ticket: str, task_id: int) -> Optional[int]:
-    _cleanup_sse_tickets()
-    info = _SSE_TICKETS.pop(ticket, None)
+    with _SSE_TICKETS_LOCK:
+        _cleanup_sse_tickets_locked()
+        info = _SSE_TICKETS.pop(ticket, None)
     if not info or info["expires_at"] < time.time():
         return None
     if info["task_id"] != task_id:
@@ -70,9 +83,9 @@ def _consume_sse_ticket(ticket: str, task_id: int) -> Optional[int]:
     return info["user_id"]
 
 
-def _cleanup_sse_tickets() -> None:
+def _cleanup_sse_tickets_locked() -> None:
     now = time.time()
-    expired = [k for k, v in _SSE_TICKETS.items() if v["expires_at"] < now]
+    expired = [k for k, v in list(_SSE_TICKETS.items()) if v["expires_at"] < now]
     for k in expired:
         _SSE_TICKETS.pop(k, None)
 
@@ -148,7 +161,11 @@ def create_agent_task(
         ).first()
         if not learner:
             return bad_request(message=f"学习者不存在: {request.learner_id}")
-        
+
+        if not current_user.is_admin:
+            if not LearnerService.check_data_permission(db, current_user.user_id, request.learner_id):
+                return unauthorized("无权限为该学习者创建任务")
+
         task_info = orchestrator.create_task(
             learner_id=request.learner_id,
             task_name=request.task_name,
@@ -187,7 +204,10 @@ def start_agent_task(
         task = db.query(AgentTask).filter(AgentTask.id == task_id).first()
         if not task:
             return not_found(message="任务不存在")
-        
+
+        if not _check_task_permission(db, current_user, task):
+            return unauthorized("无权限操作该任务")
+
         if task.status == "running":
             return bad_request(message="任务正在执行中")
         
@@ -253,6 +273,8 @@ def create_sse_ticket(
     task = db.query(AgentTask).filter(AgentTask.id == task_id).first()
     if not task:
         return not_found("任务不存在")
+    if not _check_task_permission(db, current_user, task):
+        return unauthorized("无权限访问该任务")
     ticket = _issue_sse_ticket(current_user.id, task_id)
     return success(data={"ticket": ticket, "expires_in": _SSE_TICKET_TTL})
 
@@ -288,7 +310,11 @@ async def task_events_stream(
     task = db.query(AgentTask).filter(AgentTask.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
-    
+
+    if task.learner_id is not None:
+        if not LearnerService.check_data_permission(db, user_id, task.learner_id):
+            raise HTTPException(status_code=403, detail="无权限访问该任务")
+
     # 如果任务已完成或失败，先发送当前状态后关闭
     if task.status in ("completed", "failed"):
         async def completed_stream():
@@ -370,10 +396,16 @@ def get_task_status(
 ) -> BaseResponse:
     """
     查询任务实时状态和进度
-    
+
     - 返回当前阶段、进度百分比、错误信息等
     """
     try:
+        task = db.query(AgentTask).filter(AgentTask.id == task_id).first()
+        if not task:
+            return not_found(message="任务不存在")
+        if not _check_task_permission(db, current_user, task):
+            return unauthorized("无权限查看该任务")
+
         status = orchestrator.get_task_status(task_id)
         if status.get("error") == "任务不存在":
             return not_found(message="任务不存在")
@@ -396,6 +428,12 @@ def get_task_logs(
     - 返回按时间排序的执行日志列表
     """
     try:
+        task = db.query(AgentTask).filter(AgentTask.id == task_id).first()
+        if not task:
+            return not_found(message="任务不存在")
+        if not _check_task_permission(db, current_user, task):
+            return unauthorized("无权限查看该任务日志")
+
         logs = orchestrator.get_task_logs(task_id)
         
         # 如果内存中没有，从数据库查辩论记录
@@ -441,8 +479,11 @@ def get_task_list(
     """
     try:
         query = db.query(AgentTask)
-        
+
         if learner_id:
+            if not current_user.is_admin:
+                if not LearnerService.check_data_permission(db, current_user.user_id, learner_id):
+                    return unauthorized("无权限查看该学习者任务")
             query = query.filter(AgentTask.learner_id == learner_id)
         if status:
             query = query.filter(AgentTask.status == status)
@@ -507,7 +548,11 @@ def run_diagnosis(
         ).first()
         if not learner:
             return not_found(message=f"学习者不存在: {request.learner_id}")
-        
+
+        if not current_user.is_admin:
+            if not LearnerService.check_data_permission(db, current_user.user_id, request.learner_id):
+                return unauthorized("无权限为该学习者执行诊断")
+
         # 转换为字典
         learner_dict = {}
         for column in learner.__table__.columns:
@@ -587,6 +632,12 @@ def get_debate_records(
     - 包含: 裁判观点、生成Agent回应、冲突点、修正方案
     """
     try:
+        task = db.query(AgentTask).filter(AgentTask.id == task_id).first()
+        if not task:
+            return not_found(message="任务不存在")
+        if not _check_task_permission(db, current_user, task):
+            return unauthorized("无权限查看该任务辩论记录")
+
         records = db.query(DebateRecord).filter(
             DebateRecord.task_id == task_id
         ).order_by(DebateRecord.debate_round).all()
@@ -738,7 +789,11 @@ def run_full_pipeline(
         ).first()
         if not learner:
             return not_found(message=f"学习者不存在: {request.learner_id}")
-        
+
+        if not current_user.is_admin:
+            if not LearnerService.check_data_permission(db, current_user.user_id, request.learner_id):
+                return unauthorized("无权限为该学习者启动流水线")
+
         # 创建任务
         task = AgentTask(
             learner_id=request.learner_id,

@@ -12,10 +12,12 @@ from app.schemas.response import (
     error,
     not_found,
     paged_success,
+    unauthorized,
     BaseResponse,
 )
 from app.schemas.core import SubmitAnswerRequest
 from app.services.tutoring_service import AdaptiveTutoringService
+from app.domains.learner.service import LearnerService
 from app.utils.logger import LoggerUtil
 from app.utils.auth import get_current_user, CurrentUser
 
@@ -91,6 +93,10 @@ def get_interaction_history(
     - 返回每轮答题、Agent决策、新生成资源的完整记录
     - 支持按会话筛选
     """
+    # IDOR 防护：校验学习者数据归属
+    if not current_user.is_admin:
+        if not LearnerService.check_data_permission(db, current_user.user_id, learner_id):
+            return unauthorized("无权限查看该学习者交互历史")
     try:
         result = AdaptiveTutoringService.get_interaction_history(
             learner_id=learner_id,

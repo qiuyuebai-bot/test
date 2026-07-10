@@ -25,9 +25,13 @@ from app.domains.knowledge.schemas import (
 )
 from app.domains.knowledge.service import KnowledgeService
 from app.services.common import BaseService
-from app.utils.auth import require_admin, CurrentUser
+from app.utils.auth import require_admin, get_current_user, CurrentUser
 
-router = APIRouter(prefix="/knowledge", tags=["知识库"])
+router = APIRouter(
+    prefix="/knowledge",
+    tags=["知识库"],
+    dependencies=[Depends(get_current_user)],
+)
 
 _KNOWLEDGE_RESPONSES = {
     400: {"description": "请求参数错误（文件格式不支持、内容为空等）"},
@@ -79,11 +83,25 @@ async def upload_document(
             author = None
             
             if file and hasattr(file, "read"):
-                file_content = await file.read()
-                text_content = file_content.decode("utf-8", errors="replace")
                 file_name = file.filename or "unknown.txt"
                 file_type = file_name.split(".")[-1] if "." in file_name else "txt"
-                file_size = len(file_content)
+                # 分块读取并在累计大小超限时提前中止，避免大文件撑爆内存
+                chunks = []
+                file_size = 0
+                max_size = settings.MAX_UPLOAD_SIZE
+                while True:
+                    chunk = await file.read(1024 * 1024)  # 1MB chunks
+                    if not chunk:
+                        break
+                    file_size += len(chunk)
+                    if file_size > max_size:
+                        max_size_mb = max_size // (1024 * 1024)
+                        return bad_request(
+                            f"文件大小超出限制: {round(file_size / (1024 * 1024), 2)}MB，最大支持: {max_size_mb}MB"
+                        )
+                    chunks.append(chunk)
+                file_content = b"".join(chunks)
+                text_content = file_content.decode("utf-8", errors="replace")
             else:
                 text_content = form.get("content", "")
                 file_name = form.get("file_name", "content.txt")

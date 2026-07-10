@@ -142,33 +142,33 @@ class TestKnowledgeRoutes:
         data = response.json()
         assert data["code"] == 200
 
-    def test_get_doc_list(self, client: TestClient, sample_knowledge_doc: KnowledgeDoc):
+    def test_get_doc_list(self, client: TestClient, sample_knowledge_doc: KnowledgeDoc, auth_headers: dict):
         """测试获取文档列表"""
-        response = client.get("/api/v1/knowledge/docs?page=1&page_size=10")
+        response = client.get("/api/v1/knowledge/docs?page=1&page_size=10", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["code"] == 200
 
-    def test_get_doc_detail(self, client: TestClient, sample_knowledge_doc: KnowledgeDoc):
+    def test_get_doc_detail(self, client: TestClient, sample_knowledge_doc: KnowledgeDoc, auth_headers: dict):
         """测试获取文档详情"""
-        response = client.get(f"/api/v1/knowledge/docs/{sample_knowledge_doc.id}")
+        response = client.get(f"/api/v1/knowledge/docs/{sample_knowledge_doc.id}", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["code"] == 200
 
-    def test_search_knowledge(self, client: TestClient):
+    def test_search_knowledge(self, client: TestClient, auth_headers: dict):
         """测试知识库检索"""
         response = client.post("/api/v1/knowledge/search", json={
             "query": "深度学习",
             "top_k": 5,
-        })
+        }, headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["code"] == 200
 
-    def test_get_industry_stats(self, client: TestClient):
+    def test_get_industry_stats(self, client: TestClient, auth_headers: dict):
         """测试行业统计"""
-        response = client.get("/api/v1/knowledge/stats/industries")
+        response = client.get("/api/v1/knowledge/stats/industries", headers=auth_headers)
         assert response.status_code == 200
         data = response.json()
         assert data["code"] == 200
