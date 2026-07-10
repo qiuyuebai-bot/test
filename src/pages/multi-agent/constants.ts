@@ -10,20 +10,20 @@ export const flowSteps = [
 ] as const
 
 export const agentColorMap = {
-  diagnosis: { primary: '#3d5a80', secondary: '#5a7aa5', bg: 'bg-[#3d5a80]/10', border: 'border-[#3d5a80]/30', text: 'text-[#3d5a80]' },
-  generation: { primary: '#5b8def', secondary: '#7ba6f5', bg: 'bg-[#5b8def]/10', border: 'border-[#5b8def]/30', text: 'text-[#5b8def]' },
-  review: { primary: '#f59e0b', secondary: '#fbbf24', bg: 'bg-[#f59e0b]/10', border: 'border-[#f59e0b]/30', text: 'text-[#f59e0b]' },
+  diagnosis: { primary: 'var(--color-viz-1)', secondary: 'var(--color-viz-1)', bg: 'bg-viz-1/10', border: 'border-viz-1/30', text: 'text-viz-1' },
+  generation: { primary: 'var(--color-viz-2)', secondary: 'var(--color-viz-2)', bg: 'bg-viz-2/10', border: 'border-viz-2/30', text: 'text-viz-2' },
+  review: { primary: 'var(--color-viz-3)', secondary: 'var(--color-viz-3)', bg: 'bg-viz-3/10', border: 'border-viz-3/30', text: 'text-viz-3' },
 } as const
 
 export const statusConfig: Record<string, { label: string; color: string; bgLight: string; textColor: string }> = {
-  idle: { label: '空闲', color: 'bg-gray-400', bgLight: 'bg-gray-100 dark:bg-gray-800', textColor: 'text-gray-600' },
+  idle: { label: '空闲', color: 'bg-text-tertiary', bgLight: 'bg-bg-tertiary', textColor: 'text-text-secondary' },
   running: { label: '运行中', color: 'bg-primary', bgLight: 'bg-primary/10', textColor: 'text-primary' },
-  waiting: { label: '等待中', color: 'bg-blue-400', bgLight: 'bg-blue-50', textColor: 'text-blue-600' },
-  completed: { label: '已完成', color: 'bg-green-400', bgLight: 'bg-green-50', textColor: 'text-green-600' },
-  failed: { label: '异常', color: 'bg-red-400', bgLight: 'bg-red-50', textColor: 'text-red-600' },
-  error: { label: '错误', color: 'bg-red-500', bgLight: 'bg-red-50', textColor: 'text-red-600' },
-  pending: { label: '等待中', color: 'bg-amber-400', bgLight: 'bg-amber-50', textColor: 'text-amber-600' },
-  cancelled: { label: '已取消', color: 'bg-gray-400', bgLight: 'bg-gray-100 dark:bg-gray-800', textColor: 'text-gray-600' },
+  waiting: { label: '等待中', color: 'bg-info', bgLight: 'bg-info-light', textColor: 'text-info-dark' },
+  completed: { label: '已完成', color: 'bg-success', bgLight: 'bg-success-light', textColor: 'text-success-dark' },
+  failed: { label: '异常', color: 'bg-error', bgLight: 'bg-error-light', textColor: 'text-error-dark' },
+  error: { label: '错误', color: 'bg-error', bgLight: 'bg-error-light', textColor: 'text-error-dark' },
+  pending: { label: '等待中', color: 'bg-warning', bgLight: 'bg-warning-light', textColor: 'text-warning-dark' },
+  cancelled: { label: '已取消', color: 'bg-text-tertiary', bgLight: 'bg-bg-tertiary', textColor: 'text-text-secondary' },
 }
 
 export const taskTypeOptions = [
@@ -51,9 +51,9 @@ export function getTaskTypeLabel(taskType: string): string {
 
 export function getTaskTypeColor(taskType: string): string {
   switch (taskType) {
-    case 'diagnosis': return 'bg-[#3d5a80]/10 text-[#3d5a80]'
-    case 'generation': return 'bg-[#5b8def]/10 text-[#5b8def]'
-    case 'review': return 'bg-[#f59e0b]/10 text-[#f59e0b]'
-    default: return 'bg-purple-100 text-purple-600'
+    case 'diagnosis': return 'bg-viz-1/10 text-viz-1'
+    case 'generation': return 'bg-viz-2/10 text-viz-2'
+    case 'review': return 'bg-viz-3/10 text-viz-3'
+    default: return 'bg-bg-tertiary text-text-secondary'
   }
 }

@@ -238,10 +238,12 @@ async function request<T = unknown>(path: string, options: RequestOptions = {}):
       toast.error('网络错误', '无法连接到服务器，请检查网络连接')
     }
     const networkErr = new NetworkError()
-    reportError(networkErr, {
-      tags: { kind: 'network', endpoint: path },
-      extra: { method, url, cause: String(err) },
-    })
+    if (!silent) {
+      reportError(networkErr, {
+        tags: { kind: 'network', endpoint: path },
+        extra: { method, url, cause: String(err) },
+      })
+    }
     throw networkErr
   }
 
@@ -289,10 +291,12 @@ async function request<T = unknown>(path: string, options: RequestOptions = {}):
       toast.error('服务器错误', '服务器处理异常，请稍后重试')
     }
     const err = new ApiError(response.status, '服务器内部错误')
-    reportError(err, {
-      tags: { httpStatus: response.status, endpoint: path },
-      extra: { method, url },
-    })
+    if (!silent) {
+      reportError(err, {
+        tags: { httpStatus: response.status, endpoint: path },
+        extra: { method, url },
+      })
+    }
     throw err
   }
 

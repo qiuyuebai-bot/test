@@ -19,10 +19,10 @@ export default function Button({
   ...props
 }: ButtonProps) {
   const variantStyles = {
-    primary: 'bg-primary text-white hover:bg-primary-hover active:bg-primary-active disabled:bg-gray-300 dark:disabled:bg-gray-600',
-    secondary: 'bg-secondary text-white hover:bg-secondary-hover disabled:bg-gray-300 dark:disabled:bg-gray-600',
-    outline: 'border border-border text-text-primary hover:bg-gray-50 dark:hover:bg-gray-800 disabled:border-border disabled:text-text-tertiary',
-    ghost: 'text-text-secondary hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-text-primary disabled:text-text-tertiary',
+    primary: 'bg-primary text-text-inverse hover:bg-primary-hover active:bg-primary-active enabled:hover:-translate-y-0.5 enabled:hover:shadow-lift enabled:active:translate-y-0 disabled:bg-text-tertiary',
+    secondary: 'bg-secondary text-text-inverse hover:bg-secondary-hover enabled:hover:-translate-y-0.5 enabled:hover:shadow-lift enabled:active:translate-y-0 disabled:bg-text-tertiary',
+    outline: 'border border-border text-text-primary hover:bg-bg-secondary hover:border-primary/40 disabled:border-border disabled:text-text-tertiary',
+    ghost: 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary disabled:text-text-tertiary',
   }
 
   const sizeStyles = {
@@ -35,7 +35,7 @@ export default function Button({
     <button
       disabled={disabled || loading}
       className={clsx(
-        'inline-flex items-center justify-center gap-2 font-medium rounded-button transition-all duration-200',
+        'inline-flex items-center justify-center gap-2 font-medium rounded-button transition-all duration-250',
         'disabled:cursor-not-allowed',
         variantStyles[variant],
         sizeStyles[size],

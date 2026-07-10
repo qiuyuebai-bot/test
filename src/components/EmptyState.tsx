@@ -44,7 +44,7 @@ export default function EmptyState({
 
   return (
     <Card className={clsx('flex flex-col items-center justify-center py-12 px-6 text-center', className)}>
-      <div className="w-16 h-16 rounded-2xl bg-bg-secondary flex items-center justify-center mb-5 transition-all duration-300">
+      <div className="w-16 h-16 rounded-2xl bg-bg-secondary flex items-center justify-center mb-5 transition-all duration-250">
         {icon && isValidElement(icon) ? icon : <IconComponent className="w-8 h-8 text-text-tertiary" />}
       </div>
       <h3 className="text-base font-medium text-text-primary mb-2">{title}</h3>

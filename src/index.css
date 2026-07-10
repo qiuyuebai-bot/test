@@ -62,17 +62,27 @@
   --color-border: #e5e7eb;
   --color-border-light: #f3f4f6;
 
-  /* 阴影 - 分层柔化 */
-  --shadow-soft: rgba(0, 0, 0, 0.04);
-  --shadow-medium: rgba(0, 0, 0, 0.08);
-  --shadow-heavy: rgba(0, 0, 0, 0.12);
+  /* 阴影 - 分层柔化（深化以增强高级质感） */
+  --shadow-soft: rgba(0, 0, 0, 0.06);
+  --shadow-medium: rgba(0, 0, 0, 0.10);
+  --shadow-heavy: rgba(0, 0, 0, 0.16);
   --shadow-glow: rgba(61, 90, 128, 0.25);
-  --shadow-inner: rgba(0, 0, 0, 0.04);
+  --shadow-inner: rgba(0, 0, 0, 0.05);
 
   /* 智能体专用色 */
   --color-agent-diagnosis: #3d5a80;
   --color-agent-knowledge: #6366f1;
   --color-agent-judge: #f59e0b;
+
+  /* 数据可视化 4 色板 */
+  --color-viz-1: #3d5a80;
+  --color-viz-2: #5b8def;
+  --color-viz-3: #f59e0b;
+  --color-viz-4: #10b981;
+
+  /* 强调色 */
+  --color-accent: #5b8def;
+  --color-accent-hover: #4a7de0;
 }
 
 /* 深色模式 */
@@ -113,12 +123,22 @@
   --color-border: #2d3748;
   --color-border-light: #374151;
 
-  /* 深色模式阴影 */
-  --shadow-soft: rgba(0, 0, 0, 0.2);
-  --shadow-medium: rgba(0, 0, 0, 0.3);
-  --shadow-heavy: rgba(0, 0, 0, 0.4);
-  --shadow-glow: rgba(107, 140, 190, 0.3);
-  --shadow-inner: rgba(0, 0, 0, 0.2);
+  /* 深色模式阴影（同步深化，保持略重于浅色） */
+  --shadow-soft: rgba(0, 0, 0, 0.24);
+  --shadow-medium: rgba(0, 0, 0, 0.36);
+  --shadow-heavy: rgba(0, 0, 0, 0.48);
+  --shadow-glow: rgba(107, 140, 190, 0.35);
+  --shadow-inner: rgba(0, 0, 0, 0.24);
+
+  /* 深色模式数据可视化色板 */
+  --color-viz-1: #6b8cbe;
+  --color-viz-2: #7ba3f5;
+  --color-viz-3: #fbbf24;
+  --color-viz-4: #34d399;
+
+  /* 深色模式强调色 */
+  --color-accent: #7ba3f5;
+  --color-accent-hover: #6b93e8;
 }
 
 /* ============================================
@@ -303,7 +323,7 @@ body {
    ============================================ */
 
 .transition-default {
-  transition: all 0.2s ease-out;
+  transition: all 0.25s ease-out;
 }
 
 .transition-smooth {
@@ -355,4 +375,53 @@ body {
 
 .chart-gradient-success {
   fill: url(#gradientSuccess);
+}
+
+/* ============================================
+   高级质感工具类
+   ============================================ */
+
+@layer components {
+  /* 页面主标题锚点 - 带细微底部强调线 */
+  .hero-anchor {
+    @apply relative pb-2;
+  }
+  .hero-anchor::after {
+    content: '';
+    @apply absolute bottom-0 left-0 h-0.5 rounded-full;
+    width: 2rem;
+    background: linear-gradient(90deg, var(--color-primary), transparent);
+  }
+
+  /* 子项错峰入场动画 */
+  .stagger-item {
+    @apply opacity-0;
+    animation: staggerFadeIn 0.4s ease-out forwards;
+  }
+  .stagger-item:nth-child(1) { animation-delay: 0.05s; }
+  .stagger-item:nth-child(2) { animation-delay: 0.10s; }
+  .stagger-item:nth-child(3) { animation-delay: 0.15s; }
+  .stagger-item:nth-child(4) { animation-delay: 0.20s; }
+  .stagger-item:nth-child(5) { animation-delay: 0.25s; }
+  .stagger-item:nth-child(6) { animation-delay: 0.30s; }
+  .stagger-item:nth-child(7) { animation-delay: 0.35s; }
+  .stagger-item:nth-child(8) { animation-delay: 0.40s; }
+
+  /* 指标数字统一样式 */
+  .metric-number {
+    @apply font-semibold;
+    font-variant-numeric: tabular-nums;
+    letter-spacing: -0.02em;
+  }
+}
+
+@keyframes staggerFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }

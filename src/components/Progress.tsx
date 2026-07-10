@@ -40,7 +40,7 @@ export default function Progress({
           <span className="text-sm font-medium text-text-primary">{Math.round(percentage)}%</span>
         </div>
       )}
-      <div className={clsx('w-full bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden', sizeStyles[size])}>
+      <div className={clsx('w-full bg-bg-tertiary rounded-full overflow-hidden', sizeStyles[size])}>
         <div
           className={clsx('h-full rounded-full transition-all duration-500', variantStyles[variant])}
           style={{ width: `${percentage}%` }}

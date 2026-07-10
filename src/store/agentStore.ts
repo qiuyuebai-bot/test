@@ -26,7 +26,7 @@ export interface AgentSlice {
   tasksTotal: number
   currentTask: AgentTask | null
   agentsLoading: boolean
-  fetchAgentStatuses: () => Promise<void>
+  fetchAgentStatuses: (options?: { silent?: boolean }) => Promise<void>
   fetchTasks: (params?: { page?: number; pageSize?: number; status?: string }) => Promise<void>
   startAgentTask: (params: { learnerId: number; taskType: string; taskName?: string }) => Promise<{ taskId: number }>
   runFullPipeline: (params: { learnerId: number; targetTopic: string; resourceType?: string; industry?: string }) => Promise<{ taskId: number }>
@@ -37,7 +37,7 @@ export interface AgentSlice {
 export interface MetricsSlice {
   systemMetrics: SystemMetrics | null
   metricsLoading: boolean
-  fetchSystemMetrics: () => Promise<void>
+  fetchSystemMetrics: (options?: { silent?: boolean }) => Promise<void>
 }
 
 export const createAgentSlice: StateCreator<AppState, [], [], AgentSlice> = (set, get) => ({
@@ -47,10 +47,10 @@ export const createAgentSlice: StateCreator<AppState, [], [], AgentSlice> = (set
   currentTask: null,
   agentsLoading: false,
 
-  fetchAgentStatuses: async () => {
+  fetchAgentStatuses: async (options) => {
     set({ agentsLoading: true })
     try {
-      const result = await agentApi.getAllStatus()
+      const result = await agentApi.getAllStatus(options)
       const agents = result.agents.map((a: AgentStatusRaw) => ({
         ...a,
         agentType: (a.agentType as string) === 'judge' ? 'review' : a.agentType,
@@ -60,7 +60,9 @@ export const createAgentSlice: StateCreator<AppState, [], [], AgentSlice> = (set
       })) as AgentStatus[]
       set({ agentStatuses: agents, agentsLoading: false })
     } catch (err) {
-      console.error('fetchAgentStatuses failed:', err)
+      if (!options?.silent) {
+        console.error('fetchAgentStatuses failed:', err)
+      }
       set({ agentsLoading: false })
     }
   },
@@ -153,13 +155,13 @@ export const createMetricsSlice: StateCreator<AppState, [], [], MetricsSlice> = 
   systemMetrics: null,
   metricsLoading: false,
 
-  fetchSystemMetrics: async () => {
+  fetchSystemMetrics: async (options) => {
     set({ metricsLoading: true })
     try {
       const [sysMetrics, perfMetrics, hallucMetrics] = await Promise.all([
-        coreApi.getSystemMetrics().catch(() => null),
-        agentApi.getPerformanceMetrics().catch(() => null),
-        agentApi.getHallucinationMetrics().catch(() => null),
+        coreApi.getSystemMetrics(options).catch(() => null),
+        agentApi.getPerformanceMetrics(options).catch(() => null),
+        agentApi.getHallucinationMetrics(options).catch(() => null),
       ])
       const sysAny = sysMetrics as SystemMetricsRaw | null
       const metrics: SystemMetrics = {
@@ -179,7 +181,9 @@ export const createMetricsSlice: StateCreator<AppState, [], [], MetricsSlice> = 
       }
       set({ systemMetrics: metrics, metricsLoading: false })
     } catch (err) {
-      console.error('fetchSystemMetrics failed:', err)
+      if (!options?.silent) {
+        console.error('fetchSystemMetrics failed:', err)
+      }
       set({ metricsLoading: false })
     }
   },

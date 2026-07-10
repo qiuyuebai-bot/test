@@ -64,18 +64,18 @@ export function TaskDetailModal({ isOpen, onClose, task }: Props) {
             <span className="text-xs text-text-tertiary">执行进度</span>
             <span className="text-sm font-medium text-text-primary">{Math.round(task.progress)}%</span>
           </div>
-          <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-            <div className={`h-full rounded-full transition-all duration-500 ${task.status === 'completed' ? 'bg-green-500' : task.status === 'failed' ? 'bg-red-500' : 'bg-primary'}`} style={{ width: `${task.progress}%` }} />
+          <div className="h-2 bg-bg-tertiary rounded-full overflow-hidden">
+            <div className={`h-full rounded-full transition-all duration-500 ${task.status === 'completed' ? 'bg-success' : task.status === 'failed' ? 'bg-error' : 'bg-primary'}`} style={{ width: `${task.progress}%` }} />
           </div>
         </div>
 
         {task.errorMessage && (
-          <div className="p-3 rounded-lg bg-red-50 border border-red-200">
-            <span className="text-xs text-red-600 font-medium flex items-center gap-1">
+          <div className="p-3 rounded-lg bg-error-light border border-error/30">
+            <span className="text-xs text-error-dark font-medium flex items-center gap-1">
               <AlertTriangle className="w-3 h-3" />
               错误信息
             </span>
-            <p className="text-red-600 text-xs mt-1">{task.errorMessage}</p>
+            <p className="text-error-dark text-xs mt-1">{task.errorMessage}</p>
           </div>
         )}
       </div>

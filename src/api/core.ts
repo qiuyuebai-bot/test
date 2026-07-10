@@ -82,8 +82,8 @@ export const coreApi = {
     return http.get(`/report/ability-radar/${learnerId}`)
   },
 
-  getSystemMetrics(): Promise<SystemMetrics> {
-    return http.get<SystemMetrics>('/report/metrics')
+  getSystemMetrics(options?: { silent?: boolean }): Promise<SystemMetrics> {
+    return http.get<SystemMetrics>('/report/metrics', undefined, options)
   },
 
   submitAnswer(data: SubmitAnswerRequest): Promise<unknown> {

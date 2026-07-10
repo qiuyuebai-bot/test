@@ -93,7 +93,7 @@ export default function Login() {
                 <Button
                   type="submit"
                   loading={isSubmitting}
-                  className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-medium rounded-lg transition-all duration-200 shadow-lg shadow-blue-500/20 disabled:opacity-50"
+                  className="w-full py-2.5 bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white font-medium rounded-lg transition-all duration-250 shadow-lg shadow-blue-500/20 disabled:opacity-50"
                 >
                   {isSubmitting ? '登录中...' : '登 录'}
                 </Button>

@@ -11,10 +11,10 @@ const iconMap: Record<ToastType, typeof CheckCircle2> = {
 }
 
 const colorMap: Record<ToastType, { bg: string; border: string; text: string; icon: string }> = {
-  success: { bg: 'bg-emerald-50 dark:bg-emerald-500/10', border: 'border-emerald-200 dark:border-emerald-500/20', text: 'text-emerald-700 dark:text-emerald-400', icon: 'text-emerald-500' },
-  error: { bg: 'bg-rose-50 dark:bg-rose-500/10', border: 'border-rose-200 dark:border-rose-500/20', text: 'text-rose-700 dark:text-rose-400', icon: 'text-rose-500' },
-  warning: { bg: 'bg-amber-50 dark:bg-amber-500/10', border: 'border-amber-200 dark:border-amber-500/20', text: 'text-amber-700 dark:text-amber-400', icon: 'text-amber-500' },
-  info: { bg: 'bg-sky-50 dark:bg-sky-500/10', border: 'border-sky-200 dark:border-sky-500/20', text: 'text-sky-700 dark:text-sky-400', icon: 'text-sky-500' },
+  success: { bg: 'bg-success-light', border: 'border-success/30', text: 'text-success-dark', icon: 'text-success' },
+  error: { bg: 'bg-error-light', border: 'border-error/30', text: 'text-error-dark', icon: 'text-error' },
+  warning: { bg: 'bg-warning-light', border: 'border-warning/30', text: 'text-warning-dark', icon: 'text-warning' },
+  info: { bg: 'bg-info-light', border: 'border-info/30', text: 'text-info-dark', icon: 'text-info' },
 }
 
 export default function ToastContainer() {
@@ -42,9 +42,9 @@ export default function ToastContainer() {
             key={item.id}
             className={clsx(
               'pointer-events-auto rounded-xl border p-4 shadow-lg animate-slide-up',
-              'bg-bg-card dark:bg-gray-800',
+              'bg-bg-card',
               colors.border,
-              'transition-all duration-300'
+              'transition-all duration-250'
             )}
           >
             <div className="flex items-start gap-3">

@@ -51,8 +51,8 @@ export default class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBo
       return (
         <div className="min-h-screen flex items-center justify-center bg-bg-primary p-4">
           <div className="max-w-md w-full bg-bg-card rounded-2xl border border-border p-8 shadow-lg text-center">
-            <div className="w-16 h-16 rounded-2xl bg-rose-50 dark:bg-rose-500/10 flex items-center justify-center mx-auto mb-5">
-              <AlertTriangle className="w-8 h-8 text-rose-500" />
+            <div className="w-16 h-16 rounded-2xl bg-error-light flex items-center justify-center mx-auto mb-5">
+              <AlertTriangle className="w-8 h-8 text-error" />
             </div>
             <h2 className="text-lg font-semibold text-text-primary mb-2">
               页面出现异常

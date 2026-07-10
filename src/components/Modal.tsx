@@ -67,7 +67,7 @@ export default function Modal({ isOpen, onClose, children, maxWidth = 'max-w-lg'
         aria-labelledby="modal-title"
         tabIndex={-1}
         className={clsx(
-          'relative w-full bg-bg-card rounded-2xl shadow-xl overflow-hidden animate-scale-in outline-none',
+          'relative w-full bg-bg-card rounded-2xl shadow-modal overflow-hidden animate-scale-in outline-none',
           maxWidth,
           className
         )}

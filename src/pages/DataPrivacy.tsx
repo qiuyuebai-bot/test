@@ -115,48 +115,48 @@ export default function DataPrivacy() {
     <div className="space-y-5 animate-fade-in">
       {/* 隐私合规状态总览 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card padding="md" className="hover:shadow-soft transition-all">
+        <Card padding="md" className="hover:shadow-lift transition-all">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center">
               <Shield className="w-5 h-5 text-success" />
             </div>
             <div>
-              <p className="text-xl font-semibold text-success">
+              <p className="metric-number text-xl font-semibold text-success">
                 {complianceStatus === 'compliant' ? '合规' : '待改进'}
               </p>
               <p className="text-xs text-text-tertiary">合规状态</p>
             </div>
           </div>
         </Card>
-        <Card padding="md" className="hover:shadow-soft transition-all">
+        <Card padding="md" className="hover:shadow-lift transition-all">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
               <Lock className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <p className="text-xl font-semibold text-text-primary">{encryptionStandard}</p>
+              <p className="metric-number text-xl font-semibold text-text-primary">{encryptionStandard}</p>
               <p className="text-xs text-text-tertiary">加密标准</p>
             </div>
           </div>
         </Card>
-        <Card padding="md" className="hover:shadow-soft transition-all">
+        <Card padding="md" className="hover:shadow-lift transition-all">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-info/10 flex items-center justify-center">
               <Key className="w-5 h-5 text-info" />
             </div>
             <div>
-              <p className="text-xl font-semibold text-text-primary">{ruleCount}</p>
+              <p className="metric-number text-xl font-semibold text-text-primary">{ruleCount}</p>
               <p className="text-xs text-text-tertiary">脱敏规则</p>
             </div>
           </div>
         </Card>
-        <Card padding="md" className="hover:shadow-soft transition-all">
+        <Card padding="md" className="hover:shadow-lift transition-all">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
-              <AlertCircle className="w-5 h-5 text-amber-500" />
+            <div className="w-10 h-10 rounded-xl bg-warning-light flex items-center justify-center">
+              <AlertCircle className="w-5 h-5 text-warning" />
             </div>
             <div>
-              <p className="text-xl font-semibold text-amber-500">{pendingCount}</p>
+              <p className="metric-number text-xl font-semibold text-warning">{pendingCount}</p>
               <p className="text-xs text-text-tertiary">待处理项</p>
             </div>
           </div>
@@ -184,16 +184,16 @@ export default function DataPrivacy() {
               </div>
             ) : (
               <div className="divide-y divide-border/30">
-                {compliance.map((item) => (
+                {compliance.map((item, index) => (
                   <div
-                    key={item.id}
+                    key={`${item.id}-${index}`}
                     className="px-4 py-3 flex items-center justify-between hover:bg-bg-secondary/30 transition-colors"
                   >
                     <div className="flex items-center gap-3">
                       {item.status === 'pass' ? (
                         <CheckCircle2 className="w-5 h-5 text-success flex-shrink-0" />
                       ) : (
-                        <AlertCircle className="w-5 h-5 text-amber-500 flex-shrink-0" />
+                        <AlertCircle className="w-5 h-5 text-warning flex-shrink-0" />
                       )}
                       <div>
                         <div className="flex items-center gap-2 mb-0.5">
@@ -239,9 +239,9 @@ export default function DataPrivacy() {
                   <EmptyState type="data" title="暂无脱敏规则" description="请稍后重试或检查后端服务" />
                 </div>
               ) : (
-                anonymizationRules.map((rule) => (
+                anonymizationRules.map((rule, index) => (
                   <div
-                    key={rule.id}
+                    key={`${rule.id}-${index}`}
                     className="p-4 rounded-xl border border-border bg-bg-secondary/20 hover:border-primary/20 transition-all"
                   >
                     <div className="flex items-center justify-between mb-3">
@@ -281,12 +281,12 @@ export default function DataPrivacy() {
             {keys.length === 0 ? (
               <EmptyState type="default" title="暂无密钥信息" />
             ) : (
-              keys.map((k) => (
-                <div key={k.name} className="p-3 rounded-xl border border-border bg-bg-secondary/20">
+              keys.map((k, index) => (
+                <div key={`${k.name}-${index}`} className="p-3 rounded-xl border border-border bg-bg-secondary/20">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center">
-                        <Key className="w-4 h-4 text-amber-500" />
+                      <div className="w-8 h-8 rounded-lg bg-warning-light flex items-center justify-center">
+                        <Key className="w-4 h-4 text-warning" />
                       </div>
                       <div>
                         <p className="text-sm font-medium text-text-primary">{k.name}</p>
@@ -309,7 +309,7 @@ export default function DataPrivacy() {
                     </button>
                   </div>
                   {!k.isConfigured && (
-                    <p className="mt-2 text-xs text-amber-500">⚠ 密钥未配置，请设置环境变量 SECRET_KEY</p>
+                    <p className="mt-2 text-xs text-warning">⚠ 密钥未配置，请设置环境变量 SECRET_KEY</p>
                   )}
                 </div>
               ))
@@ -326,8 +326,8 @@ export default function DataPrivacy() {
               {permissions.length === 0 ? (
                 <EmptyState type="default" title="暂无权限配置" />
               ) : (
-                permissions.map((perm) => (
-                  <div key={perm.role} className="p-3 rounded-xl border border-border/50 bg-bg-secondary/20">
+                permissions.map((perm, index) => (
+                  <div key={`${perm.role}-${index}`} className="p-3 rounded-xl border border-border/50 bg-bg-secondary/20">
                     <div className="flex items-center justify-between mb-2">
                       <span className="text-sm font-medium text-text-primary">{perm.role}</span>
                       <Badge variant="default" size="sm">{perm.dataAccess}</Badge>
@@ -358,9 +358,9 @@ export default function DataPrivacy() {
               {documents.length === 0 ? (
                 <EmptyState type="default" title="暂无文档" />
               ) : (
-                documents.map((doc) => (
+                documents.map((doc, index) => (
                   <button
-                    key={doc.url}
+                    key={`${doc.url}-${index}`}
                     className="w-full p-3 rounded-xl border border-border hover:border-primary/20 hover:bg-primary/5 transition-all flex items-center justify-between"
                     onClick={() => window.open(doc.url, '_blank')}
                   >

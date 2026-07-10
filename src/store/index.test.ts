@@ -193,7 +193,7 @@ describe('store learner state', () => {
 describe('store knowledge state', () => {
   it('fetchKnowledgeDocs populates docs and clears error', async () => {
     vi.mocked(knowledgeApi.getList).mockResolvedValue({
-      items: [{ id: 1 } as any], total: 1, page: 1, pageSize: 50, totalPages: 1,
+      items: [{ id: 1, title: 'test', domain: '', category: '', totalSlices: 0, indexedSlices: 0, status: 'pending', uploadTime: '', version: '' }], total: 1, page: 1, pageSize: 50, totalPages: 1,
     })
     const useStore = await freshStore()
     await useStore.getState().fetchKnowledgeDocs()

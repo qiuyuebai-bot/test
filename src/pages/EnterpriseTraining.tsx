@@ -315,46 +315,46 @@ export default function EnterpriseTraining() {
     <div className="space-y-5 animate-fade-in">
       {/* 企业培训数据总览看板 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card padding="md" className="hover:shadow-soft transition-all">
+        <Card padding="md" className="hover:shadow-lift transition-all">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
               <Building2 className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <p className="text-xl font-semibold text-text-primary">{stats.companies}</p>
+              <p className="text-xl font-semibold text-text-primary metric-number">{stats.companies}</p>
               <p className="text-xs text-text-tertiary">合作企业</p>
             </div>
           </div>
         </Card>
-        <Card padding="md" className="hover:shadow-soft transition-all">
+        <Card padding="md" className="hover:shadow-lift transition-all">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center">
               <Users className="w-5 h-5 text-success" />
             </div>
             <div>
-              <p className="text-xl font-semibold text-text-primary">{stats.learners.toLocaleString()}</p>
+              <p className="text-xl font-semibold text-text-primary metric-number">{stats.learners.toLocaleString()}</p>
               <p className="text-xs text-text-tertiary">培训学员</p>
             </div>
           </div>
         </Card>
-        <Card padding="md" className="hover:shadow-soft transition-all">
+        <Card padding="md" className="hover:shadow-lift transition-all">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
               <Target className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <p className="text-xl font-semibold text-text-primary">{stats.passRate}%</p>
+              <p className="text-xl font-semibold text-text-primary metric-number">{stats.passRate}%</p>
               <p className="text-xs text-text-tertiary">通过率</p>
             </div>
           </div>
         </Card>
-        <Card padding="md" className="hover:shadow-soft transition-all">
+        <Card padding="md" className="hover:shadow-lift transition-all">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-info/10 flex items-center justify-center">
               <TrendingUp className="w-5 h-5 text-info" />
             </div>
             <div>
-              <p className="text-xl font-semibold text-text-primary">{stats.avgScore}</p>
+              <p className="text-xl font-semibold text-text-primary metric-number">{stats.avgScore}</p>
               <p className="text-xs text-text-tertiary">平均评分</p>
             </div>
           </div>
@@ -437,7 +437,7 @@ export default function EnterpriseTraining() {
                         <td className="px-4 py-3 text-sm text-text-secondary">{project.participantCount} 人</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            <div className="w-20 h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                            <div className="w-20 h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
                               <div className="h-full bg-primary rounded-full" style={{ width: `${project.progressPercentage}%` }} />
                             </div>
                             <span className="text-xs text-text-secondary">{project.progressPercentage}%</span>
@@ -459,7 +459,7 @@ export default function EnterpriseTraining() {
                             </button>
                             <button
                               onClick={() => handleDeleteClick(project)}
-                              className="p-1.5 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                              className="p-1.5 rounded-lg hover:bg-error-light transition-colors"
                               title="删除"
                             >
                               <Trash2 className="w-4 h-4 text-text-secondary hover:text-error" />
@@ -531,7 +531,7 @@ export default function EnterpriseTraining() {
                     <span className="text-text-tertiary">完成度</span>
                     <span className="text-text-primary font-medium">{t.completion}%</span>
                   </div>
-                  <div className="h-1 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                  <div className="h-1 bg-bg-tertiary rounded-full overflow-hidden">
                     <div className="h-full bg-primary rounded-full" style={{ width: `${t.completion}%` }} />
                   </div>
                 </div>
@@ -556,7 +556,7 @@ export default function EnterpriseTraining() {
                     <span className="text-xs text-text-primary">{skill.skill}</span>
                     <span className="text-xs text-text-tertiary">差距 {skill.gap}%</span>
                   </div>
-                  <div className="relative h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                  <div className="relative h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
                     <div className="absolute inset-y-0 left-0 bg-success/40 rounded-full" style={{ width: `${skill.current}%` }} />
                     <div className="absolute inset-y-0 bg-primary rounded-full" style={{ width: `${skill.required}%` }} />
                   </div>

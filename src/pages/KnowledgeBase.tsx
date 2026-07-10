@@ -32,15 +32,15 @@ import { toast } from '@/components/toastStore'
 
 const statusConfig = {
   indexed: { label: '已索引', color: 'bg-success/10 text-success border-success/20', icon: CheckCircle },
-  pending: { label: '处理中', color: 'bg-amber-50 text-amber-600 border-amber-200', icon: Clock },
-  error: { label: '异常', color: 'bg-red-50 text-red-600 border-red-200', icon: AlertCircle },
+  pending: { label: '处理中', color: 'bg-warning-light text-warning-dark border-warning/30', icon: Clock },
+  error: { label: '异常', color: 'bg-error-light text-error-dark border-error/30', icon: AlertCircle },
 }
 
 function DomainTag({ domain, options }: { domain: string; options: DomainOption[] }) {
   const config = options.find(d => d.value === domain)
   const label = config?.label || domain
   return (
-    <span className={`px-3 py-1 rounded-full text-xs font-medium border transition-all hover:shadow-soft ${config?.color || 'bg-bg-secondary/30 text-text-secondary border-border'}`}>
+    <span className={`px-3 py-1 rounded-full text-xs font-medium border transition-all hover:shadow-lift ${config?.color || 'bg-bg-secondary/30 text-text-secondary border-border'}`}>
       {label}
     </span>
   )
@@ -167,8 +167,8 @@ function UploadModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void
       </div>
 
         <div className="py-8 text-center">
-          <div className="w-16 h-16 rounded-full bg-amber-50 flex items-center justify-center mx-auto mb-4">
-            <Clock className="w-8 h-8 text-amber-500" />
+          <div className="w-16 h-16 rounded-full bg-warning-light flex items-center justify-center mx-auto mb-4">
+            <Clock className="w-8 h-8 text-warning" />
           </div>
           <h4 className="text-lg font-medium text-text-primary mb-2">上传功能待接入</h4>
           <p className="text-sm text-text-secondary">文档上传功能正在开发中，敬请期待</p>
@@ -304,7 +304,7 @@ export default function KnowledgeBase() {
     <div className="space-y-4 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-text-primary">垂直领域知识库管理</h1>
+          <h1 className="hero-anchor text-xl font-semibold text-text-primary">垂直领域知识库管理</h1>
           <p className="text-sm text-text-secondary mt-1">支持多行业专业知识库导入、切片管理、内容检索</p>
         </div>
         <div className="flex items-center gap-3">
@@ -324,39 +324,39 @@ export default function KnowledgeBase() {
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card padding="md" className="flex items-center gap-3 hover:shadow-soft transition-all">
+        <Card padding="md" className="flex items-center gap-3 hover:shadow-lift transition-all">
           <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
             <Database className="w-5 h-5 text-primary" />
           </div>
           <div>
-            <p className="text-xl font-semibold text-text-primary">{stats.total}</p>
+            <p className="metric-number text-xl font-semibold text-text-primary">{stats.total}</p>
             <p className="text-xs text-text-secondary">文档总数</p>
           </div>
         </Card>
-        <Card padding="md" className="flex items-center gap-3 hover:shadow-soft transition-all">
+        <Card padding="md" className="flex items-center gap-3 hover:shadow-lift transition-all">
           <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center">
             <CheckCircle className="w-5 h-5 text-success" />
           </div>
           <div>
-            <p className="text-xl font-semibold text-text-primary">{stats.indexed}</p>
+            <p className="metric-number text-xl font-semibold text-text-primary">{stats.indexed}</p>
             <p className="text-xs text-text-secondary">已索引</p>
           </div>
         </Card>
-        <Card padding="md" className="flex items-center gap-3 hover:shadow-soft transition-all">
-          <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
-            <Clock className="w-5 h-5 text-amber-500" />
+        <Card padding="md" className="flex items-center gap-3 hover:shadow-lift transition-all">
+          <div className="w-10 h-10 rounded-xl bg-warning-light flex items-center justify-center">
+            <Clock className="w-5 h-5 text-warning" />
           </div>
           <div>
-            <p className="text-xl font-semibold text-text-primary">{stats.pending}</p>
+            <p className="metric-number text-xl font-semibold text-text-primary">{stats.pending}</p>
             <p className="text-xs text-text-secondary">处理中</p>
           </div>
         </Card>
-        <Card padding="md" className="flex items-center gap-3 hover:shadow-soft transition-all">
+        <Card padding="md" className="flex items-center gap-3 hover:shadow-lift transition-all">
           <div className="w-10 h-10 rounded-xl bg-info/10 flex items-center justify-center">
             <Layers className="w-5 h-5 text-info" />
           </div>
           <div>
-            <p className="text-xl font-semibold text-text-primary">{stats.totalSlices}</p>
+            <p className="metric-number text-xl font-semibold text-text-primary">{stats.totalSlices}</p>
             <p className="text-xs text-text-secondary">知识切片</p>
           </div>
         </Card>
@@ -475,7 +475,7 @@ export default function KnowledgeBase() {
                               </button>
                               <button
                                 onClick={() => handleDeleteClick(doc)}
-                                className="p-2 rounded-lg hover:bg-red-50 transition-colors"
+                                className="p-2 rounded-lg hover:bg-error-light transition-colors"
                                 title="删除"
                               >
                                 <Trash2 className="w-4 h-4 text-text-tertiary" />

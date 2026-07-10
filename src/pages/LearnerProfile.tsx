@@ -9,6 +9,7 @@ import Modal from '@/components/Modal'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
 import { SCORE_EXCELLENT_THRESHOLD, SCORE_GOOD_THRESHOLD } from '@/lib/constants'
+import { CHART_COLORS } from '@/lib/chartTheme'
 import {
   RadarChart,
   PolarGrid,
@@ -86,24 +87,24 @@ function RadarChartCard({ data }: { data: Array<{ subject: string; score: number
   return (
     <ResponsiveContainer width="100%" height={200}>
       <RadarChart cx="50%" cy="50%" outerRadius="70%" data={data}>
-        <PolarGrid stroke="#e2e8f0" strokeWidth={1} />
+        <PolarGrid stroke={CHART_COLORS.grid} strokeWidth={1} />
         <PolarAngleAxis
           dataKey="subject"
-          tick={{ fill: '#64748b', fontSize: 11, fontWeight: 500 }}
+          tick={{ fill: CHART_COLORS.text, fontSize: 11, fontWeight: 500 }}
           tickLine={false}
         />
         <PolarRadiusAxis
           angle={30}
           domain={[0, 100]}
-          tick={{ fill: '#94a3b8', fontSize: 10 }}
+          tick={{ fill: CHART_COLORS.text, fontSize: 10 }}
           tickCount={4}
-          axisLine={{ stroke: '#e2e8f0' }}
+          axisLine={{ stroke: CHART_COLORS.grid }}
         />
         <Radar
           name="能力评分"
           dataKey="score"
-          stroke="#3d5a80"
-          fill="#3d5a80"
+          stroke={CHART_COLORS.primary}
+          fill={CHART_COLORS.primary}
           fillOpacity={0.15}
           strokeWidth={2}
         />
@@ -113,7 +114,7 @@ function RadarChartCard({ data }: { data: Array<{ subject: string; score: number
 }
 
 function SkillTagCloud({ skills }: { skills: string[] }) {
-  const colors = ['bg-[#3d5a80]/10 text-[#3d5a80] border-[#3d5a80]/20', 'bg-[#5b8def]/10 text-[#5b8def] border-[#5b8def]/20', 'bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/20', 'bg-[#10b981]/10 text-[#10b981] border-[#10b981]/20']
+  const colors = ['bg-viz-1/10 text-viz-1 border-viz-1/20', 'bg-viz-2/10 text-viz-2 border-viz-2/20', 'bg-viz-3/10 text-viz-3 border-viz-3/20', 'bg-viz-4/10 text-viz-4 border-viz-4/20']
   return (
     <div className="flex flex-wrap gap-2">
       {skills.length === 0 ? (
@@ -122,7 +123,7 @@ function SkillTagCloud({ skills }: { skills: string[] }) {
         skills.map((skill, index) => (
           <span
             key={skill}
-            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all hover:shadow-soft ${colors[index % colors.length]}`}
+            className={`px-3 py-1.5 rounded-full text-xs font-medium border transition-all hover:shadow-lift ${colors[index % colors.length]}`}
           >
             {skill}
           </span>
@@ -154,7 +155,7 @@ function LearnerCard({
   return (
     <Card
       padding="md"
-      className={`cursor-pointer transition-all duration-300 hover:shadow-medium hover:-translate-y-0.5 ${isSelected ? 'ring-2 ring-primary/30 border-primary/30' : ''}`}
+      className={`cursor-pointer transition-all duration-250 hover:shadow-lift hover:-translate-y-0.5 ${isSelected ? 'ring-2 ring-primary/30 border-primary/30' : ''}`}
       onClick={onClick}
     >
       <div className="flex items-start justify-between mb-4">
@@ -176,9 +177,9 @@ function LearnerCard({
           </button>
           <button
             onClick={(e) => { e.stopPropagation(); onDelete() }}
-            className="p-2 rounded-lg hover:bg-red-50 transition-colors"
+            className="p-2 rounded-lg hover:bg-error-light transition-colors"
           >
-            <Trash2 className="w-4 h-4 text-red-400" />
+            <Trash2 className="w-4 h-4 text-error" />
           </button>
         </div>
       </div>
@@ -190,13 +191,13 @@ function LearnerCard({
             <span className="text-xs text-text-secondary">先验能力底盘</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="flex-1 h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+            <div className="flex-1 h-2 bg-bg-tertiary rounded-full overflow-hidden">
               <div
                 className="h-full rounded-full transition-all duration-500 bg-primary"
                 style={{ width: `${avgAbility}%` }}
               />
             </div>
-            <span className="text-sm font-semibold text-primary">{avgAbility.toFixed(2)}</span>
+            <span className="metric-number text-sm font-semibold text-primary">{avgAbility.toFixed(2)}</span>
           </div>
         </div>
         <div>
@@ -204,7 +205,7 @@ function LearnerCard({
             <Target className="w-3.5 h-3.5 text-text-tertiary" />
             <span className="text-xs text-text-secondary">知识盲区</span>
           </div>
-          <span className="text-sm font-medium text-amber-500">{learner.knowledgeBlindAreas?.length || 0} 个</span>
+          <span className="text-sm font-medium text-warning">{learner.knowledgeBlindAreas?.length || 0} 个</span>
         </div>
       </div>
 
@@ -214,7 +215,7 @@ function LearnerCard({
 
       <div className="pt-3 border-t border-border">
         <div className="flex items-center gap-1.5 mb-2">
-          <AlertTriangle className="w-3.5 h-3.5 text-amber-500" />
+          <AlertTriangle className="w-3.5 h-3.5 text-warning" />
           <span className="text-xs text-text-secondary">知识盲区标签云</span>
         </div>
         <SkillTagCloud skills={(learner.knowledgeBlindAreas || []).slice(0, 4)} />
@@ -395,7 +396,7 @@ function EditModal({
                     max="100"
                     value={formData[dim.key as keyof typeof formData] as number}
                     onChange={(e) => setFormData({ ...formData, [dim.key]: Number(e.target.value) })}
-                    className="w-full h-1.5 bg-gray-200 dark:bg-gray-700 rounded-full appearance-none cursor-pointer accent-primary"
+                    className="w-full h-1.5 bg-bg-tertiary rounded-full appearance-none cursor-pointer accent-primary"
                   />
                 </div>
               ))}
@@ -695,7 +696,7 @@ export default function LearnerProfilePage() {
     <div className="space-y-4 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-text-primary">学习者画像管理</h1>
+          <h1 className="hero-anchor text-xl font-semibold text-text-primary">学习者画像管理</h1>
           <p className="text-sm text-text-secondary mt-1">录入/读取学习者背景数据，生成标准化用户学情画像</p>
         </div>
         <div className="flex items-center gap-3">
@@ -779,13 +780,13 @@ export default function LearnerProfilePage() {
                       综合能力评分
                     </h4>
                     <div className="flex items-center gap-3 mb-3">
-                      <div className="flex-1 h-3 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                      <div className="flex-1 h-3 bg-bg-tertiary rounded-full overflow-hidden">
                         <div
                           className="h-full rounded-full bg-primary transition-all duration-500"
                           style={{ width: `${currentAvgAbility}%` }}
                         />
                       </div>
-                      <span className="text-lg font-bold text-primary">{currentAvgAbility.toFixed(2)}</span>
+                      <span className="metric-number text-lg font-bold text-primary">{currentAvgAbility.toFixed(2)}</span>
                     </div>
                     <RadarChartCard data={currentRadarData} />
                   </div>
@@ -800,13 +801,13 @@ export default function LearnerProfilePage() {
                         <div key={dim.subject} className="flex items-center justify-between">
                           <span className="text-xs text-text-secondary">{dim.subject}</span>
                           <div className="flex items-center gap-2">
-                            <div className="w-24 h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                            <div className="w-24 h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
                               <div
-                                className={`h-full rounded-full ${dim.score >= SCORE_EXCELLENT_THRESHOLD ? 'bg-success' : dim.score >= SCORE_GOOD_THRESHOLD ? 'bg-primary' : 'bg-amber-500'}`}
+                                className={`h-full rounded-full ${dim.score >= SCORE_EXCELLENT_THRESHOLD ? 'bg-success' : dim.score >= SCORE_GOOD_THRESHOLD ? 'bg-primary' : 'bg-warning'}`}
                                 style={{ width: `${dim.score}%` }}
                               />
                             </div>
-                            <span className={`text-xs font-semibold w-8 text-right ${dim.score >= SCORE_EXCELLENT_THRESHOLD ? 'text-success' : dim.score >= SCORE_GOOD_THRESHOLD ? 'text-primary' : 'text-amber-500'}`}>
+                            <span className={`text-xs font-semibold w-8 text-right ${dim.score >= SCORE_EXCELLENT_THRESHOLD ? 'text-success' : dim.score >= SCORE_GOOD_THRESHOLD ? 'text-primary' : 'text-warning'}`}>
                               {dim.score}
                             </span>
                           </div>
@@ -817,7 +818,7 @@ export default function LearnerProfilePage() {
 
                   <div className="pt-4 border-t border-border">
                     <h4 className="text-sm font-medium text-text-primary mb-3 flex items-center gap-2">
-                      <AlertTriangle className="w-4 h-4 text-amber-500" />
+                      <AlertTriangle className="w-4 h-4 text-warning" />
                       全部知识盲区
                     </h4>
                     <SkillTagCloud skills={currentLearner.knowledgeBlindAreas || []} />
@@ -837,7 +838,7 @@ export default function LearnerProfilePage() {
                       <Edit2 className="w-4 h-4" />
                       编辑
                     </Button>
-                    <Button variant="outline" className="text-red-500 hover:bg-red-50 hover:border-red-200" onClick={() => handleDelete(currentLearner)}>
+                    <Button variant="outline" className="text-error hover:bg-error-light hover:border-error/30" onClick={() => handleDelete(currentLearner)}>
                       <Trash2 className="w-4 h-4" />
                     </Button>
                   </div>
@@ -845,7 +846,7 @@ export default function LearnerProfilePage() {
               </>
             ) : (
               <div className="p-8 text-center">
-                <div className="w-14 h-14 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center mx-auto mb-3">
+                <div className="w-14 h-14 rounded-full bg-bg-tertiary flex items-center justify-center mx-auto mb-3">
                   <GraduationCap className="w-7 h-7 text-text-tertiary" />
                 </div>
                 <p className="text-text-secondary">选择学习者查看详情</p>

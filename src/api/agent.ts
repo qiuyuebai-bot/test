@@ -23,8 +23,8 @@ export interface FullPipelineRequest {
 }
 
 export const agentApi = {
-  getAllStatus(): Promise<{ agents: AgentStatus[]; total: number }> {
-    return http.get<{ agents: AgentStatus[]; total: number }>('/agent/status')
+  getAllStatus(options?: { silent?: boolean }): Promise<{ agents: AgentStatus[]; total: number }> {
+    return http.get<{ agents: AgentStatus[]; total: number }>('/agent/status', undefined, options)
   },
 
   getStatus(agentType: string): Promise<AgentStatus> {
@@ -63,11 +63,11 @@ export const agentApi = {
     return http.get(`/agent/debate/${taskId}`)
   },
 
-  getHallucinationMetrics(): Promise<{ totalChecks: number; hallucinationCount: number; hallucinationRate: number; passRate: number; unit: string }> {
-    return http.get('/agent/metrics/hallucination')
+  getHallucinationMetrics(options?: { silent?: boolean }): Promise<{ totalChecks: number; hallucinationCount: number; hallucinationRate: number; passRate: number; unit: string }> {
+    return http.get('/agent/metrics/hallucination', undefined, options)
   },
 
-  getPerformanceMetrics(): Promise<{ totalTasks: number; successCount: number; failedCount: number; runningCount: number; successRate: number; avgDurationMs: number }> {
-    return http.get('/agent/metrics/performance')
+  getPerformanceMetrics(options?: { silent?: boolean }): Promise<{ totalTasks: number; successCount: number; failedCount: number; runningCount: number; successRate: number; avgDurationMs: number }> {
+    return http.get('/agent/metrics/performance', undefined, options)
   },
 }

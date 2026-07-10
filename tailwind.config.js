@@ -78,6 +78,18 @@ export default {
           light: 'var(--color-border-light)',
           dark: 'var(--color-border-dark)',
         },
+        /* 数据可视化色板 */
+        viz: {
+          1: 'var(--color-viz-1)',
+          2: 'var(--color-viz-2)',
+          3: 'var(--color-viz-3)',
+          4: 'var(--color-viz-4)',
+        },
+        /* 强调色 */
+        accent: {
+          DEFAULT: 'var(--color-accent)',
+          hover: 'var(--color-accent-hover)',
+        },
       },
       fontFamily: {
         sans: ['"Noto Sans SC"', '"SF Pro Display"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
@@ -111,6 +123,10 @@ export default {
         'heavy': '0 8px 32px var(--shadow-heavy)',
         'glow': '0 0 20px var(--shadow-glow)',
         'inner-soft': 'inset 0 2px 4px var(--shadow-inner)',
+        'lift': '0 8px 24px var(--shadow-medium), 0 2px 6px var(--shadow-soft)',
+        'card-hover': '0 12px 32px var(--shadow-medium), 0 4px 8px var(--shadow-soft)',
+        'focus-ring': '0 0 0 3px var(--color-primary-light)',
+        'modal': '0 8px 32px var(--shadow-heavy), 0 4px 8px var(--shadow-medium)',
       },
       animation: {
         'fade-in': 'fadeIn 0.3s ease-out',
@@ -122,6 +138,9 @@ export default {
         'flow-dash': 'flowDash 1.5s linear infinite',
         'pulse-ring': 'pulseRing 2s ease-out infinite',
         'shimmer': 'shimmer 2s ease-in-out infinite',
+      },
+      transitionDuration: {
+        '250': '250ms',
       },
       keyframes: {
         fadeIn: {

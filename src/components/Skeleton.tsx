@@ -12,7 +12,7 @@ export function Skeleton({ className, style }: SkeletonProps) {
     <div
       style={style}
       className={cn(
-        'animate-pulse rounded-md bg-gray-200 dark:bg-gray-700',
+        'animate-shimmer rounded-md bg-gradient-to-r from-gray-200 via-gray-100 to-gray-200 dark:from-gray-700 dark:via-gray-600 dark:to-gray-700 bg-[length:200%_100%]',
         className
       )}
     />
@@ -22,7 +22,7 @@ export function Skeleton({ className, style }: SkeletonProps) {
 /** 卡片骨架（用于 Dashboard、LearnerProfile 等） */
 export function CardSkeleton({ lines = 3 }: { lines?: number }) {
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-6 space-y-3">
+    <div className="rounded-lg border border-border p-6 space-y-3">
       <Skeleton className="h-4 w-1/3" />
       {Array.from({ length: lines }).map((_, i) => (
         <Skeleton key={i} className="h-3 w-full" />
@@ -35,8 +35,8 @@ export function CardSkeleton({ lines = 3 }: { lines?: number }) {
 /** 表格骨架（用于 LearnerProfile、EnterpriseTraining 等） */
 export function TableSkeleton({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-gray-700 overflow-hidden">
-      <div className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-800 p-4">
+    <div className="rounded-lg border border-border overflow-hidden">
+      <div className="border-b border-border bg-bg-tertiary p-4">
         <div className="flex gap-4">
           {Array.from({ length: cols }).map((_, i) => (
             <Skeleton key={i} className="h-4 flex-1" />
@@ -47,7 +47,7 @@ export function TableSkeleton({ rows = 5, cols = 4 }: { rows?: number; cols?: nu
         <div
           key={rowIdx}
           className={cn(
-            'border-b border-gray-200 dark:border-gray-700 p-4',
+            'border-b border-border p-4',
             rowIdx === rows - 1 && 'border-b-0'
           )}
         >
@@ -65,7 +65,7 @@ export function TableSkeleton({ rows = 5, cols = 4 }: { rows?: number; cols?: nu
 /** 图表骨架（用于 MetricsDashboard、LearningReport 等） */
 export function ChartSkeleton({ height = 300 }: { height?: number }) {
   return (
-    <div className="rounded-lg border border-gray-200 dark:border-gray-700 p-6">
+    <div className="rounded-lg border border-border p-6">
       <Skeleton className="h-5 w-1/4 mb-4" />
       <div className="flex items-end justify-between gap-2" style={{ height }}>
         {Array.from({ length: 7 }).map((_, i) => (

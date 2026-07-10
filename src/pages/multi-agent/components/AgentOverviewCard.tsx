@@ -14,7 +14,7 @@ export function AgentOverviewCard({ agent, icon: Icon }: Props) {
   const currentTaskName = agent.currentTaskId ? `任务 #${agent.currentTaskId}` : undefined
 
   return (
-    <div className={`relative p-4 rounded-xl border ${colors.border} bg-bg-card shadow-soft transition-all duration-300 hover:shadow-medium hover:-translate-y-0.5`}>
+    <div className={`relative p-4 rounded-xl border ${colors.border} bg-bg-card shadow-soft transition-all duration-250 hover:shadow-lift hover:-translate-y-0.5`}>
       <div className="absolute top-2 right-2">
         <div className={`w-2.5 h-2.5 rounded-full ${statusInfo.color} ${isActive ? 'animate-pulse' : ''}`} />
       </div>
@@ -35,11 +35,11 @@ export function AgentOverviewCard({ agent, icon: Icon }: Props) {
         </div>
         <div className="flex justify-between">
           <span className="text-text-tertiary">成功</span>
-          <span className="font-medium text-green-600">{agent.successCount}</span>
+          <span className="font-medium text-success-dark">{agent.successCount}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-text-tertiary">失败</span>
-          <span className="font-medium text-red-500">{agent.failureCount}</span>
+          <span className="font-medium text-error">{agent.failureCount}</span>
         </div>
         <div className="flex justify-between">
           <span className="text-text-tertiary">平均耗时</span>

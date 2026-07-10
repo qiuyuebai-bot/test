@@ -122,7 +122,7 @@ export default function Deployment() {
               <Rocket className="w-7 h-7 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-semibold text-text-primary">系统部署说明</h1>
+              <h1 className="hero-anchor text-xl font-semibold text-text-primary">系统部署说明</h1>
               <p className="text-sm text-text-secondary mt-1">快速部署指南与架构说明</p>
             </div>
           </div>
@@ -181,7 +181,7 @@ export default function Deployment() {
                     onClick={() => handleCopy(item.code)}
                     className="absolute right-2 top-2 p-1.5 rounded hover:bg-gray-700 transition-colors"
                   >
-                    <Copy className="w-4 h-4 text-gray-400" />
+                    <Copy className="w-4 h-4 text-text-tertiary" />
                   </button>
                 </div>
               </div>
@@ -288,7 +288,7 @@ export default function Deployment() {
                   <div className="space-y-2">
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-text-secondary w-16">理论基础</span>
-                      <div className="flex-1 h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full">
+                      <div className="flex-1 h-1.5 bg-bg-tertiary rounded-full">
                         <div
                           className="h-full bg-primary rounded-full transition-all"
                           style={{ width: `${learner.theoreticalFoundation}%` }}
@@ -298,7 +298,7 @@ export default function Deployment() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-text-secondary w-16">编程能力</span>
-                      <div className="flex-1 h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full">
+                      <div className="flex-1 h-1.5 bg-bg-tertiary rounded-full">
                         <div
                           className="h-full bg-success rounded-full transition-all"
                           style={{ width: `${learner.programmingAbility}%` }}
@@ -308,7 +308,7 @@ export default function Deployment() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className="text-xs text-text-secondary w-16">综合能力</span>
-                      <div className="flex-1 h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full">
+                      <div className="flex-1 h-1.5 bg-bg-tertiary rounded-full">
                         <div
                           className="h-full bg-info rounded-full transition-all"
                           style={{ width: `${learner.averageAbility}%` }}
@@ -324,7 +324,7 @@ export default function Deployment() {
                         {learner.knowledgeBlindAreas.slice(0, 3).map((area) => (
                           <span
                             key={area}
-                            className="px-1.5 py-0.5 rounded text-[10px] bg-amber-50 text-amber-600 border border-amber-200"
+                            className="px-1.5 py-0.5 rounded text-[10px] bg-warning-light text-warning-dark border border-warning/30"
                           >
                             {area}
                           </span>

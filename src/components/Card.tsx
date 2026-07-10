@@ -23,7 +23,7 @@ export default function Card({ children, className, padding = 'md', hover = fals
       className={clsx(
         'bg-bg-card rounded-xl border border-border shadow-soft',
         paddingStyles[padding],
-        hover && 'transition-shadow duration-200 hover:shadow-medium',
+        hover && 'transition-all duration-250 hover:shadow-lift hover:-translate-y-0.5',
         onClick && 'cursor-pointer',
         className
       )}

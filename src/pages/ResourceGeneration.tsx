@@ -42,10 +42,10 @@ type ResourceType = 'guide' | 'lecture' | 'case' | 'quiz' | 'roadmap'
 
 const resourceTypeConfig: Record<ResourceType, { label: string; icon: typeof FileText; color: string }> = {
   guide: { label: '学习路径指南', icon: Route, color: 'text-primary' },
-  lecture: { label: '图文讲义', icon: BookOpen, color: 'text-amber-500' },
+  lecture: { label: '图文讲义', icon: BookOpen, color: 'text-warning' },
   case: { label: '案例场景', icon: BookMarked, color: 'text-purple-500' },
   quiz: { label: '测试题', icon: ListChecks, color: 'text-success' },
-  roadmap: { label: '学习路线图', icon: GraduationCap, color: 'text-blue-500' },
+  roadmap: { label: '学习路线图', icon: GraduationCap, color: 'text-info' },
 }
 
 const reviewStatusMap: Record<string, { label: string; variant: 'success' | 'warning' | 'error' | 'default' }> = {
@@ -262,7 +262,7 @@ export default function ResourceGeneration() {
 
   const getQualityScoreColor = (score: number) => {
     if (score >= SCORE_EXCELLENT_THRESHOLD) return 'text-success'
-    if (score >= SCORE_GOOD_THRESHOLD) return 'text-amber-500'
+    if (score >= SCORE_GOOD_THRESHOLD) return 'text-warning'
     return 'text-danger'
   }
 
@@ -395,7 +395,7 @@ export default function ResourceGeneration() {
     <div className="space-y-4 animate-fade-in">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-text-primary">个性化资源生成</h1>
+          <h1 className="hero-anchor text-xl font-semibold text-text-primary">个性化资源生成</h1>
           <p className="text-sm text-text-secondary mt-1">多 Agent 协同产出学习路径指南、图文讲义、案例场景、测试题、学习路线图</p>
         </div>
         {error && (
@@ -566,9 +566,9 @@ export default function ResourceGeneration() {
 
             {isGenerating && (
               <div className="mb-4">
-                <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                <div className="h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-primary to-blue-400 rounded-full transition-all duration-500 ease-out"
+                    className="h-full bg-gradient-to-r from-primary to-info rounded-full transition-all duration-500 ease-out"
                     style={{ width: `${generationProgress}%` }}
                   />
                 </div>
@@ -591,15 +591,15 @@ export default function ResourceGeneration() {
                 return (
                   <div key={step.id} className="relative">
                     {idx < generationSteps.length - 1 && (
-                      <div className={`absolute left-[15px] top-8 w-0.5 h-4 -translate-x-1/2 transition-colors duration-300 ${
-                        isComplete ? 'bg-primary' : 'bg-gray-200 dark:bg-gray-700'
+                      <div className={`absolute left-[15px] top-8 w-0.5 h-4 -translate-x-1/2 transition-colors duration-250 ${
+                        isComplete ? 'bg-primary' : 'bg-bg-tertiary'
                       }`} />
                     )}
-                    <div className={`flex items-start gap-3 p-2.5 rounded-lg transition-all duration-300 ${
+                    <div className={`flex items-start gap-3 p-2.5 rounded-lg transition-all duration-250 ${
                       isRunning ? 'bg-primary/5 border border-primary/20' : ''
                     }`}>
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-300 ${
-                        isComplete ? 'bg-success/10' : isRunning ? 'bg-primary/10' : 'bg-gray-100 dark:bg-gray-800'
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center flex-shrink-0 transition-all duration-250 ${
+                        isComplete ? 'bg-success/10' : isRunning ? 'bg-primary/10' : 'bg-bg-tertiary'
                       }`}>
                         {isComplete ? (
                           <CheckCircle2 className="w-4 h-4 text-success" />
@@ -654,7 +654,7 @@ export default function ResourceGeneration() {
               {resourceLoading ? (
                 <div className="space-y-2">
                   {Array.from({ length: 3 }).map((_, i) => (
-                    <div key={i} className="p-3 rounded-lg border border-gray-200 dark:border-gray-700 space-y-2">
+                    <div key={i} className="p-3 rounded-lg border border-border space-y-2">
                       <CardSkeleton lines={2} />
                     </div>
                   ))}
@@ -733,7 +733,7 @@ export default function ResourceGeneration() {
                     {config.label}
                     {typeCount > 0 && (
                       <span className={`text-[10px] px-1.5 py-0.5 rounded-full ${
-                        activeTab === type ? 'bg-current/10' : 'bg-gray-100 dark:bg-gray-800'
+                        activeTab === type ? 'bg-current/10' : 'bg-bg-tertiary'
                       }`}>
                         {typeCount}
                       </span>

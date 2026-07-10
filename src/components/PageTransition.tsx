@@ -17,7 +17,7 @@ export default function PageTransition({ children, className }: PageTransitionPr
   return (
     <div
       className={clsx(
-        'transition-all duration-200 ease-out',
+        'transition-all duration-250 ease-out',
         isVisible ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2',
         className
       )}

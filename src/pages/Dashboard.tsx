@@ -49,20 +49,27 @@ export default function Dashboard() {
     }
     loadData()
 
+    let visibilityRefreshing = false
     const refreshInterval = setInterval(() => {
       // 标签页隐藏时跳过轮询，避免后台无效请求消耗带宽和 CPU
       if (document.hidden) return
-      fetchSystemMetrics()
-      fetchAgentStatuses()
+      // 后台轮询使用 silent 模式，避免 ERR_ABORTED 等瞬时错误污染控制台和 Sentry
+      fetchSystemMetrics({ silent: true })
+      fetchAgentStatuses({ silent: true })
       fetchTasks({ page: 1, pageSize: 10 })
     }, 30000)
 
     // 标签页重新可见时立即刷新一次，保证数据新鲜度
+    // 使用并发守卫避免与轮询或前一次可见刷新重叠触发 ERR_ABORTED
     const handleVisibilityChange = () => {
-      if (!document.hidden) {
-        fetchSystemMetrics()
-        fetchAgentStatuses()
-      }
+      if (document.hidden || visibilityRefreshing) return
+      visibilityRefreshing = true
+      Promise.all([
+        fetchSystemMetrics({ silent: true }),
+        fetchAgentStatuses({ silent: true }),
+      ]).finally(() => {
+        visibilityRefreshing = false
+      })
     }
     document.addEventListener('visibilitychange', handleVisibilityChange)
 
@@ -132,7 +139,7 @@ export default function Dashboard() {
             <div className="flex items-start justify-between">
               <div>
                 <p className="text-sm text-text-secondary mb-1">{stat.label}</p>
-                <p className="text-3xl font-semibold text-text-primary">{stat.value}</p>
+                <p className="metric-number text-3xl font-semibold text-text-primary">{stat.value}</p>
                 <p className="text-xs text-text-tertiary mt-1 flex items-center gap-1">
                   <TrendingUp className="w-3 h-3" />
                   实时数据
@@ -166,10 +173,10 @@ export default function Dashboard() {
                         <div
                           className={`w-10 h-10 rounded-lg flex items-center justify-center ${
                             agent.agentType === 'diagnosis'
-                              ? 'bg-[#3d5a80]'
+                              ? 'bg-viz-1'
                               : agent.agentType === 'generation'
-                              ? 'bg-[#6366f1]'
-                              : 'bg-[#f59e0b]'
+                              ? 'bg-viz-2'
+                              : 'bg-viz-3'
                           }`}
                         >
                           <Brain className="w-5 h-5 text-white" />
@@ -225,7 +232,7 @@ export default function Dashboard() {
                         : task.status === 'running'
                         ? 'bg-warning-light'
                         : task.status === 'failed'
-                        ? 'bg-red-100 dark:bg-red-900/20'
+                        ? 'bg-error-light'
                         : 'bg-info-light'
                     }`}
                   >
@@ -302,13 +309,13 @@ export default function Dashboard() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="flex items-center gap-2">
-                        <div className="flex-1 h-1.5 bg-gray-100 dark:bg-gray-700 rounded-full max-w-[80px]">
+                        <div className="flex-1 h-1.5 bg-bg-tertiary rounded-full max-w-[80px]">
                           <div
                             className="h-full bg-primary rounded-full"
                             style={{ width: `${learner.averageAbility}%` }}
                           />
                         </div>
-                        <span className="text-sm font-medium text-text-primary">
+                        <span className="metric-number text-sm font-medium text-text-primary">
                           {learner.averageAbility.toFixed(2)}%
                         </span>
                       </div>

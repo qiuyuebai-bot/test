@@ -97,7 +97,7 @@ export default function Layout() {
         {/* 移动端关闭按钮 */}
         <button
           onClick={() => setMobileMenuOpen(false)}
-          className="lg:hidden p-1.5 rounded-lg text-text-tertiary hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          className="lg:hidden p-1.5 rounded-lg text-text-tertiary hover:bg-bg-secondary transition-colors"
         >
           <X className="w-5 h-5" />
         </button>
@@ -112,10 +112,10 @@ export default function Layout() {
               key={item.name}
               to={item.href}
               className={clsx(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200',
+                'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-250',
                 isActive
                   ? 'bg-primary-light text-primary font-medium'
-                  : 'text-text-secondary hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-text-primary'
+                  : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'
               )}
             >
               <item.icon className={clsx('w-5 h-5 flex-shrink-0', isActive && 'text-primary')} />
@@ -132,10 +132,10 @@ export default function Layout() {
                 key={item.name}
                 to={item.href}
                 className={clsx(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-200',
+                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-250',
                   isActive
                     ? 'bg-primary-light text-primary font-medium'
-                    : 'text-text-secondary hover:bg-gray-50 dark:hover:bg-gray-800 hover:text-text-primary'
+                    : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'
                   )}
               >
                 <item.icon className={clsx('w-5 h-5 flex-shrink-0', isActive && 'text-primary')} />
@@ -152,7 +152,7 @@ export default function Layout() {
           onClick={toggleSidebar}
           aria-expanded={!isSidebarCollapsed}
           aria-label="切换侧边栏"
-          className="flex items-center justify-center w-full py-2 rounded-lg text-text-tertiary hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+          className="flex items-center justify-center w-full py-2 rounded-lg text-text-tertiary hover:bg-bg-secondary transition-colors"
         >
           <Menu className="w-5 h-5" />
         </button>
@@ -173,7 +173,7 @@ export default function Layout() {
       {/* 桌面端侧边栏 */}
       <aside
         className={clsx(
-          'hidden lg:flex flex-col bg-bg-card border-r border-border transition-all duration-300',
+          'hidden lg:flex flex-col bg-bg-card border-r border-border transition-all duration-250',
           isSidebarCollapsed ? 'w-[72px]' : 'w-[260px]'
         )}
       >
@@ -183,7 +183,7 @@ export default function Layout() {
       {/* 移动端侧边栏 */}
       <aside
         className={clsx(
-          'fixed inset-y-0 left-0 z-50 flex flex-col bg-bg-card border-r border-border transition-transform duration-300 w-[260px] lg:hidden',
+          'fixed inset-y-0 left-0 z-50 flex flex-col bg-bg-card border-r border-border transition-transform duration-250 w-[260px] lg:hidden',
           mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
         )}
       >
@@ -198,7 +198,7 @@ export default function Layout() {
             {/* 移动端菜单按钮 */}
             <button
               onClick={() => setMobileMenuOpen(true)}
-              className="lg:hidden p-1.5 rounded-lg text-text-secondary hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors flex-shrink-0"
+              className="lg:hidden p-1.5 rounded-lg text-text-secondary hover:bg-bg-secondary transition-colors flex-shrink-0"
             >
               <Menu className="w-5 h-5" />
             </button>
@@ -211,7 +211,7 @@ export default function Layout() {
           <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
             <button
               onClick={toggleDarkMode}
-              className="p-2 rounded-lg text-text-secondary hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+              className="p-2 rounded-lg text-text-secondary hover:bg-bg-secondary transition-colors"
               title={isDarkMode ? '切换到浅色模式' : '切换到深色模式'}
             >
               {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
@@ -221,7 +221,7 @@ export default function Layout() {
                 onClick={() => setUserMenuOpen(!userMenuOpen)}
                 aria-expanded={userMenuOpen}
                 aria-haspopup="true"
-                className="flex items-center gap-2 p-1.5 pr-2 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-800 transition-colors"
+                className="flex items-center gap-2 p-1.5 pr-2 rounded-lg hover:bg-bg-secondary transition-colors"
               >
                 <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
                   <span className="text-sm text-white font-medium">
@@ -246,7 +246,7 @@ export default function Layout() {
                   </div>
                   <button
                     onClick={handleLogout}
-                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                    className="w-full flex items-center gap-2 px-4 py-2 text-sm text-error hover:bg-error-light transition-colors"
                   >
                     <LogOut className="w-4 h-4" />
                     退出登录

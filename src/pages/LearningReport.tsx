@@ -4,6 +4,7 @@ import { useShallow } from 'zustand/react/shallow'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import { SCORE_EXCELLENT_THRESHOLD, SCORE_GOOD_THRESHOLD } from '@/lib/constants'
+import { CHART_COLORS, CHART_TOOLTIP_PROPS } from '@/lib/chartTheme'
 import {
   Activity,
   TrendingUp,
@@ -47,16 +48,16 @@ import {
 
 // 严重度 → 颜色映射
 const SEVERITY_COLOR_MAP: Record<string, string> = {
-  high: '#ef4444',
-  medium: '#f59e0b',
-  low: '#3d5a80',
+  high: 'var(--color-error)',
+  medium: 'var(--color-viz-3)',
+  low: 'var(--color-viz-1)',
 }
 
 // 节点状态图标配置
 const statusConfig = {
   completed: { icon: CheckCircle2, color: 'text-success' },
   current: { icon: Play, color: 'text-primary' },
-  next: { icon: Circle, color: 'text-amber-500' },
+  next: { icon: Circle, color: 'text-warning' },
   locked: { icon: Lock, color: 'text-text-tertiary' },
 }
 
@@ -66,7 +67,7 @@ const difficultyTypeConfig: Record<number, { label: string; color: string }> = {
   2: { label: '基础', color: 'bg-success/10 border-success/30 text-success' },
   3: { label: '进阶', color: 'bg-primary/10 border-primary/30 text-primary' },
   4: { label: '进阶', color: 'bg-primary/10 border-primary/30 text-primary' },
-  5: { label: '高阶', color: 'bg-amber-50 border-amber-200 text-amber-600' },
+  5: { label: '高阶', color: 'bg-warning-light border-warning/30 text-warning-dark' },
 }
 
 interface AbilityRadarPoint {
@@ -265,46 +266,46 @@ export default function LearningReport() {
     <div className="space-y-5 animate-fade-in">
       {/* 顶部统计指标栏 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card padding="md" className="hover:shadow-soft transition-all">
+        <Card padding="md" className="hover:shadow-lift transition-all">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center">
               <Target className="w-5 h-5 text-success" />
             </div>
             <div>
-              <p className="text-xl font-semibold text-text-primary">{stats.knowledgeCoverage.toFixed(1)}%</p>
+              <p className="metric-number text-xl font-semibold text-text-primary">{stats.knowledgeCoverage.toFixed(1)}%</p>
               <p className="text-xs text-text-tertiary">知识点覆盖率</p>
             </div>
           </div>
         </Card>
-        <Card padding="md" className="hover:shadow-soft transition-all">
+        <Card padding="md" className="hover:shadow-lift transition-all">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
               <Zap className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <p className="text-xl font-semibold text-text-primary">{stats.resourceMatch.toFixed(1)}%</p>
+              <p className="metric-number text-xl font-semibold text-text-primary">{stats.resourceMatch.toFixed(1)}%</p>
               <p className="text-xs text-text-tertiary">资源匹配准确率</p>
             </div>
           </div>
         </Card>
-        <Card padding="md" className="hover:shadow-soft transition-all">
+        <Card padding="md" className="hover:shadow-lift transition-all">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
-              <Crosshair className="w-5 h-5 text-amber-500" />
+            <div className="w-10 h-10 rounded-xl bg-warning-light flex items-center justify-center">
+              <Crosshair className="w-5 h-5 text-warning" />
             </div>
             <div>
-              <p className="text-xl font-semibold text-text-primary">{stats.hallucinationRate.toFixed(1)}%</p>
+              <p className="metric-number text-xl font-semibold text-text-primary">{stats.hallucinationRate.toFixed(1)}%</p>
               <p className="text-xs text-text-tertiary">知识幻觉错误率</p>
             </div>
           </div>
         </Card>
-        <Card padding="md" className="hover:shadow-soft transition-all">
+        <Card padding="md" className="hover:shadow-lift transition-all">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-info/10 flex items-center justify-center">
               <BookOpen className="w-5 h-5 text-info" />
             </div>
             <div>
-              <p className="text-xl font-semibold text-text-primary">{stats.totalResources}</p>
+              <p className="metric-number text-xl font-semibold text-text-primary">{stats.totalResources}</p>
               <p className="text-xs text-text-tertiary">已生成资源数</p>
             </div>
           </div>
@@ -357,10 +358,10 @@ export default function LearningReport() {
               {radarChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <RechartsRadar data={radarChartData}>
-                    <PolarGrid stroke="#e2e8f0" strokeWidth={1} />
-                    <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10, fill: '#64748b' }} tickLine={false} />
-                    <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 9, fill: '#94a3b8' }} tickCount={4} axisLine={false} />
-                    <Radar name="能力" dataKey="score" stroke="#3d5a80" fill="#3d5a80" fillOpacity={0.15} strokeWidth={2} />
+                    <PolarGrid stroke={CHART_COLORS.grid} strokeWidth={1} />
+                    <PolarAngleAxis dataKey="subject" tick={{ fontSize: 10, fill: CHART_COLORS.text }} tickLine={false} />
+                    <PolarRadiusAxis angle={30} domain={[0, 100]} tick={{ fontSize: 9, fill: CHART_COLORS.text }} tickCount={4} axisLine={false} />
+                    <Radar name="能力" dataKey="score" stroke={CHART_COLORS.primary} fill={CHART_COLORS.primary} fillOpacity={0.15} strokeWidth={2} />
                   </RechartsRadar>
                 </ResponsiveContainer>
               ) : (
@@ -384,15 +385,15 @@ export default function LearningReport() {
                   <AreaChart data={abilityTrendData}>
                     <defs>
                       <linearGradient id="colorScore" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#3d5a80" stopOpacity={0.15} />
-                        <stop offset="95%" stopColor="#3d5a80" stopOpacity={0} />
+                        <stop offset="5%" stopColor={CHART_COLORS.primary} stopOpacity={0.15} />
+                        <stop offset="95%" stopColor={CHART_COLORS.primary} stopOpacity={0} />
                       </linearGradient>
                     </defs>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
-                    <XAxis dataKey="week" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} domain={[40, 100]} />
-                    <Tooltip contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12 }} />
-                    <Area type="monotone" dataKey="score" stroke="#3d5a80" strokeWidth={2} fill="url(#colorScore)" dot={{ fill: '#3d5a80', strokeWidth: 2, r: 3 }} />
+                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
+                    <XAxis dataKey="week" tick={{ fontSize: 10, fill: CHART_COLORS.text }} axisLine={false} tickLine={false} />
+                    <YAxis tick={{ fontSize: 10, fill: CHART_COLORS.text }} axisLine={false} tickLine={false} domain={[40, 100]} />
+                    <Tooltip {...CHART_TOOLTIP_PROPS} />
+                    <Area type="monotone" dataKey="score" stroke={CHART_COLORS.primary} strokeWidth={2} fill="url(#colorScore)" dot={{ fill: CHART_COLORS.primary, strokeWidth: 2, r: 3 }} />
                   </AreaChart>
                 </ResponsiveContainer>
               ) : (
@@ -411,7 +412,7 @@ export default function LearningReport() {
                 <span className="text-sm text-text-primary">已完成任务</span>
                 <span className="text-sm font-semibold text-success">{stats.completedTasks}</span>
               </div>
-              <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+              <div className="h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
                 <div
                   className="h-full bg-success rounded-full transition-all"
                   style={{
@@ -423,7 +424,7 @@ export default function LearningReport() {
                 <span className="text-sm text-text-primary">进行中任务</span>
                 <span className="text-sm font-semibold text-primary">{stats.pendingTasks}</span>
               </div>
-              <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+              <div className="h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
                 <div
                   className="h-full bg-primary rounded-full transition-all"
                   style={{
@@ -453,12 +454,12 @@ export default function LearningReport() {
               {matchCurveChartData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   <LineChart data={matchCurveChartData}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                    <XAxis dataKey="difficulty" tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} label={{ value: '难度等级', position: 'bottom', fontSize: 10, fill: '#94a3b8' }} />
-                    <YAxis tick={{ fontSize: 10, fill: '#94a3b8' }} axisLine={false} tickLine={false} domain={[30, 100]} />
-                    <Tooltip contentStyle={{ background: '#fff', border: '1px solid #e2e8f0', borderRadius: 8, fontSize: 12 }} labelStyle={{ fontWeight: 500 }} />
-                    <Line type="monotone" dataKey="recommended" stroke="#cbd5e1" strokeWidth={2} strokeDasharray="6 4" dot={false} name="推荐匹配度" />
-                    <Line type="monotone" dataKey="actual" stroke="#3d5a80" strokeWidth={2.5} dot={{ fill: '#3d5a80', strokeWidth: 2, r: 4 }} name="实际匹配度" />
+                    <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
+                    <XAxis dataKey="difficulty" tick={{ fontSize: 10, fill: CHART_COLORS.text }} axisLine={false} tickLine={false} label={{ value: '难度等级', position: 'bottom', fontSize: 10, fill: CHART_COLORS.text }} />
+                    <YAxis tick={{ fontSize: 10, fill: CHART_COLORS.text }} axisLine={false} tickLine={false} domain={[30, 100]} />
+                    <Tooltip {...CHART_TOOLTIP_PROPS} />
+                    <Line type="monotone" dataKey="recommended" stroke={CHART_COLORS.text} strokeWidth={2} strokeDasharray="6 4" dot={false} name="推荐匹配度" />
+                    <Line type="monotone" dataKey="actual" stroke={CHART_COLORS.primary} strokeWidth={2.5} dot={{ fill: CHART_COLORS.primary, strokeWidth: 2, r: 4 }} name="实际匹配度" />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
@@ -469,7 +470,7 @@ export default function LearningReport() {
             </div>
             <div className="px-4 pb-4 flex items-center gap-4">
               <div className="flex items-center gap-1.5">
-                <div className="w-6 h-0.5 bg-gray-300 dark:bg-gray-600" style={{ backgroundImage: 'repeating-linear-gradient(90deg, #cbd5e1 0, #cbd5e1 6px, transparent 6px, transparent 10px)' }} />
+                <div className="w-6 h-0.5 bg-border" style={{ backgroundImage: 'repeating-linear-gradient(90deg, var(--color-border) 0, var(--color-border) 6px, transparent 6px, transparent 10px)' }} />
                 <span className="text-xs text-text-tertiary">推荐匹配</span>
               </div>
               <div className="flex items-center gap-1.5">
@@ -483,7 +484,7 @@ export default function LearningReport() {
           <Card padding="none">
             <div className="p-4 border-b border-border">
               <div className="flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-amber-500" />
+                <AlertTriangle className="w-4 h-4 text-warning" />
                 <h3 className="text-sm font-semibold text-text-primary">知识盲区热力定位</h3>
               </div>
               <p className="text-xs text-text-tertiary mt-1">点击色块可快速跳转学习资源</p>
@@ -492,11 +493,11 @@ export default function LearningReport() {
               {heatmapData.length > 0 ? (
                 <div className="grid grid-cols-3 gap-2">
                   {heatmapData.map((item) => {
-                    const color = SEVERITY_COLOR_MAP[item.severity] || '#5b8def'
+                    const color = SEVERITY_COLOR_MAP[item.severity] || 'var(--color-viz-2)'
                     return (
                       <button
                         key={item.dimension}
-                        className="relative p-3 rounded-xl transition-all hover:scale-105 hover:shadow-soft cursor-pointer group"
+                        className="relative p-3 rounded-xl transition-all hover:scale-105 hover:shadow-lift cursor-pointer group"
                         style={{ backgroundColor: `${color}15`, border: `1px solid ${color}30` }}
                         onClick={() => navigate('/resources')}
                         title={item.description}
@@ -530,11 +531,11 @@ export default function LearningReport() {
                   <span className="text-xs text-text-tertiary">良好</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded bg-amber-50" />
+                  <div className="w-3 h-3 rounded bg-warning-light" />
                   <span className="text-xs text-text-tertiary">薄弱</span>
                 </div>
                 <div className="flex items-center gap-1">
-                  <div className="w-3 h-3 rounded bg-red-50" />
+                  <div className="w-3 h-3 rounded bg-error-light" />
                   <span className="text-xs text-text-tertiary">盲区</span>
                 </div>
               </div>
@@ -553,7 +554,7 @@ export default function LearningReport() {
                       <div className="w-full h-12 flex items-end">
                         <div
                           className={`w-full rounded-t-sm transition-all ${
-                            test.score >= SCORE_EXCELLENT_THRESHOLD ? 'bg-success' : test.score >= SCORE_GOOD_THRESHOLD ? 'bg-primary' : 'bg-amber-500'
+                            test.score >= SCORE_EXCELLENT_THRESHOLD ? 'bg-success' : test.score >= SCORE_GOOD_THRESHOLD ? 'bg-primary' : 'bg-warning'
                           }`}
                           style={{ height: `${test.score}%` }}
                         />
@@ -594,7 +595,7 @@ export default function LearningReport() {
                     <div key={node.id} className="relative">
                       {idx < learningPathNodes.length - 1 && (
                         <div className={`absolute left-[18px] top-10 w-0.5 h-5 ${
-                          node.status === 'completed' ? 'bg-primary/40' : 'bg-gray-200 dark:bg-gray-700'
+                          node.status === 'completed' ? 'bg-primary/40' : 'bg-bg-tertiary'
                         }`} />
                       )}
                       <div
@@ -613,7 +614,7 @@ export default function LearningReport() {
                               ? 'bg-success/10'
                               : node.status === 'current'
                               ? 'bg-primary/10'
-                              : 'bg-gray-100 dark:bg-gray-800'
+                              : 'bg-bg-tertiary'
                           }`}>
                             <Icon className={`w-4 h-4 ${statusIcon.color}`} />
                           </div>
@@ -715,7 +716,7 @@ export default function LearningReport() {
                       <td className="px-4 py-3 text-sm text-text-secondary">{test.question_difficulty}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
-                          <span className={`text-lg font-semibold ${status.variant === 'success' ? 'text-success' : status.variant === 'warning' ? 'text-primary' : 'text-amber-500'}`}>
+                          <span className={`text-lg font-semibold ${status.variant === 'success' ? 'text-success' : status.variant === 'warning' ? 'text-primary' : 'text-warning'}`}>
                             {test.score.toFixed(0)}
                           </span>
                           <span className="text-sm text-text-tertiary">/ 100</span>

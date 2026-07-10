@@ -191,13 +191,13 @@ export default function SystemTest() {
     <div className="space-y-5 animate-fade-in">
       {/* 三大核心量化指标 */}
       <div className="grid grid-cols-3 gap-3">
-        <Card padding="md" className="border-l-4 border-l-amber-500">
+        <Card padding="md" className="border-l-4 border-l-warning">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center">
-              <Crosshair className="w-5 h-5 text-amber-500" />
+            <div className="w-10 h-10 rounded-xl bg-warning-light flex items-center justify-center">
+              <Crosshair className="w-5 h-5 text-warning" />
             </div>
             <div>
-              <p className="text-xl font-semibold text-amber-500">{hallucinationRateValue.toFixed(1)}%</p>
+              <p className="text-xl font-semibold metric-number text-warning">{hallucinationRateValue.toFixed(1)}%</p>
               <p className="text-xs text-text-tertiary">知识幻觉错误率</p>
             </div>
           </div>
@@ -208,7 +208,7 @@ export default function SystemTest() {
               <Target className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <p className="text-xl font-semibold text-primary">{resourceMatchAccuracy.toFixed(1)}%</p>
+              <p className="text-xl font-semibold metric-number text-primary">{resourceMatchAccuracy.toFixed(1)}%</p>
               <p className="text-xs text-text-tertiary">资源匹配准确率</p>
             </div>
           </div>
@@ -219,7 +219,7 @@ export default function SystemTest() {
               <Users className="w-5 h-5 text-success" />
             </div>
             <div>
-              <p className="text-xl font-semibold text-success">{knowledgeCoverageRate.toFixed(1)}%</p>
+              <p className="text-xl font-semibold metric-number text-success">{knowledgeCoverageRate.toFixed(1)}%</p>
               <p className="text-xs text-text-tertiary">知识点覆盖率</p>
             </div>
           </div>
@@ -265,46 +265,46 @@ export default function SystemTest() {
 
       {/* 测试概览统计 */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        <Card padding="md" className="hover:shadow-soft transition-all">
+        <Card padding="md" className="hover:shadow-lift transition-all">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-info/10 flex items-center justify-center">
               <FlaskConical className="w-5 h-5 text-info" />
             </div>
             <div>
-              <p className="text-xl font-semibold text-text-primary">{testSuites.length}</p>
+              <p className="text-xl font-semibold metric-number text-text-primary">{testSuites.length}</p>
               <p className="text-xs text-text-tertiary">测试套件</p>
             </div>
           </div>
         </Card>
-        <Card padding="md" className="hover:shadow-soft transition-all">
+        <Card padding="md" className="hover:shadow-lift transition-all">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-bg-secondary flex items-center justify-center">
               <Zap className="w-5 h-5 text-text-secondary" />
             </div>
             <div>
-              <p className="text-xl font-semibold text-text-primary">{totalCases}</p>
+              <p className="text-xl font-semibold metric-number text-text-primary">{totalCases}</p>
               <p className="text-xs text-text-tertiary">总测试用例</p>
             </div>
           </div>
         </Card>
-        <Card padding="md" className="hover:shadow-soft transition-all">
+        <Card padding="md" className="hover:shadow-lift transition-all">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center">
               <CheckCircle2 className="w-5 h-5 text-success" />
             </div>
             <div>
-              <p className="text-xl font-semibold text-success">{totalPassed}</p>
+              <p className="text-xl font-semibold metric-number text-success">{totalPassed}</p>
               <p className="text-xs text-text-tertiary">通过</p>
             </div>
           </div>
         </Card>
-        <Card padding="md" className="hover:shadow-soft transition-all">
+        <Card padding="md" className="hover:shadow-lift transition-all">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
               <Zap className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <p className="text-xl font-semibold text-primary">{passRate}%</p>
+              <p className="text-xl font-semibold metric-number text-primary">{passRate}%</p>
               <p className="text-xs text-text-tertiary">通过率</p>
             </div>
           </div>
@@ -352,7 +352,7 @@ export default function SystemTest() {
                         <td className="px-4 py-3 text-sm text-text-secondary">{slice.indexed}</td>
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-2">
-                            <div className="w-16 h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                            <div className="w-16 h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
                               <div className="h-full bg-primary rounded-full" style={{ width: `${slice.coverage}%` }} />
                             </div>
                             <span className="text-xs text-text-secondary">{slice.coverage}%</span>
@@ -386,12 +386,12 @@ export default function SystemTest() {
                   <div key={suite.id} className="p-4 hover:bg-bg-secondary/30 transition-colors flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
-                        suite.status === 'passed' ? 'bg-success/10' : suite.status === 'failed' ? 'bg-amber-50' : 'bg-info/10'
+                        suite.status === 'passed' ? 'bg-success/10' : suite.status === 'failed' ? 'bg-warning-light' : 'bg-info/10'
                       }`}>
                         {suite.status === 'passed' ? (
                           <CheckCircle2 className="w-4 h-4 text-success" />
                         ) : suite.status === 'failed' ? (
-                          <Bug className="w-4 h-4 text-amber-500" />
+                          <Bug className="w-4 h-4 text-warning" />
                         ) : (
                           <RefreshCw className="w-4 h-4 text-info" />
                         )}
@@ -434,7 +434,7 @@ export default function SystemTest() {
                       <span className="text-sm text-text-primary">{agent.agentName}</span>
                       <div className="flex items-center gap-2">
                         <span className="text-xs text-text-tertiary">{agent.totalTasksHandled} 任务</span>
-                        <span className={`text-xs font-medium ${rate === 100 ? 'text-success' : rate >= SCORE_EXCELLENT_THRESHOLD ? 'text-primary' : 'text-amber-500'}`}>
+                        <span className={`text-xs font-medium ${rate === 100 ? 'text-success' : rate >= SCORE_EXCELLENT_THRESHOLD ? 'text-primary' : 'text-warning'}`}>
                           {rate}%
                         </span>
                       </div>
@@ -467,14 +467,14 @@ export default function SystemTest() {
                         ) : pending ? (
                           <RefreshCw className="w-4 h-4 text-info mt-0.5 flex-shrink-0 animate-spin" />
                         ) : (
-                          <XCircle className="w-4 h-4 text-amber-500 mt-0.5 flex-shrink-0" />
+                          <XCircle className="w-4 h-4 text-warning mt-0.5 flex-shrink-0" />
                         )}
                         <div className="flex-1 min-w-0">
                           <p className="text-sm text-text-primary truncate">
                             #{result.taskId} · {result.taskName}
                           </p>
                           {result.errorMessage && (
-                            <p className="text-xs text-amber-500 mt-0.5 truncate">{result.errorMessage}</p>
+                            <p className="text-xs text-warning mt-0.5 truncate">{result.errorMessage}</p>
                           )}
                           <p className="text-xs text-text-tertiary">
                             {result.taskType} · {result.status} · 进度 {result.progress}%
@@ -495,13 +495,13 @@ export default function SystemTest() {
               失败统计
             </h4>
             <div className="grid grid-cols-2 gap-3">
-              <div className="p-3 rounded-lg bg-amber-50/50">
+              <div className="p-3 rounded-lg bg-warning-light/50">
                 <p className="text-xs text-text-tertiary mb-1">总失败数</p>
-                <p className="text-xl font-semibold text-amber-500">{totalFailed}</p>
+                <p className="text-xl font-semibold metric-number text-warning">{totalFailed}</p>
               </div>
               <div className="p-3 rounded-lg bg-success/5">
                 <p className="text-xs text-text-tertiary mb-1">总通过数</p>
-                <p className="text-xl font-semibold text-success">{totalPassed}</p>
+                <p className="text-xl font-semibold metric-number text-success">{totalPassed}</p>
               </div>
             </div>
           </Card>

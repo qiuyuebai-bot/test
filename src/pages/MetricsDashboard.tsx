@@ -7,6 +7,7 @@ import Progress from '@/components/Progress'
 import { PageSkeleton } from '@/components/Skeleton'
 import EmptyState from '@/components/EmptyState'
 import ErrorState from '@/components/ErrorState'
+import { CHART_COLORS, CHART_TOOLTIP_PROPS } from '@/lib/chartTheme'
 import {
   TrendingUp,
   Target,
@@ -135,7 +136,7 @@ export default function MetricsDashboard() {
                 {metric.isOnTarget ? '达标' : '待优化'}
               </Badge>
             </div>
-            <p className="text-3xl font-semibold text-text-primary mb-1">{metric.value}</p>
+            <p className="metric-number text-3xl font-semibold text-text-primary mb-1">{metric.value}</p>
             <p className="text-sm text-text-secondary mb-3">{metric.label}</p>
             <div className="flex items-center justify-between">
               <span className="text-xs text-text-tertiary">目标: {metric.target}</span>
@@ -160,34 +161,28 @@ export default function MetricsDashboard() {
                 <AreaChart data={trendData}>
                   <defs>
                     <linearGradient id="colorHallucination" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#f87171" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#f87171" stopOpacity={0} />
+                      <stop offset="5%" stopColor="var(--color-error)" stopOpacity={0.2} />
+                      <stop offset="95%" stopColor="var(--color-error)" stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="colorAccuracy" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#3d5a80" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#3d5a80" stopOpacity={0} />
+                      <stop offset="5%" stopColor={CHART_COLORS.primary} stopOpacity={0.2} />
+                      <stop offset="95%" stopColor={CHART_COLORS.primary} stopOpacity={0} />
                     </linearGradient>
                     <linearGradient id="colorCoverage" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#60a5fa" stopOpacity={0.2} />
-                      <stop offset="95%" stopColor="#60a5fa" stopOpacity={0} />
+                      <stop offset="5%" stopColor={CHART_COLORS.secondary} stopOpacity={0.2} />
+                      <stop offset="95%" stopColor={CHART_COLORS.secondary} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                  <XAxis dataKey="date" tick={{ fontSize: 12, fill: '#6b7280' }} />
-                  <YAxis tick={{ fontSize: 12, fill: '#6b7280' }} />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: 'var(--color-bg-card)',
-                      border: '1px solid var(--color-border)',
-                      borderRadius: '8px',
-                    }}
-                  />
+                  <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
+                  <XAxis dataKey="date" tick={{ fontSize: 12, fill: CHART_COLORS.text }} />
+                  <YAxis tick={{ fontSize: 12, fill: CHART_COLORS.text }} />
+                  <Tooltip {...CHART_TOOLTIP_PROPS} />
                   <Legend />
                   <Area
                     type="monotone"
                     dataKey="hallucinationRate"
                     name="幻觉率"
-                    stroke="#f87171"
+                    stroke="var(--color-error)"
                     fillOpacity={1}
                     fill="url(#colorHallucination)"
                   />
@@ -195,7 +190,7 @@ export default function MetricsDashboard() {
                     type="monotone"
                     dataKey="resourceMatchAccuracy"
                     name="资源匹配准确率"
-                    stroke="#3d5a80"
+                    stroke={CHART_COLORS.primary}
                     fillOpacity={1}
                     fill="url(#colorAccuracy)"
                   />
@@ -203,7 +198,7 @@ export default function MetricsDashboard() {
                     type="monotone"
                     dataKey="knowledgeCoverageRate"
                     name="知识点覆盖率"
-                    stroke="#60a5fa"
+                    stroke={CHART_COLORS.secondary}
                     fillOpacity={1}
                     fill="url(#colorCoverage)"
                   />
@@ -237,20 +232,14 @@ export default function MetricsDashboard() {
                 ]}
                 layout="vertical"
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--color-border)" />
-                <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 12, fill: '#6b7280' }} />
-                <YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: '#6b7280' }} width={70} />
-                <Tooltip
-                  contentStyle={{
-                    backgroundColor: 'var(--color-bg-card)',
-                    border: '1px solid var(--color-border)',
-                    borderRadius: '8px',
-                  }}
-                />
+                <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
+                <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 12, fill: CHART_COLORS.text }} />
+                <YAxis dataKey="name" type="category" tick={{ fontSize: 12, fill: CHART_COLORS.text }} width={70} />
+                <Tooltip {...CHART_TOOLTIP_PROPS} />
                 <Legend />
-                <Bar dataKey="hallucinationRate" name="幻觉率" fill="#f87171" radius={[0, 4, 4, 0]} />
-                <Bar dataKey="resourceMatchAccuracy" name="资源匹配准确率" fill="#3d5a80" radius={[0, 4, 4, 0]} />
-                <Bar dataKey="knowledgeCoverageRate" name="知识点覆盖率" fill="#60a5fa" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="hallucinationRate" name="幻觉率" fill="var(--color-error)" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="resourceMatchAccuracy" name="资源匹配准确率" fill={CHART_COLORS.primary} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="knowledgeCoverageRate" name="知识点覆盖率" fill={CHART_COLORS.secondary} radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -266,28 +255,28 @@ export default function MetricsDashboard() {
               <Users className="w-4 h-4 text-success" />
               <span className="text-sm text-text-secondary">总学习者</span>
             </div>
-            <p className="text-2xl font-semibold text-text-primary">{systemMetrics.totalLearners}</p>
+            <p className="metric-number text-2xl font-semibold text-text-primary">{systemMetrics.totalLearners}</p>
           </div>
           <div className="p-4 rounded-xl bg-bg-secondary/50">
             <div className="flex items-center gap-2 mb-2">
               <Activity className="w-4 h-4 text-primary" />
               <span className="text-sm text-text-secondary">活跃会话</span>
             </div>
-            <p className="text-2xl font-semibold text-text-primary">{systemMetrics.activeSessions ?? 0}</p>
+            <p className="metric-number text-2xl font-semibold text-text-primary">{systemMetrics.activeSessions ?? 0}</p>
           </div>
           <div className="p-4 rounded-xl bg-bg-secondary/50">
             <div className="flex items-center gap-2 mb-2">
               <Clock className="w-4 h-4 text-info" />
               <span className="text-sm text-text-secondary">平均完成时间</span>
             </div>
-            <p className="text-2xl font-semibold text-text-primary">{systemMetrics.avgCompletionTime ?? '-'}</p>
+            <p className="metric-number text-2xl font-semibold text-text-primary">{systemMetrics.avgCompletionTime ?? '-'}</p>
           </div>
           <div className="p-4 rounded-xl bg-bg-secondary/50">
             <div className="flex items-center gap-2 mb-2">
               <CheckCircle className="w-4 h-4 text-success" />
               <span className="text-sm text-text-secondary">满意度评分</span>
             </div>
-            <p className="text-2xl font-semibold text-text-primary">{systemMetrics.satisfactionScore ?? 0} / 5.0</p>
+            <p className="metric-number text-2xl font-semibold text-text-primary">{systemMetrics.satisfactionScore ?? 0} / 5.0</p>
           </div>
         </div>
       </Card>
@@ -330,28 +319,28 @@ export default function MetricsDashboard() {
               <TrendingUp className="w-4 h-4 text-primary" />
               <span className="text-sm text-text-secondary">总任务数</span>
             </div>
-            <p className="text-2xl font-semibold text-text-primary">{systemMetrics.totalTasks ?? 0}</p>
+            <p className="metric-number text-2xl font-semibold text-text-primary">{systemMetrics.totalTasks ?? 0}</p>
           </div>
           <div className="p-4 rounded-xl bg-bg-secondary/50">
             <div className="flex items-center gap-2 mb-2">
               <CheckCircle className="w-4 h-4 text-success" />
               <span className="text-sm text-text-secondary">已完成</span>
             </div>
-            <p className="text-2xl font-semibold text-text-primary">{systemMetrics.tasksCompleted ?? 0}</p>
+            <p className="metric-number text-2xl font-semibold text-text-primary">{systemMetrics.tasksCompleted ?? 0}</p>
           </div>
           <div className="p-4 rounded-xl bg-bg-secondary/50">
             <div className="flex items-center gap-2 mb-2">
               <BarChart3 className="w-4 h-4 text-info" />
               <span className="text-sm text-text-secondary">生成资源数</span>
             </div>
-            <p className="text-2xl font-semibold text-text-primary">{systemMetrics.totalResources}</p>
+            <p className="metric-number text-2xl font-semibold text-text-primary">{systemMetrics.totalResources}</p>
           </div>
           <div className="p-4 rounded-xl bg-bg-secondary/50">
             <div className="flex items-center gap-2 mb-2">
               <Activity className="w-4 h-4 text-primary" />
               <span className="text-sm text-text-secondary">平均响应时间</span>
             </div>
-            <p className="text-2xl font-semibold text-text-primary">
+            <p className="metric-number text-2xl font-semibold text-text-primary">
               {systemMetrics.avgResponseTime ? `${systemMetrics.avgResponseTime.toFixed(0)}ms` : '-'}
             </p>
           </div>

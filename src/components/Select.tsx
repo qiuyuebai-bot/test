@@ -27,7 +27,7 @@ const Select = forwardRef<HTMLSelectElement, SelectProps>(
               'w-full h-10 px-3 pr-10 bg-bg-secondary border border-border rounded-input appearance-none',
               'text-text-primary',
               'focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary',
-              'transition-all duration-200',
+              'transition-all duration-250',
               error && 'border-error focus:ring-error/20 focus:border-error',
               className
             )}

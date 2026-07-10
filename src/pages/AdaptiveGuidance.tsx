@@ -413,12 +413,12 @@ export default function AdaptiveGuidance() {
           </div>
           <div className="flex items-center gap-6">
             <div className="text-center">
-              <p className="text-xl font-semibold text-success">{correctCount}</p>
+              <p className="metric-number text-xl font-semibold text-success">{correctCount}</p>
               <p className="text-xs text-text-tertiary">正确数</p>
             </div>
             <div className="w-px h-10 bg-border" />
             <div className="text-center">
-              <p className="text-xl font-semibold text-text-primary">{currentQuestion + 1}/{questions.length}</p>
+              <p className="metric-number text-xl font-semibold text-text-primary">{currentQuestion + 1}/{questions.length}</p>
               <p className="text-xs text-text-tertiary">当前进度</p>
             </div>
             <div className="w-px h-10 bg-border" />
@@ -427,8 +427,8 @@ export default function AdaptiveGuidance() {
                 <span className="text-text-tertiary">学习进度</span>
                 <span className="text-primary font-medium">{Math.round(progress)}%</span>
               </div>
-              <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
-                <div className="h-full bg-primary rounded-full transition-all duration-300" style={{ width: `${progress}%` }} />
+              <div className="h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
+                <div className="h-full bg-primary rounded-full transition-all duration-250" style={{ width: `${progress}%` }} />
               </div>
             </div>
           </div>
@@ -469,22 +469,22 @@ export default function AdaptiveGuidance() {
                     key={idx}
                     onClick={() => handleSelect(idx)}
                     disabled={showResult}
-                    className={`w-full p-4 rounded-xl border text-left transition-all duration-200 ${
+                    className={`w-full p-4 rounded-xl border text-left transition-all duration-250 ${
                       isCorrectOption
                         ? 'border-success/40 bg-success/5'
                         : isWrongSelected
-                        ? 'border-amber-200/50 bg-amber-50/30'
+                        ? 'border-warning/30 bg-warning-light/30'
                         : isSelected
                         ? 'border-primary/40 bg-primary/5'
                         : 'border-border/60 bg-bg-secondary/30 hover:border-primary/30'
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm font-medium transition-all duration-200 ${
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center text-sm font-medium transition-all duration-250 ${
                         isCorrectOption
                           ? 'bg-success text-white'
                           : isWrongSelected
-                          ? 'bg-amber-400 text-white'
+                          ? 'bg-warning text-white'
                           : isSelected
                           ? 'bg-primary text-white'
                           : 'bg-bg-secondary text-text-tertiary'
@@ -497,7 +497,7 @@ export default function AdaptiveGuidance() {
                           String.fromCharCode(65 + idx)
                         )}
                       </div>
-                      <span className={`flex-1 text-sm ${isCorrectOption ? 'text-success' : isWrongSelected ? 'text-amber-600' : 'text-text-primary'}`}>
+                      <span className={`flex-1 text-sm ${isCorrectOption ? 'text-success' : isWrongSelected ? 'text-warning-dark' : 'text-text-primary'}`}>
                         {option}
                       </span>
                     </div>
@@ -508,7 +508,7 @@ export default function AdaptiveGuidance() {
 
             {/* 反馈提示 */}
             {showResult && (
-              <div className="mx-5 mb-5 p-4 rounded-xl bg-bg-secondary/50 border border-border/50 transition-all duration-300">
+              <div className="mx-5 mb-5 p-4 rounded-xl bg-bg-secondary/50 border border-border/50 transition-all duration-250">
                 <div className="flex items-start gap-3">
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0 ${
                     isCorrect ? 'bg-success/10' : 'bg-primary/10'
@@ -579,7 +579,7 @@ export default function AdaptiveGuidance() {
                 <button
                   onClick={() => setActiveContentTab('simplified')}
                   disabled={!simplifiedContent}
-                  className={`flex-1 py-3 px-4 flex items-center justify-center gap-2 text-sm font-medium transition-all duration-200 relative ${
+                  className={`flex-1 py-3 px-4 flex items-center justify-center gap-2 text-sm font-medium transition-all duration-250 relative ${
                     activeContentTab === 'simplified'
                       ? 'text-primary'
                       : 'text-text-tertiary hover:text-text-secondary'
@@ -594,21 +594,21 @@ export default function AdaptiveGuidance() {
                 <button
                   onClick={() => setActiveContentTab('advanced')}
                   disabled={!advancedContent}
-                  className={`flex-1 py-3 px-4 flex items-center justify-center gap-2 text-sm font-medium transition-all duration-200 relative ${
+                  className={`flex-1 py-3 px-4 flex items-center justify-center gap-2 text-sm font-medium transition-all duration-250 relative ${
                     activeContentTab === 'advanced'
-                      ? 'text-amber-600'
+                      ? 'text-warning-dark'
                       : 'text-text-tertiary hover:text-text-secondary'
                   } ${!advancedContent ? 'opacity-40 cursor-not-allowed' : ''}`}
                 >
                   <Zap className="w-4 h-4" />
                   高阶拓展挑战
                   {activeContentTab === 'advanced' && (
-                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-amber-500" />
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-warning" />
                   )}
                 </button>
               </div>
 
-              <div className="p-5 min-h-[280px] transition-all duration-300">
+              <div className="p-5 min-h-[280px] transition-all duration-250">
                 {activeContentTab === 'simplified' && simplifiedContent ? (
                   <div className="space-y-4">
                     <div className="flex items-center gap-2 mb-3">
@@ -639,8 +639,8 @@ export default function AdaptiveGuidance() {
                 ) : activeContentTab === 'advanced' && advancedContent ? (
                   <div className="space-y-4">
                     <div className="flex items-center gap-2 mb-3">
-                      <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center">
-                        <Zap className="w-4 h-4 text-amber-500" />
+                      <div className="w-8 h-8 rounded-lg bg-warning-light flex items-center justify-center">
+                        <Zap className="w-4 h-4 text-warning" />
                       </div>
                       <h4 className="font-semibold text-text-primary">{advancedContent.title}</h4>
                     </div>
@@ -656,7 +656,7 @@ export default function AdaptiveGuidance() {
                           <ul className="space-y-1">
                             {section.tasks.map((t: string, tIdx: number) => (
                               <li key={tIdx} className="text-sm text-text-secondary flex items-start gap-2">
-                                <Target className="w-3.5 h-3.5 text-amber-500 mt-0.5 flex-shrink-0" />
+                                <Target className="w-3.5 h-3.5 text-warning mt-0.5 flex-shrink-0" />
                                 {t}
                               </li>
                             ))}
@@ -687,9 +687,9 @@ export default function AdaptiveGuidance() {
 
             {isAdjusting && (
               <div className="mb-4">
-                <div className="h-1 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                <div className="h-1 bg-bg-tertiary rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-primary rounded-full transition-all duration-300"
+                    className="h-full bg-primary rounded-full transition-all duration-250"
                     style={{ width: `${adjustmentProgress}%` }}
                   />
                 </div>
@@ -705,7 +705,7 @@ export default function AdaptiveGuidance() {
                 return (
                   <div
                     key={agent.agent}
-                    className={`relative p-3 rounded-xl border transition-all duration-200 ${
+                    className={`relative p-3 rounded-xl border transition-all duration-250 ${
                       agent.status === 'complete'
                         ? 'border-success/30 bg-success/5'
                         : agent.status === 'running'
@@ -714,12 +714,12 @@ export default function AdaptiveGuidance() {
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-200 ${
+                      <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all duration-250 ${
                         agent.status === 'complete'
                           ? 'bg-success/10'
                           : agent.status === 'running'
                           ? 'bg-primary/10'
-                          : 'bg-gray-100 dark:bg-gray-800'
+                          : 'bg-bg-tertiary'
                       }`}>
                         <Icon className={`w-4 h-4 ${
                           agent.status === 'complete'
@@ -789,7 +789,7 @@ export default function AdaptiveGuidance() {
                 <span className="text-sm text-text-secondary">理论基础</span>
                 <span className="text-sm font-medium text-text-primary">{learner?.theoreticalFoundation ?? 0}%</span>
               </div>
-              <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+              <div className="h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
                 <div className="h-full bg-primary rounded-full" style={{ width: `${learner?.theoreticalFoundation ?? 0}%` }} />
               </div>
               <div className="flex items-center justify-between">
@@ -818,7 +818,7 @@ export default function AdaptiveGuidance() {
                 historyRecords.map((record) => {
                   const isExpanded = expandedHistory === record.recordId
                   return (
-                    <div key={record.recordId} className="rounded-xl border border-border/50 overflow-hidden transition-all duration-200">
+                    <div key={record.recordId} className="rounded-xl border border-border/50 overflow-hidden transition-all duration-250">
                       <button
                         onClick={() => setExpandedHistory(isExpanded ? null : record.recordId)}
                         className="w-full p-3 flex items-center justify-between bg-bg-secondary/30 hover:bg-bg-secondary/50 transition-colors"
@@ -828,13 +828,13 @@ export default function AdaptiveGuidance() {
                             record.result === 'correct'
                               ? 'bg-success/10'
                               : record.result === 'wrong'
-                              ? 'bg-amber-50'
+                              ? 'bg-warning-light'
                               : 'bg-primary/10'
                           }`}>
                             {record.result === 'correct' ? (
                               <CheckCircle2 className="w-3.5 h-3.5 text-success" />
                             ) : record.result === 'wrong' ? (
-                              <XCircle className="w-3.5 h-3.5 text-amber-500" />
+                              <XCircle className="w-3.5 h-3.5 text-warning" />
                             ) : (
                               <MessageSquare className="w-3.5 h-3.5 text-primary" />
                             )}
@@ -856,7 +856,7 @@ export default function AdaptiveGuidance() {
                         </div>
                       </button>
                       {isExpanded && (
-                        <div className="p-3 bg-bg-secondary/20 border-t border-border/30 transition-all duration-200">
+                        <div className="p-3 bg-bg-secondary/20 border-t border-border/30 transition-all duration-250">
                           <p className="text-xs text-text-secondary">
                             <span className="font-medium">决策时间：</span>{record.createdAt || '未知'}
                           </p>

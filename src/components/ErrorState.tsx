@@ -50,8 +50,8 @@ export default function ErrorState({
 
   return (
     <Card className={clsx('flex flex-col items-center justify-center py-10 px-6 text-center', className)}>
-      <div className="w-16 h-16 rounded-2xl bg-amber-50 flex items-center justify-center mb-5 transition-all duration-300">
-        <IconComponent className="w-8 h-8 text-amber-500" />
+      <div className="w-16 h-16 rounded-2xl bg-warning-light flex items-center justify-center mb-5 transition-all duration-250">
+        <IconComponent className="w-8 h-8 text-warning" />
       </div>
       <h3 className="text-base font-medium text-text-primary mb-2">{title || config.title}</h3>
       <p className="text-sm text-text-secondary max-w-sm mb-4 leading-relaxed">

@@ -130,14 +130,14 @@ export default function MultiAgentVisualization() {
     <div className="space-y-4 animate-fade-in">
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-xl font-semibold text-text-primary">多智能体协同决策可视化</h1>
+          <h1 className="hero-anchor text-xl font-semibold text-text-primary">多智能体协同决策可视化</h1>
           <p className="text-sm text-text-secondary mt-1">完整呈现学情诊断 → 知识生成 → 审核纠偏全闭环流程</p>
         </div>
         <div className="flex items-center gap-3">
           {data.sse.isConnected && data.runningTaskId && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-50 border border-green-200">
-              <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
-              <span className="text-xs font-medium text-green-700">实时连接中</span>
+            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-success-light border border-success/30">
+              <div className="w-2 h-2 rounded-full bg-success animate-pulse" />
+              <span className="text-xs font-medium text-success-dark">实时连接中</span>
             </div>
           )}
           <Button variant="outline" onClick={() => data.handleReset(clearLogs)}>
@@ -285,21 +285,21 @@ export default function MultiAgentVisualization() {
               <svg
                 ref={svgRef}
                 viewBox="0 0 800 450"
-                className="w-full h-full transition-transform duration-300"
+                className="w-full h-full transition-transform duration-250"
                 style={{ transform: `scale(${scale})`, transformOrigin: 'center center' }}
               >
                 <defs>
                   <linearGradient id="flowGrad1" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#3d5a80" stopOpacity="0.6" />
-                    <stop offset="100%" stopColor="#5b8def" stopOpacity="0.6" />
+                    <stop offset="0%" stopColor="var(--color-viz-1)" stopOpacity="0.6" />
+                    <stop offset="100%" stopColor="var(--color-viz-2)" stopOpacity="0.6" />
                   </linearGradient>
                   <linearGradient id="flowGrad2" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#5b8def" stopOpacity="0.6" />
-                    <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.6" />
+                    <stop offset="0%" stopColor="var(--color-viz-2)" stopOpacity="0.6" />
+                    <stop offset="100%" stopColor="var(--color-viz-3)" stopOpacity="0.6" />
                   </linearGradient>
                   <linearGradient id="flowGrad3" x1="0%" y1="0%" x2="100%" y2="0%">
-                    <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.6" />
-                    <stop offset="100%" stopColor="#10b981" stopOpacity="0.6" />
+                    <stop offset="0%" stopColor="var(--color-viz-3)" stopOpacity="0.6" />
+                    <stop offset="100%" stopColor="var(--color-viz-4)" stopOpacity="0.6" />
                   </linearGradient>
                   <filter id="glow">
                     <feGaussianBlur stdDeviation="3" result="coloredBlur" />
@@ -317,7 +317,7 @@ export default function MultiAgentVisualization() {
                 <path d="M 570 225 L 650 225" stroke="url(#flowGrad2)" strokeWidth="2" fill="none" strokeDasharray={getStepStatus('validate') === 'active' || getStepStatus('validate') === 'processing' ? '6 3' : 'none'} className={getStepStatus('validate') === 'processing' ? 'animate-flow-dash' : ''} />
                 <path d="M 700 225 L 750 225" stroke="url(#flowGrad3)" strokeWidth="2" fill="none" strokeDasharray={getStepStatus('correct') === 'active' || getStepStatus('correct') === 'processing' ? '6 3' : 'none'} className={getStepStatus('correct') === 'processing' ? 'animate-flow-dash' : ''} />
 
-                <path d="M 750 275 Q 750 380 400 380 Q 50 380 50 275" stroke="#94a3b8" strokeWidth="1.5" fill="none" strokeDasharray="4 2" className="animate-flow-dash" opacity={0.4} />
+                <path d="M 750 275 Q 750 380 400 380 Q 50 380 50 275" stroke="var(--color-text-tertiary)" strokeWidth="1.5" fill="none" strokeDasharray="4 2" className="animate-flow-dash" opacity={0.4} />
 
                 {flowSteps.map((step, index) => {
                   const x = 50 + index * 100
@@ -332,12 +332,12 @@ export default function MultiAgentVisualization() {
                     <g key={step.id} transform={`translate(${x}, ${y})`}>
                       <circle
                         r="35"
-                        fill={status === 'active' ? (isAgent ? agentColors?.primary : '#10b981') : status === 'processing' ? (isAgent ? agentColors?.primary : '#60a5fa') : '#e2e8f0'}
+                        fill={status === 'active' ? (isAgent ? agentColors?.primary : 'var(--color-viz-4)') : status === 'processing' ? (isAgent ? agentColors?.primary : 'var(--color-info)') : 'var(--color-border)'}
                         opacity={status === 'pending' ? 0.6 : 1}
                         className={(status === 'processing' || isAgentActive) ? 'animate-pulse-ring' : ''}
                         filter="url(#glow)"
                       />
-                      <circle r="32" fill={status === 'active' ? (isAgent ? agentColors?.primary : '#10b981') : status === 'processing' ? (isAgent ? agentColors?.primary : '#3b82f6') : '#f8fafc'} stroke={status === 'active' ? (isAgent ? agentColors?.secondary : '#059669') : status === 'processing' ? (isAgent ? agentColors?.secondary : '#60a5fa') : '#cbd5e1'} strokeWidth="2" />
+                      <circle r="32" fill={status === 'active' ? (isAgent ? agentColors?.primary : 'var(--color-viz-4)') : status === 'processing' ? (isAgent ? agentColors?.primary : 'var(--color-info)') : 'var(--color-bg-tertiary)'} stroke={status === 'active' ? (isAgent ? agentColors?.secondary : 'var(--color-success-dark)') : status === 'processing' ? (isAgent ? agentColors?.secondary : 'var(--color-info)') : 'var(--color-border)'} strokeWidth="2" />
 
                       {isAgent ? (
                         <>
@@ -363,14 +363,14 @@ export default function MultiAgentVisualization() {
                           )}
                         </>
                       ) : step.type === 'input' ? (
-                        <path d="M -8 -10 L 8 -10 L 0 10 Z" fill="#64748b" />
+                        <path d="M -8 -10 L 8 -10 L 0 10 Z" fill="var(--color-text-tertiary)" />
                       ) : step.type === 'output' ? (
-                        <path d="M -8 10 L 8 10 L 0 -10 Z" fill="#10b981" />
+                        <path d="M -8 10 L 8 10 L 0 -10 Z" fill="var(--color-viz-4)" />
                       ) : (
-                        <circle r="8" fill={status === 'active' ? '#f59e0b' : '#94a3b8'} />
+                        <circle r="8" fill={status === 'active' ? 'var(--color-viz-3)' : 'var(--color-text-tertiary)'} />
                       )}
 
-                      <text y="55" textAnchor="middle" fontSize="11" fill="#64748b" fontWeight="500">{step.label}</text>
+                      <text y="55" textAnchor="middle" fontSize="11" fill="var(--color-text-tertiary)" fontWeight="500">{step.label}</text>
                     </g>
                   )
                 })}
@@ -378,10 +378,10 @@ export default function MultiAgentVisualization() {
                 {flowSteps.slice(0, -1).map((_, index) => {
                   const x = 125 + index * 100
                   return (
-                    <polygon key={index} points={`${x},220 ${x + 8},225 ${x},230`} fill="#64748b" opacity={0.6} />
+                    <polygon key={index} points={`${x},220 ${x + 8},225 ${x},230`} fill="var(--color-text-tertiary)" opacity={0.6} />
                   )
                 })}
-                <polygon points="45,270 55,275 45,280" fill="#94a3b8" opacity={0.4} />
+                <polygon points="45,270 55,275 45,280" fill="var(--color-text-tertiary)" opacity={0.4} />
               </svg>
 
               <div className="absolute bottom-4 left-4 right-4 space-y-2">
@@ -391,9 +391,9 @@ export default function MultiAgentVisualization() {
                       <span className="text-text-secondary font-medium">{data.sseTaskProgress.description || '处理中...'}</span>
                       <span className="text-primary font-semibold">{Math.round(data.sseTaskProgress.progress)}%</span>
                     </div>
-                    <div className="h-1.5 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                    <div className="h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
                       <div
-                        className={`h-full rounded-full transition-all duration-500 ${data.sseTaskProgress.stage === 'failed' ? 'bg-red-500' : data.sseTaskProgress.stage === 'complete' ? 'bg-green-500' : 'bg-primary'}`}
+                        className={`h-full rounded-full transition-all duration-500 ${data.sseTaskProgress.stage === 'failed' ? 'bg-error' : data.sseTaskProgress.stage === 'complete' ? 'bg-success' : 'bg-primary'}`}
                         style={{ width: `${data.sseTaskProgress.progress}%` }}
                       />
                     </div>
@@ -402,13 +402,13 @@ export default function MultiAgentVisualization() {
                 <div className="flex items-center justify-between text-xs text-text-tertiary">
                   <span>系统状态</span>
                   <span className="flex items-center gap-1">
-                    {data.sse.isConnected && <div className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />}
+                    {data.sse.isConnected && <div className="w-1.5 h-1.5 rounded-full bg-success animate-pulse" />}
                     {data.agentStatuses.some(a => a.state === 'running') ? '运行中' : data.agentStatuses.some(a => a.state === 'waiting') ? '等待中' : '空闲'}
                   </span>
                 </div>
                 <div className="flex gap-2">
                   <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-full bg-green-400" />
+                    <div className="w-2 h-2 rounded-full bg-success" />
                     <span className="text-[10px] text-text-tertiary">空闲 {data.agentStatuses.filter(a => a.state === 'idle' || a.state === 'completed').length}</span>
                   </div>
                   <div className="flex items-center gap-1">
@@ -416,7 +416,7 @@ export default function MultiAgentVisualization() {
                     <span className="text-[10px] text-text-tertiary">运行 {data.agentStatuses.filter(a => a.state === 'running' || a.state === 'waiting').length}</span>
                   </div>
                   <div className="flex items-center gap-1">
-                    <div className="w-2 h-2 rounded-full bg-red-400" />
+                    <div className="w-2 h-2 rounded-full bg-error" />
                     <span className="text-[10px] text-text-tertiary">异常 {data.agentStatuses.filter(a => a.state === 'failed' || a.state === 'error').length}</span>
                   </div>
                 </div>
@@ -442,13 +442,13 @@ export default function MultiAgentVisualization() {
                 </div>
               ) : (
                 logs.slice(-50).reverse().map((log) => (
-                  <div key={log.id} className={`flex gap-2 p-2 rounded-lg text-sm ${log.type === 'system' ? 'bg-bg-secondary' : log.type === 'success' ? 'bg-success/5 border border-success/10' : log.type === 'error' ? 'bg-red-50 border border-red-100' : 'bg-primary/5'}`}>
-                    <div className={`w-1.5 h-1.5 rounded-full mt-1.5 ${log.type === 'system' ? 'bg-gray-400' : log.type === 'success' ? 'bg-success' : log.type === 'error' ? 'bg-red-500' : 'bg-primary'}`} />
+                  <div key={log.id} className={`flex gap-2 p-2 rounded-lg text-sm ${log.type === 'system' ? 'bg-bg-secondary' : log.type === 'success' ? 'bg-success/5 border border-success/10' : log.type === 'error' ? 'bg-error-light border border-error/20' : 'bg-primary/5'}`}>
+                    <div className={`w-1.5 h-1.5 rounded-full mt-1.5 ${log.type === 'system' ? 'bg-text-tertiary' : log.type === 'success' ? 'bg-success' : log.type === 'error' ? 'bg-error' : 'bg-primary'}`} />
                     <div className="flex-1 min-w-0">
                       <span className="text-xs text-text-tertiary flex items-center gap-1">
                         <Clock className="w-3 h-3" />
                         {log.timestamp}
-                        <span className={`ml-1 px-1 rounded text-[10px] ${log.agent === 'diagnosis' ? 'bg-[#3d5a80]/10 text-[#3d5a80]' : log.agent === 'generation' ? 'bg-[#5b8def]/10 text-[#5b8def]' : log.agent === 'review' ? 'bg-[#f59e0b]/10 text-[#f59e0b]' : 'bg-gray-100 dark:bg-gray-800 text-gray-600'}`}>
+                        <span className={`ml-1 px-1 rounded text-[10px] ${log.agent === 'diagnosis' ? 'bg-viz-1/10 text-viz-1' : log.agent === 'generation' ? 'bg-viz-2/10 text-viz-2' : log.agent === 'review' ? 'bg-viz-3/10 text-viz-3' : 'bg-bg-tertiary text-text-secondary'}`}>
                           {log.agent === 'diagnosis' ? '诊断' : log.agent === 'generation' ? '生成' : log.agent === 'review' ? '审核' : '系统'}
                         </span>
                       </span>
@@ -476,14 +476,14 @@ export default function MultiAgentVisualization() {
                   <div
                     key={task.taskId}
                     onClick={() => data.setSelectedTask(task)}
-                    className="p-3 rounded-xl border border-border bg-bg-secondary/30 hover:border-primary/30 hover:bg-primary/5 transition-all cursor-pointer group"
+                    className="stagger-item p-3 rounded-xl border border-border bg-bg-secondary/30 hover:border-primary/30 hover:bg-primary/5 transition-all cursor-pointer group"
                   >
                     <div className="flex items-start gap-2">
                       <div className={`w-1.5 h-1.5 rounded-full mt-1.5 flex-shrink-0 ${
-                        task.status === 'completed' ? 'bg-green-400' :
+                        task.status === 'completed' ? 'bg-success' :
                         task.status === 'running' ? 'bg-primary animate-pulse' :
-                        task.status === 'failed' ? 'bg-red-400' :
-                        'bg-amber-400'
+                        task.status === 'failed' ? 'bg-error' :
+                        'bg-warning'
                       }`} />
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2">
@@ -498,14 +498,14 @@ export default function MultiAgentVisualization() {
                         </div>
                         {task.status === 'running' && (
                           <div className="mt-2">
-                            <div className="h-1 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                            <div className="h-1 bg-bg-tertiary rounded-full overflow-hidden">
                               <div className="h-full bg-primary rounded-full transition-all" style={{ width: `${task.progress}%` }} />
                             </div>
                           </div>
                         )}
                         <div className="flex items-center gap-2 mt-1.5">
                           {task.errorMessage && (
-                            <span className="text-[10px] text-red-500 flex items-center gap-0.5">
+                            <span className="text-[10px] text-error flex items-center gap-0.5">
                               <AlertTriangle className="w-3 h-3" /> 异常
                             </span>
                           )}
