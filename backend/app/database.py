@@ -119,12 +119,12 @@ def init_database() -> None:
 
     logger.info(f"正在初始化数据库（已注册 {len(models.__all__)} 个模型，APP_ENV={settings.APP_ENV}）...")
 
-    is_production = settings.APP_ENV == "production"
+    # 始终先运行 create_all（幂等操作，已存在的表不会重复创建）
+    # 这确保首次部署或空数据库启动时表结构齐全，避免空迁移基线导致缺表
+    Base.metadata.create_all(bind=engine)
+    logger.info("create_all 完成（幂等，已存在的表跳过）")
 
-    # 开发环境保留 create_all 作为 fallback，保证首次启动开箱即用
-    if not is_production:
-        Base.metadata.create_all(bind=engine)
-        logger.info("create_all 完成（开发环境 fallback）")
+    is_production = settings.APP_ENV == "production"
 
     # 运行 alembic 迁移（确保 schema 最新）
     alembic_ini_path = Path(__file__).resolve().parent.parent / "alembic.ini"
