@@ -14,7 +14,7 @@ openai>=1.0.0
 numpy==1.26.4
 chromadb==0.4.22
 celery==5.3.6
-redis==5.0.1
+redis==8.0.1
 
 pydantic==2.13.4
 pydantic-settings==2.14.2
