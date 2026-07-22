@@ -1,2 +1,2 @@
-numpy==1.26.3
+numpy==2.5.1
 onnxruntime==1.18.1
