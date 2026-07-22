@@ -35,13 +35,15 @@ RUN if [ "${VITE_MODE}" = "staging" ]; then \
     fi
 
 # ---- 运行阶段 ----
-FROM nginx:1.25-alpine AS runtime
+FROM nginx:alpine AS runtime
 
 LABEL maintainer="knowledge-system"
 LABEL description="领域知识个性化生成与多智能体协同决策系统 - 前端"
 
 # 复制自定义 Nginx 配置
 COPY deploy/nginx/nginx.conf /etc/nginx/conf.d/default.conf
+
+RUN apk upgrade --no-cache
 
 # 复制构建产物
 COPY --from=builder /app/dist /usr/share/nginx/html

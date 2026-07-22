@@ -41,6 +41,13 @@ WORKDIR /app
 # 从构建阶段复制虚拟环境（运行阶段无需额外系统包，Python 自带 urllib 用于健康检查）
 COPY --from=builder /opt/venv /opt/venv
 
+RUN rm -rf /usr/local/lib/python3.11/site-packages/pip* \
+    /usr/local/lib/python3.11/site-packages/setuptools* \
+    /usr/local/lib/python3.11/site-packages/wheel* \
+    /opt/venv/bin/pip* \
+    /opt/venv/lib/python3.11/site-packages/pip* \
+    /opt/venv/lib/python3.11/site-packages/setuptools*
+
 # 复制应用代码
 COPY . .
 
