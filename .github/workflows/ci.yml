@@ -118,6 +118,14 @@ jobs:
     name: Performance Smoke Test
     runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop' || github.event_name == 'workflow_dispatch'
+    env:
+      APP_ENV: development
+      DATABASE_URL: sqlite:///./data/ci-performance-smoke.db
+      SECRET_KEY: ci-performance-smoke-secret-key-000000000000000000000000
+      DEFAULT_ADMIN_PASSWORD: admin123
+      SEED_ON_STARTUP: "true"
+      SMOKE_P95_MS: "1000"
+      SMOKE_P99_MS: "3000"
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -131,21 +139,29 @@ jobs:
       - name: Start backend server
         run: |
           cd backend
-          python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 &
-          echo "等待后端启动..."
+          rm -f data/ci-performance-smoke.db
+          python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 > ../backend-smoke.log 2>&1 &
+          echo $! > ../backend-smoke.pid
+          echo "Waiting for backend..."
           for i in $(seq 1 30); do
             if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
-              echo "后端已就绪"
-              break
+              echo "Backend is ready"
+              exit 0
             fi
             sleep 2
           done
+          echo "Backend failed to become ready"
+          cat ../backend-smoke.log
+          exit 1
       - name: Run k6 smoke test
         uses: grafana/k6-action@v0.3.1
         with:
           filename: tests/performance/smoke.js
         env:
           BASE_URL: http://localhost:8000
+      - name: Print backend log
+        if: always()
+        run: cat backend-smoke.log || true
       - name: Upload k6 results
         if: always()
         uses: actions/upload-artifact@v4

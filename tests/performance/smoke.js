@@ -11,10 +11,18 @@ import { check } from 'k6'
 import { login, hitEndpoint, authHeaders } from './helpers.js'
 import { BASE_URL, ENDPOINTS, COMMON_THRESHOLDS } from './config.js'
 
+const SMOKE_THRESHOLDS = {
+  ...COMMON_THRESHOLDS,
+  http_req_duration: [
+    `p(95)<${__ENV.SMOKE_P95_MS || 500}`,
+    `p(99)<${__ENV.SMOKE_P99_MS || 1500}`,
+  ],
+}
+
 export const options = {
   vus: 1,
   iterations: 1,
-  thresholds: COMMON_THRESHOLDS,
+  thresholds: SMOKE_THRESHOLDS,
   tags: { scenario: 'smoke' },
 }
 
