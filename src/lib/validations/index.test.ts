@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest'
 import {
   loginSchema,
+  registerSchema,
+  onboardingNameSchema,
   changePasswordSchema,
   createLearnerSchema,
   uploadKnowledgeSchema,
@@ -26,6 +28,44 @@ describe('loginSchema', () => {
   })
   it('rejects missing fields', () => {
     expect(valid(loginSchema, { username: '', password: '' })).toBe(false)
+  })
+})
+
+describe('registerSchema', () => {
+  const ok = {
+    username: 'alice_1',
+    password: 'secret123',
+    confirmPassword: 'secret123',
+  }
+
+  it('accepts a valid registration payload', () => {
+    expect(valid(registerSchema, ok)).toBe(true)
+  })
+
+  it('rejects short usernames', () => {
+    expect(valid(registerSchema, { ...ok, username: 'ab' })).toBe(false)
+  })
+
+  it('rejects passwords without digits', () => {
+    expect(valid(registerSchema, { ...ok, password: 'password', confirmPassword: 'password' })).toBe(false)
+  })
+
+  it('rejects mismatched passwords', () => {
+    expect(valid(registerSchema, { ...ok, confirmPassword: 'secret124' })).toBe(false)
+  })
+})
+
+describe('onboardingNameSchema', () => {
+  it('accepts a normal display name', () => {
+    expect(valid(onboardingNameSchema, { name: '秋月白' })).toBe(true)
+  })
+
+  it('rejects empty display names', () => {
+    expect(valid(onboardingNameSchema, { name: '   ' })).toBe(false)
+  })
+
+  it('rejects display names over 50 chars', () => {
+    expect(valid(onboardingNameSchema, { name: 'a'.repeat(51) })).toBe(false)
   })
 })
 

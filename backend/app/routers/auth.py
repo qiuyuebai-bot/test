@@ -8,11 +8,13 @@ from sqlalchemy.orm import Session
 from loguru import logger
 
 from app.database import get_db
+from app.models import LearnerProfile
 from app.models.user import User, UserRoleEnum
 from app.schemas.response import success, error, bad_request, unauthorized
 from app.schemas.auth import (
     LoginRequest,
     RegisterRequest,
+    OnboardingNameRequest,
     RefreshTokenRequest,
     ChangePasswordRequest,
 )
@@ -257,7 +259,53 @@ def get_current_user_info(
 
 
 # ===========================================
-# 5. 修改密码
+# 5. 注册后设置称呼
+# ===========================================
+
+@router.post("/onboarding/name", summary="注册后设置称呼", responses=_AUTH_RESPONSES)
+def set_onboarding_name(
+    request: OnboardingNameRequest,
+    current_user: CurrentUser = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """
+    为当前登录用户创建或更新学习者画像名称。
+    """
+    try:
+        name = request.name.strip()
+        learner = db.query(LearnerProfile).filter(
+            LearnerProfile.user_id == current_user.user_id
+        ).first()
+
+        if learner:
+            learner.real_name = name
+            learner.display_name = name
+        else:
+            learner = LearnerProfile(
+                user_id=current_user.user_id,
+                real_name=name,
+                display_name=name,
+            )
+            db.add(learner)
+
+        db.commit()
+        db.refresh(learner)
+
+        logger.info(f"用户设置称呼成功: user_id={current_user.user_id}, learner_id={learner.id}")
+
+        return success({
+            "id": learner.id,
+            "real_name": learner.real_name,
+        }, "设置成功")
+
+    except Exception as e:
+        logger.error(f"设置称呼失败: {e}")
+        db.rollback()
+        return error(message=f"设置称呼失败: {str(e)}")
+
+
+# ===========================================
+# 6. 修改密码
 # ===========================================
 
 @router.post("/change-password", summary="修改密码", responses=_AUTH_RESPONSES)
@@ -300,7 +348,7 @@ def change_password(
 
 
 # ===========================================
-# 6. 登出
+# 7. 登出
 # ===========================================
 
 @router.post("/logout", summary="用户登出")
@@ -315,7 +363,7 @@ def logout(
 
 
 # ===========================================
-# 7. 验证Token有效性
+# 8. 验证Token有效性
 # ===========================================
 
 @router.get("/verify", summary="验证Token有效性", responses=_AUTH_RESPONSES)

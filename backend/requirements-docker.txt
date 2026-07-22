@@ -1,0 +1,29 @@
+# Docker runtime dependencies.
+# Chroma enables the project's vector-search path; the app does not import
+# sentence-transformers or torch directly.
+
+fastapi==0.109.0
+uvicorn[standard]==0.27.0
+python-multipart==0.0.6
+
+sqlalchemy==2.0.25
+alembic==1.13.1
+psycopg2-binary==2.9.9
+
+openai>=1.0.0
+numpy==1.26.4
+chromadb==0.4.22
+celery==5.3.6
+redis==5.0.1
+
+pydantic==2.5.3
+pydantic-settings==2.1.0
+python-dotenv==1.0.0
+python-jose[cryptography]==3.3.0
+bcrypt==5.0.0
+passlib[bcrypt]==1.7.4
+httpx==0.26.0
+aiofiles==23.2.1
+loguru==0.7.2
+psutil==5.9.8
+reportlab==4.0.8

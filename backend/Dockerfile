@@ -10,21 +10,15 @@ FROM python:3.11-slim AS builder
 
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
-    PIP_DISABLE_PIP_VERSION_CHECK=1
+    PIP_DISABLE_PIP_VERSION_CHECK=1 \
+    PIP_INDEX_URL=https://mirrors.aliyun.com/pypi/simple \
+    PIP_TRUSTED_HOST=mirrors.aliyun.com
 
 WORKDIR /app
 
-# 安装构建依赖（仅编译阶段需要）
-# 使用 BuildKit cache mount 加速 apt 重复构建
-RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
-    --mount=type=cache,target=/var/lib/apt,sharing=locked \
-    apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    gcc
-
 # 复制依赖文件并安装到虚拟环境
 # 使用 BuildKit cache mount 加速 pip 重复构建（pip 缓存跨构建复用）
-COPY requirements.txt .
+COPY requirements-docker.txt requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
     python -m venv /opt/venv && \
     /opt/venv/bin/pip install --upgrade pip && \

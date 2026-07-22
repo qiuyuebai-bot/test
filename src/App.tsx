@@ -7,6 +7,7 @@ import { ProtectedRoute, PublicOnlyRoute } from './components/ProtectedRoute'
 import { useStore } from './store'
 
 const Login = lazy(() => import('./pages/Login'))
+const OnboardingName = lazy(() => import('./pages/OnboardingName'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const MultiAgentVisualization = lazy(() => import('./pages/MultiAgentVisualization'))
 const LearnerProfile = lazy(() => import('./pages/LearnerProfile'))
@@ -45,6 +46,14 @@ function App() {
               <PublicOnlyRoute>
                 <Login />
               </PublicOnlyRoute>
+            }
+          />
+          <Route
+            path="/onboarding/name"
+            element={
+              <ProtectedRoute>
+                <OnboardingName />
+              </ProtectedRoute>
             }
           />
           <Route
