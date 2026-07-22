@@ -13,7 +13,7 @@ import { BASE_URL, ENDPOINTS, COMMON_THRESHOLDS } from './config.js'
 
 export const options = {
   vus: 1,
-  duration: '30s',
+  iterations: 1,
   thresholds: COMMON_THRESHOLDS,
   tags: { scenario: 'smoke' },
 }
