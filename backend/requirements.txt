@@ -37,7 +37,7 @@ aiofiles==23.2.1
 loguru==0.7.2
 
 # 系统监控
-psutil==7.1.3
+psutil==7.2.2
 
 # 测试
 pytest==7.4.4
