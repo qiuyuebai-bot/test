@@ -20,7 +20,7 @@ sentence-transformers==2.3.1
 
 # 异步任务队列
 celery==5.3.6
-redis==5.0.1
+redis==8.0.1
 
 # 数据验证
 pydantic==2.13.4
