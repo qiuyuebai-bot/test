@@ -18,6 +18,10 @@ export const authApi = {
     return http.get<UserInfo>('/auth/me')
   },
 
+  setOnboardingName(data: { name: string }): Promise<{ id: number; realName: string }> {
+    return http.post<{ id: number; realName: string }>('/auth/onboarding/name', data)
+  },
+
   verifyToken(): Promise<{ userId: number; username: string; role: string; valid: boolean }> {
     return http.get('/auth/verify')
   },

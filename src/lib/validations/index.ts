@@ -15,6 +15,40 @@ export const loginSchema = z.object({
 
 export type LoginFormValues = z.infer<typeof loginSchema>
 
+export const registerSchema = z
+  .object({
+    username: z
+      .string()
+      .min(1, '请输入用户名')
+      .min(3, '用户名至少3个字符')
+      .max(50, '用户名不能超过50个字符')
+      .regex(/^[a-zA-Z0-9_]+$/, '用户名只能包含字母、数字和下划线'),
+    password: z
+      .string()
+      .min(1, '请输入密码')
+      .min(8, '密码至少8个字符')
+      .max(128, '密码不能超过128个字符')
+      .regex(/[A-Za-z]/, '密码必须包含字母')
+      .regex(/[0-9]/, '密码必须包含数字'),
+    confirmPassword: z.string().min(1, '请确认密码'),
+  })
+  .refine((data) => data.password === data.confirmPassword, {
+    message: '两次输入的密码不一致',
+    path: ['confirmPassword'],
+  })
+
+export type RegisterFormValues = z.infer<typeof registerSchema>
+
+export const onboardingNameSchema = z.object({
+  name: z
+    .string()
+    .trim()
+    .min(1, '请输入你的称呼')
+    .max(50, '称呼不能超过50个字符'),
+})
+
+export type OnboardingNameFormValues = z.infer<typeof onboardingNameSchema>
+
 export const changePasswordSchema = z.object({
   oldPassword: z.string().min(6, '原密码至少6个字符'),
   newPassword: z

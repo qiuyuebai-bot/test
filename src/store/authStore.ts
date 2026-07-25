@@ -10,6 +10,7 @@ export interface AuthSlice {
   isLoggedIn: boolean
   isLoading: boolean
   login: (username: string, password: string) => Promise<void>
+  register: (data: { username: string; password: string; email?: string; role?: string }) => Promise<void>
   logout: () => Promise<void>
   fetchCurrentUser: () => Promise<void>
   initializeAuth: () => void
@@ -26,6 +27,21 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, 
     set({ isLoading: true })
     try {
       const result = await authApi.login({ username, password })
+      setTokens(result.accessToken, result.refreshToken)
+      setUserInfo({ user_id: result.userId, username: result.username, role: result.role })
+      setSentryUser({ id: String(result.userId), username: result.username, role: result.role })
+      const userInfo = await authApi.getCurrentUser()
+      set({ user: userInfo, isLoggedIn: true, isLoading: false })
+    } catch (error) {
+      set({ isLoading: false })
+      throw error
+    }
+  },
+
+  register: async (data: { username: string; password: string; email?: string; role?: string }) => {
+    set({ isLoading: true })
+    try {
+      const result = await authApi.register(data)
       setTokens(result.accessToken, result.refreshToken)
       setUserInfo({ user_id: result.userId, username: result.username, role: result.role })
       setSentryUser({ id: String(result.userId), username: result.username, role: result.role })

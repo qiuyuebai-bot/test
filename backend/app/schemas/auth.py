@@ -97,6 +97,27 @@ class RegisterRequest(BaseModel):
         return v
 
 
+class OnboardingNameRequest(BaseModel):
+    """注册后设置称呼"""
+    name: str = Field(
+        ...,
+        min_length=1,
+        max_length=50,
+        description="用户在系统内显示的称呼",
+        json_schema_extra={"example": "秋月白"},
+    )
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        name = v.strip()
+        if not name:
+            raise ValueError("请输入你的称呼")
+        if len(name) > 50:
+            raise ValueError("称呼不能超过50个字符")
+        return name
+
+
 class TokenResponse(BaseModel):
     """Token响应"""
     access_token: str = Field(..., description="访问Token")
