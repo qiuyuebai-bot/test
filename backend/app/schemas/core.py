@@ -189,6 +189,14 @@ class SystemMetricsResponse(BaseModel):
 
 # ========== 交互式自适应导学 ==========
 
+class GenerateTutoringQuestionsRequest(BaseModel):
+    """Request an ungraded, dynamically generated practice set."""
+    learner_id: int = Field(..., description="学习者ID", gt=0)
+    topic: str = Field(..., description="目标知识点", min_length=1, max_length=200)
+    difficulty: int = Field(..., description="题目难度", ge=1, le=5)
+    question_count: int = Field(3, description="题目数量", ge=1, le=6)
+
+
 class SubmitAnswerRequest(BaseModel):
     """提交答题请求"""
     learner_id: int = Field(..., description="学习者ID", gt=0)

@@ -17,6 +17,8 @@ from app.agents.diagnosis_agent import DiagnosisAgent
 from app.services.common import BaseService
 from app.constants import ADAPTIVE_DECISION_THRESHOLD, MAX_DIFFICULTY
 from app.utils.seed_loader import load_seed_payload
+from app.services.llm_question_generator import LLMQuestionGenerator
+from app.utils.llm import LLMUtil
 
 # 题库与知识点解释从 JSON 配置加载，避免在源码中硬编码业务数据
 _QUESTION_BANK_PAYLOAD = load_seed_payload("questions.json")
@@ -38,6 +40,25 @@ class AdaptiveTutoringService(BaseService):
         return _QUESTION_BANK
     
     @classmethod
+    def generate_dynamic_questions(
+        cls, learner_id: int, topic: str, difficulty: int, question_count: int
+    ) -> List[Dict[str, Any]]:
+        """Generate ungraded practice questions, falling back to the local seed bank."""
+        learner = cls.get_learner(learner_id)
+        if not learner:
+            raise ValueError("学习者不存在")
+        if LLMUtil.is_available():
+            try:
+                return LLMQuestionGenerator.generate_question_set(topic, difficulty, question_count)
+            except Exception as exc:
+                logger.warning(f"[自适应导学] LLM 动态出题失败，使用题库兜底: {exc}")
+        fallback = [
+            question for question in _QUESTION_BANK
+            if question.get("topic") == topic and question.get("difficulty") == difficulty
+        ] or list(_QUESTION_BANK)
+        return [{**question, "generation_method": "deterministic_fallback"} for question in fallback[:question_count]]
+
+    @classmethod
     def process_answer(
         cls,
         user_id: int,
@@ -58,6 +79,10 @@ class AdaptiveTutoringService(BaseService):
             f"[自适应导学] 处理答题: user_id={user_id}, learner_id={learner_id}, "
             f"topic={question_topic}, score={score}"
         )
+
+        # Dynamic LLM questions are deliberately ungraded until server-side question persistence is added.
+        if str(question_id or "").startswith("llm-"):
+            return {"success": False, "error": "动态练习题暂不支持计分提交"}
 
         try:
             learner = cls.get_learner(learner_id)

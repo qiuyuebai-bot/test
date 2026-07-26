@@ -32,6 +32,10 @@ backend/build/
 .env.*.local
 *.pem
 *.key
+*.p12
+*.pfx
+*.jks
+*service-account*.json
 data/.secret_key
 backend/data/.secret_key
 

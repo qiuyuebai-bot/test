@@ -8,11 +8,14 @@
 ## 目标知识点
 {knowledge_topic}
 
+## 资源类型
+{resource_type}
+
 ## 推荐难度等级（1-5）
 {difficulty_level}
 
 ## 参考知识库
 {reference_knowledge}
 
-请基于以上信息生成一份个性化学习资源，输出JSON：
-{{"resource_title": "资源标题", "content": "资源正文（2000-3000字）", "difficulty_level": 1-5, "topics": ["知识点1", "知识点2"], "word_count": 估算字数, "source_slice_ids": [], "source_doc_ids": []}}
+仅能基于参考知识库生成内容；资料不足时明确说明。不得输出参考资料以外的事实、ID 或其他字段。根据资源类型生成指南或讲义，正文至少 100 字。输出 JSON：
+{{"resource_title": "资源标题", "content": "资源正文", "difficulty_level": 1-5, "topics": ["知识点1", "知识点2"]}}

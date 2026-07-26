@@ -21,6 +21,8 @@ from app.services.common import (
     LearnerServiceHelper,
     MetricsServiceHelper,
 )
+from app.services.path_planner import PathPlanner
+from app.utils.llm import LLMUtil
 
 
 class ReportService(BaseService):
@@ -153,13 +155,15 @@ class ReportService(BaseService):
         for i, r in enumerate(resources):
             labels.append(f"资源{i+1}")
             difficulty_data.append(r.difficulty_level or DEFAULT_DIFFICULTY)
-            match_data.append(r.match_score or 70)
-            
+            raw_match_score = r.match_score if r.match_score is not None else 70
+            match_score = raw_match_score * 100 if 0 <= raw_match_score <= 1 else raw_match_score
+            match_data.append(match_score)
+
             data_points.append({
                 "name": f"资源{i+1}",
                 "difficulty": r.difficulty_level or DEFAULT_DIFFICULTY,
-                "match_score": r.match_score or 70,
-                "learner_ability": avg_ability / 20,
+                "match_score": match_score,
+                "learner_ability": avg_ability,
                 "resource_id": r.id,
                 "title": r.title,
             })
@@ -168,7 +172,7 @@ class ReportService(BaseService):
             "labels": labels,
             "difficulty": difficulty_data,
             "match_score": match_data,
-            "learner_ability": [avg_ability / 20] * len(labels),
+            "learner_ability": [avg_ability] * len(labels),
             "data": data_points,
             "learner_ability_raw": avg_ability,
         }
@@ -203,9 +207,17 @@ class ReportService(BaseService):
                 "match_score": r.match_score,
             })
         
+        if LLMUtil.is_available():
+            try:
+                return PathPlanner.plan_path(learner, blind_areas, [
+                    resource for group in resources_by_diff.values() for resource in group
+                ])
+            except Exception as exc:
+                logger.warning(f"[报告服务] LLM 学习路径规划失败，使用规则兜底: {exc}")
+
         nodes = []
         edges = []
-        
+
         # 阶段1: 基础
         for i, (name, time_val) in enumerate([("基础概念", "2小时"), ("入门实践", "4小时")]):
             node_id = f"step-{i+1}"
@@ -213,7 +225,7 @@ class ReportService(BaseService):
                 "id": node_id,
                 "name": name,
                 "difficulty": i + 1,
-                "status": "completed" if i < 2 else "current",
+                "status": "completed" if i == 0 else "current",
                 "estimated_time": time_val,
                 "resources": resources_by_diff.get(i + 1, []),
                 "description": ["建立知识框架", "动手实践基础案例"][i],
@@ -252,11 +264,14 @@ class ReportService(BaseService):
         for i in range(len(nodes) - 1):
             edges.append({"source": nodes[i]["id"], "target": nodes[i + 1]["id"]})
         
+        current_step = next((index for index, node in enumerate(nodes, 1) if node["status"] == "current"), len(nodes))
+        completed_steps = sum(node["status"] == "completed" for node in nodes)
+        total_hours = sum(int("".join(char for char in node["estimated_time"] if char.isdigit()) or 0) for node in nodes)
         return {
             "total_steps": len(nodes),
-            "current_step": 3,
-            "progress": 37.5,
-            "estimated_total_time": "32小时",
+            "current_step": current_step,
+            "progress": round(completed_steps / len(nodes) * 100, 1) if nodes else 0,
+            "estimated_total_time": f"{total_hours}小时",
             "nodes": nodes,
             "edges": edges,
         }
@@ -385,6 +400,12 @@ class ReportService(BaseService):
         Returns:
             PDF 字节流，失败返回 None
         """
+        from app.services.pdf_exporter import PDFExporter
+        report = cls.generate_learner_report(learner_id)
+        if not report.get("success"):
+            return None
+        return PDFExporter.export_report(report)
+
         from reportlab.lib.pagesizes import A4
         from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
         from reportlab.lib.units import mm

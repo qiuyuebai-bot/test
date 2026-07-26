@@ -14,5 +14,5 @@
 ## 参考知识库
 {reference_knowledge}
 
-请按以上要求生成 {question_count} 道测试题，输出JSON：
-{{"questions": [{{"question": "题干", "options": ["A. ...", "B. ...", "C. ...", "D. ..."], "correct_answer": "A/B/C/D", "explanation": "解析", "difficulty_level": 1-5, "knowledge_points": ["知识点1"]}}]}}
+只能基于参考知识库命题；每题必须有 2-6 个选项、一个可验证的正确答案和解析。不得使用占位文字或输出任何额外字段。请按以上要求生成 {question_count} 道测试题，输出 JSON：
+{{"questions": [{{"question": "题干", "options": ["选项一", "选项二", "选项三", "选项四"], "correct_answer": "A", "explanation": "解析", "difficulty_level": 1-5, "knowledge_points": ["知识点1"]}}]}}

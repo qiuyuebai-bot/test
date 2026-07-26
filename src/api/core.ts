@@ -62,6 +62,10 @@ export const coreApi = {
     return http.get<LearnerReport>(`/report/learner/${learnerId}`)
   },
 
+  downloadLearnerReportPdf(learnerId: number): Promise<Blob> {
+    return http.get<Blob>(`/report/learner/${learnerId}/pdf`)
+  },
+
   getHeatmap(learnerId: number): Promise<unknown> {
     return http.get(`/report/heatmap/${learnerId}`)
   },

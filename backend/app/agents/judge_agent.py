@@ -8,6 +8,8 @@ from typing import Dict, Any, List
 from loguru import logger
 from app.agents.base import BaseAgent, AgentStatus
 from app.utils.hallucination import HallucinationUtil
+from app.agents.llm_debater import LLMDebater
+from app.utils.llm import LLMUtil
 
 
 class JudgeAgent(BaseAgent):
@@ -159,26 +161,34 @@ class JudgeAgent(BaseAgent):
             "debate_round": current_round,
         })
         
-        # 辩论结果
+        # 优先使用真实 LLM 辩论；失败时保留确定性辩论回应。
+        llm_round = None
+        if LLMUtil.is_available():
+            try:
+                llm_round = LLMDebater.run_debate_round(
+                    generated_content, reference_knowledge, audit_result, current_round
+                )
+            except Exception as exc:
+                logger.warning(f"[审核裁判Agent] LLM 辩论失败，使用规则兜底: {exc}")
+
+        merged_issues = audit_result["issues"] + (llm_round.get("issues", []) if llm_round else [])
+        corrections = self._generate_corrections(generated_content, reference_knowledge, merged_issues)
         debate_result = {
             "round": current_round,
             "judge_standpoint": audit_result["debate_record"]["judge_view"],
-            "generation_counterargument": self._generate_counterargument(
-                generated_content,
-                audit_result,
-                current_round,
+            "generation_counterargument": (
+                llm_round["generation_counterargument"] if llm_round
+                else self._generate_counterargument(generated_content, audit_result, current_round)
             ),
-            "final_decision": audit_result["debate_record"]["judge_view"]["decision"],
-            "corrections": audit_result["corrections"],
-            "conflict_points": [
-                i for i in audit_result["issues"]
-                if i["severity"] in ("high", "medium")
-            ],
-            "confidence": audit_result.get("overall_score", 0) / 100,
+            "final_decision": llm_round.get("final_decision") if llm_round else audit_result["debate_record"]["judge_view"]["decision"],
+            "corrections": corrections,
+            "conflict_points": [i for i in merged_issues if i["severity"] in ("high", "medium")],
+            "confidence": llm_round.get("confidence") if llm_round else audit_result.get("overall_score", 0) / 100,
+            "judge_rebuttal": llm_round.get("judge_rebuttal", "") if llm_round else "",
+            "debate_method": "llm" if llm_round else "deterministic_fallback",
         }
-        
+
         if current_round >= max_rounds:
-            debate_result["final_decision"] = "final_decision"
             debate_result["debate_ended"] = True
             debate_result["reason"] = "达到最大辩论轮次"
         

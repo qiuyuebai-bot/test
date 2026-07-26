@@ -5,6 +5,8 @@
 from typing import Dict, Any, List
 from loguru import logger
 from app.agents.base import BaseAgent
+from app.agents.llm_diagnostician import LLMDiagnostician
+from app.utils.llm import LLMUtil
 
 
 class DiagnosisAgent(BaseAgent):
@@ -85,8 +87,17 @@ class DiagnosisAgent(BaseAgent):
             "target_industry": learner_profile.get("target_industry"),
         }
         
+        if LLMUtil.is_available():
+            try:
+                result = LLMDiagnostician.enhance_result(result)
+            except Exception as exc:
+                logger.warning(f"[学情诊断Agent] LLM 诊断增强失败，使用规则结果: {exc}")
+                result["diagnosis_method"] = "deterministic_fallback"
+        else:
+            result["diagnosis_method"] = "deterministic_fallback"
+
         logger.debug(f"[学情诊断Agent] 诊断完成: 综合得分={result['overall_score']:.1f}")
-        
+
         return result
     
     def _extract_ability_scores(self, profile: Dict[str, Any]) -> Dict[str, float]:

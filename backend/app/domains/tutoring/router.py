@@ -15,7 +15,7 @@ from app.schemas.response import (
     unauthorized,
     BaseResponse,
 )
-from app.schemas.core import SubmitAnswerRequest
+from app.schemas.core import GenerateTutoringQuestionsRequest, SubmitAnswerRequest
 from app.services.tutoring_service import AdaptiveTutoringService
 from app.domains.learner.service import LearnerService
 from app.utils.logger import LoggerUtil
@@ -36,6 +36,25 @@ def get_tutoring_questions(
     except Exception as e:
         LoggerUtil.log_error("获取题库失败", e)
         return error(message=f"获取题库失败: {str(e)}")
+
+
+@router.post("/tutoring/questions/generate", summary="动态生成练习题")
+def generate_tutoring_questions(
+    request: GenerateTutoringQuestionsRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> BaseResponse:
+    """生成未计分练习题；答题提交仍使用既有题库流程。"""
+    if not current_user.is_admin and not LearnerService.check_data_permission(db, current_user.user_id, request.learner_id):
+        return unauthorized("无权限为该学习者生成题目")
+    try:
+        questions = AdaptiveTutoringService.generate_dynamic_questions(
+            request.learner_id, request.topic, request.difficulty, request.question_count
+        )
+        return success(data={"questions": questions, "generation_method": questions[0].get("generation_method", "deterministic_fallback") if questions else "deterministic_fallback"})
+    except Exception as e:
+        LoggerUtil.log_error("动态生成题目失败", e)
+        return error(message=f"动态生成题目失败: {str(e)}")
 
 
 @router.post("/tutoring/answer", summary="提交答题结果")

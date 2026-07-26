@@ -5,6 +5,8 @@
 from typing import Dict, Any, List
 from loguru import logger
 from app.agents.base import BaseAgent
+from app.agents.llm_generator import LLMGenerator
+from app.utils.llm import LLMUtil
 
 
 class GenerationAgent(BaseAgent):
@@ -78,14 +80,19 @@ class GenerationAgent(BaseAgent):
         
         result = {
             "resource_type": resource_type,
-            "resource_title": self._generate_title(target_topic, resource_type, diagnosis_result),
-            "difficulty_level": diagnosis_result.get("recommended_difficulty", {}).get("recommended_difficulty", 3),
+            "resource_title": resource_content.get(
+                "resource_title", self._generate_title(target_topic, resource_type, diagnosis_result)
+            ),
+            "difficulty_level": resource_content.get(
+                "difficulty_level",
+                diagnosis_result.get("recommended_difficulty", {}).get("recommended_difficulty", 3),
+            ),
             "content": resource_content["content"],
             "content_json": resource_content.get("content_json", {}),
             "word_count": len(resource_content["content"]),
             "source_slice_ids": resource_content.get("source_slice_ids", []),
             "source_doc_ids": resource_content.get("source_doc_ids", []),
-            "generation_method": "knowledge_based_generation",
+            "generation_method": resource_content.get("generation_method", "deterministic_fallback"),
         }
         
         logger.debug(f"[知识生成Agent] 生成完成: 类型={resource_type}, 字数={result['word_count']}")
@@ -111,9 +118,15 @@ class GenerationAgent(BaseAgent):
         Returns:
             指南内容
         """
+        if LLMUtil.is_available():
+            try:
+                return {**LLMGenerator.generate_guide(diagnosis, knowledge, profile, topic), "generation_method": "llm"}
+            except Exception as exc:
+                logger.warning(f"[知识生成Agent] LLM 实操指南生成失败，使用规则兜底: {exc}")
+
         difficulty = diagnosis.get("recommended_difficulty", {}).get("recommended_difficulty", 3)
         learning_style = profile.get("learning_style", "visual")
-        
+
         # 从知识库提取关键内容
         key_points = self._extract_key_points(knowledge, max_points=5)
         
@@ -182,8 +195,14 @@ class GenerationAgent(BaseAgent):
         Returns:
             测试题内容
         """
+        if LLMUtil.is_available():
+            try:
+                return {**LLMGenerator.generate_exercises(diagnosis, knowledge, profile, topic), "generation_method": "llm"}
+            except Exception as exc:
+                logger.warning(f"[知识生成Agent] LLM 测试题生成失败，使用规则兜底: {exc}")
+
         difficulty = diagnosis.get("recommended_difficulty", {}).get("recommended_difficulty", 3)
-        
+
         # 生成不同难度的题目
         basic_questions = self._generate_question_set(knowledge, topic, "basic", min(3, difficulty))
         advanced_questions = self._generate_question_set(knowledge, topic, "advanced", max(0, 5 - difficulty))
@@ -243,9 +262,15 @@ class GenerationAgent(BaseAgent):
         Returns:
             讲义内容
         """
+        if LLMUtil.is_available():
+            try:
+                return {**LLMGenerator.generate_lecture(diagnosis, knowledge, profile, topic), "generation_method": "llm"}
+            except Exception as exc:
+                logger.warning(f"[知识生成Agent] LLM 讲义生成失败，使用规则兜底: {exc}")
+
         difficulty = diagnosis.get("recommended_difficulty", {}).get("recommended_difficulty", 3)
         blind_areas = diagnosis.get("knowledge_blind_areas", [])
-        
+
         # 组织章节
         sections = []
         for i, k in enumerate(knowledge[:6]):

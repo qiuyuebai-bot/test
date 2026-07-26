@@ -11,5 +11,5 @@
 ## 平均能力分
 {average_score}
 
-请基于以上数据生成个性化诊断报告，输出JSON：
-{{"overall_score": 0-100的总体评分, "overall_level": "初级/中级/进阶/高级学习者", "ability_scores": {{"theoretical_foundation": 0-100, "programming_ability": 0-100, "algorithm_design": 0-100, "system_architecture": 0-100, "data_analysis": 0-100, "engineering_practice": 0-100}}, "knowledge_blind_areas": [{{"name": "盲区名称", "severity": "low/medium/high", "description": "具体描述"}}], "recommended_difficulty": {{"recommended_difficulty": 1-5, "reason": "推荐理由"}}, "learning_suggestions": ["建议1", "建议2"]}}
+能力分数、等级和推荐难度由规则引擎决定，不得修改或虚构。仅为已给出的盲区生成描述，并给出最多 8 条个性化建议。输出 JSON：
+{{"knowledge_blind_areas": [{{"name": "已存在盲区名称", "description": "具体描述"}}], "learning_suggestions": ["建议1", "建议2"]}}

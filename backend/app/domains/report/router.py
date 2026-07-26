@@ -6,6 +6,8 @@ import io
 from datetime import datetime
 from typing import Optional
 from collections import defaultdict
+from urllib.parse import quote
+import re
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
@@ -83,13 +85,14 @@ def export_learner_report_pdf(
         learner = db.query(LearnerProfile).filter(LearnerProfile.id == learner_id).first()
         learner_name = (learner.real_name or f"learner_{learner_id}") if learner else f"learner_{learner_id}"
 
-        filename = f"学情报告_{learner_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
+        safe_name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", learner_name).strip(" .")[:80] or f"learner_{learner_id}"
+        filename = f"学情报告_{safe_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
 
         return StreamingResponse(
             io.BytesIO(pdf_bytes),
             media_type="application/pdf",
             headers={
-                "Content-Disposition": f"attachment; filename*=UTF-8''{filename}",
+                "Content-Disposition": f"attachment; filename*=UTF-8''{quote(filename)}",
             },
         )
     except Exception as e:
