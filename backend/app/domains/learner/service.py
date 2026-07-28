@@ -45,7 +45,7 @@ class LearnerService:
     ]
     
     @staticmethod
-    def create_learner(db: Session, learner_data: LearnerProfileCreate) -> Optional[LearnerProfile]:
+    def create_learner(db: Session, learner_data: LearnerProfileCreate, user_id: int) -> Optional[LearnerProfile]:
         """
         创建学习者画像
         
@@ -57,10 +57,10 @@ class LearnerService:
             学习者画像对象，已存在则返回None
         """
         existing = db.query(LearnerProfile).filter(
-            LearnerProfile.user_id == learner_data.user_id
+            LearnerProfile.user_id == user_id
         ).first()
         if existing:
-            logger.warning(f"用户已存在学习者画像: user_id={learner_data.user_id}")
+            logger.warning(f"用户已存在学习者画像: user_id={user_id}")
             return None
         
         learner = LearnerProfile(
@@ -273,7 +273,7 @@ class LearnerService:
         for idx, learner_data in enumerate(import_data.learners):
             try:
                 learner = LearnerProfile(
-                    user_id=learner_data.user_id,
+                    user_id=user_id,
                     real_name=learner_data.real_name,
                     education_level=learner_data.education_level,
                     major=learner_data.major,
