@@ -27,7 +27,7 @@ class LearnerProfileBase(BaseModel):
 
 class LearnerProfileCreate(LearnerProfileBase):
     """创建学习者画像请求"""
-    user_id: int = Field(..., description="关联用户ID")
+  
     
     # 先验能力评估
     theoretical_foundation: float = Field(0.0, ge=0, le=100, description="理论基础")
