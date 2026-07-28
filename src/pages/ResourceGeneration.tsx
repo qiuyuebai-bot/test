@@ -102,6 +102,7 @@ export default function ResourceGeneration() {
   const [industryOptions, setIndustryOptions] = useState<{ value: string; label: string }[]>([])
   const [activeTab, setActiveTab] = useState<ResourceType>('guide')
   const [selectedResource, setSelectedResource] = useState<LearningResource | null>(null)
+  const [selectedLearnerId, setSelectedLearnerId] = useState<number | null>(null)
   const [targetTopic, setTargetTopic] = useState('')
   const [selectedIndustry, setSelectedIndustry] = useState('人工智能训练')
   const [isGenerating, setIsGenerating] = useState(false)
@@ -176,10 +177,22 @@ export default function ResourceGeneration() {
   }, [fetchLearners, fetchResources])
 
   useEffect(() => {
-    if (!currentLearner && learners.length > 0) {
-      setCurrentLearner(learners[0])
+    if (learners.length === 0) return
+
+    const currentId = currentLearner?.id
+    const hasSelectedLearner = selectedLearnerId ? learners.some(l => l.id === selectedLearnerId) : false
+    const nextLearner = hasSelectedLearner
+      ? learners.find(l => l.id === selectedLearnerId)
+      : learners.find(l => l.id === currentId) || learners[0]
+
+    if (!nextLearner) return
+    if (selectedLearnerId !== nextLearner.id) {
+      setSelectedLearnerId(nextLearner.id)
     }
-  }, [learners, currentLearner, setCurrentLearner])
+    if (currentLearner?.id !== nextLearner.id) {
+      setCurrentLearner(nextLearner)
+    }
+  }, [learners, currentLearner, selectedLearnerId, setCurrentLearner])
 
   useEffect(() => {
     if (resources.length > 0 && !selectedResource) {
@@ -201,7 +214,7 @@ export default function ResourceGeneration() {
     }
   }, [sse.error])
 
-  const selectedLearner = currentLearner || learners[0]
+  const selectedLearner = learners.find(l => l.id === selectedLearnerId) || currentLearner || learners[0]
 
   const currentStepIndex = (sse.currentStage ? stageToStepIndex[sse.currentStage] : undefined) ?? (isGenerating ? 0 : -1)
   const generationProgress = sse.progress
@@ -209,6 +222,7 @@ export default function ResourceGeneration() {
   const handleSelectLearner = (learnerId: number) => {
     const learner = learners.find(l => l.id === learnerId)
     if (learner) {
+      setSelectedLearnerId(learner.id)
       setCurrentLearner(learner)
     }
   }
@@ -418,21 +432,35 @@ export default function ResourceGeneration() {
               <div>
                 <label className="block text-xs font-medium text-text-secondary mb-2">选择学习者</label>
                 <div className="space-y-2 max-h-36 overflow-y-auto">
-                  {learners.map((l) => (
-                    <button
-                      key={l.id}
-                      onClick={() => handleSelectLearner(l.id)}
-                      disabled={isGenerating}
-                      className={`w-full p-3 rounded-lg border text-left text-sm transition-all ${
-                        selectedLearner?.id === l.id
-                          ? 'border-primary/30 bg-primary/5'
-                          : 'border-border bg-bg-secondary/30 hover:border-primary/20'
-                      } ${isGenerating ? 'opacity-60 cursor-not-allowed' : ''}`}
-                    >
-                      <p className="font-medium text-text-primary">{l.realName}</p>
-                      <p className="text-xs text-text-tertiary">{l.educationLevel} · {l.major}</p>
-                    </button>
-                  ))}
+                  {learners.map((l) => {
+                    const isSelected = selectedLearner?.id === l.id
+                    return (
+                      <button
+                        key={l.id}
+                        onClick={() => handleSelectLearner(l.id)}
+                        disabled={isGenerating}
+                        className={`w-full p-3 rounded-lg border text-left text-sm transition-all ${
+                          isSelected
+                            ? 'border-primary bg-primary/10 shadow-sm'
+                            : 'border-border bg-bg-secondary/30 hover:border-primary/30 hover:bg-bg-card'
+                        } ${isGenerating ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className={`font-medium ${isSelected ? 'text-primary' : 'text-text-primary'}`}>{l.realName}</p>
+                          {isSelected && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-primary">
+                              <CheckCircle2 className="w-3 h-3" />
+                              已选
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-text-tertiary mt-1">{l.educationLevel} · {l.major}</p>
+                      </button>
+                    )
+                  })}
+                  {learners.length === 0 && (
+                    <p className="text-xs text-text-tertiary py-2">暂无可选学习者</p>
+                  )}
                 </div>
               </div>
 
