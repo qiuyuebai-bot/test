@@ -2,8 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import type { LearningResource } from '@/types'
-import { agentApi, configApi } from '@/api'
-import type { IndustryOption } from '@/api/config'
+import { agentApi } from '@/api'
 import { useTaskSSE } from '@/hooks'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
@@ -28,8 +27,6 @@ import {
   Copy,
   Printer,
   Route,
-  GraduationCap,
-  BookMarked,
   Search,
   X,
   Building2,
@@ -38,14 +35,12 @@ import EmptyState from '@/components/EmptyState'
 import { CardSkeleton } from '@/components/Skeleton'
 import { toast } from '@/components/toastStore'
 
-type ResourceType = 'guide' | 'lecture' | 'case' | 'quiz' | 'roadmap'
+type ResourceType = 'guide' | 'exercise' | 'lecture'
 
 const resourceTypeConfig: Record<ResourceType, { label: string; icon: typeof FileText; color: string }> = {
-  guide: { label: '学习路径指南', icon: Route, color: 'text-primary' },
-  lecture: { label: '图文讲义', icon: BookOpen, color: 'text-warning' },
-  case: { label: '案例场景', icon: BookMarked, color: 'text-purple-500' },
-  quiz: { label: '测试题', icon: ListChecks, color: 'text-success' },
-  roadmap: { label: '学习路线图', icon: GraduationCap, color: 'text-info' },
+  guide: { label: '实操指南', icon: Route, color: 'text-primary' },
+  exercise: { label: '分阶测试题', icon: ListChecks, color: 'text-success' },
+  lecture: { label: '专属讲义', icon: BookOpen, color: 'text-warning' },
 }
 
 const reviewStatusMap: Record<string, { label: string; variant: 'success' | 'warning' | 'error' | 'default' }> = {
@@ -104,11 +99,11 @@ export default function ResourceGeneration() {
   const [sseTaskId, setSseTaskId] = useState<number | null>(null)
   const [stageDescription, setStageDescription] = useState('')
   const [debateInfo, setDebateInfo] = useState<{ round: number; total: number } | null>(null)
-  const [industryOptions, setIndustryOptions] = useState<IndustryOption[]>([])
+  const [industryOptions, setIndustryOptions] = useState<{ value: string; label: string }[]>([])
   const [activeTab, setActiveTab] = useState<ResourceType>('guide')
   const [selectedResource, setSelectedResource] = useState<LearningResource | null>(null)
-  const [resourceTitle, setResourceTitle] = useState('')
-  const [selectedIndustry, setSelectedIndustry] = useState('technology')
+  const [targetTopic, setTargetTopic] = useState('')
+  const [selectedIndustry, setSelectedIndustry] = useState('人工智能训练')
   const [isGenerating, setIsGenerating] = useState(false)
   const [currentStepDesc, setCurrentStepDesc] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -117,8 +112,10 @@ export default function ResourceGeneration() {
 
   const debateRoundText = debateInfo ? `第${debateInfo.round}/${debateInfo.total}轮辩论中...` : ''
 
+  const industryLabels = ['智能制造', '工业互联网', '软件开发', '人工智能训练', '数据分析', '通用']
+
   useEffect(() => {
-    configApi.getOptions().then(opts => setIndustryOptions(opts.industries)).catch(() => {})
+    setIndustryOptions(industryLabels.map(name => ({ value: name, label: name })))
   }, [])
 
   useEffect(() => {
@@ -161,7 +158,6 @@ export default function ResourceGeneration() {
     onComplete: () => {
       setStageDescription('任务完成')
       setDebateInfo(null)
-      setResourceTitle('')
       if (completeTimeoutRef.current) clearTimeout(completeTimeoutRef.current)
       completeTimeoutRef.current = setTimeout(() => {
         setIsGenerating(false)
@@ -222,8 +218,8 @@ export default function ResourceGeneration() {
       setError('请先选择学习者')
       return
     }
-    if (!resourceTitle.trim()) {
-      setError('请输入资源标题')
+    if (!targetTopic.trim()) {
+      setError('请输入目标知识点')
       return
     }
 
@@ -236,7 +232,7 @@ export default function ResourceGeneration() {
     try {
       const result = await agentApi.runFullPipeline({
         learnerId: selectedLearner.id,
-        targetTopic: resourceTitle.trim(),
+        targetTopic: targetTopic.trim(),
         resourceType: activeTab,
         industry: selectedIndustry,
       })
@@ -248,7 +244,7 @@ export default function ResourceGeneration() {
       setIsGenerating(false)
       setError(err instanceof Error ? err.message : '资源生成失败，请重试')
     }
-  }, [selectedLearner, resourceTitle, activeTab, selectedIndustry])
+  }, [selectedLearner, targetTopic, activeTab, selectedIndustry])
 
   const handleCancel = () => {
     cancelledRef.current = true
@@ -489,12 +485,12 @@ export default function ResourceGeneration() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-text-secondary mb-2">资源主题/标题</label>
+                <label className="block text-xs font-medium text-text-secondary mb-2">目标知识点 / 主题</label>
                 <input
                   type="text"
-                  value={resourceTitle}
-                  onChange={(e) => setResourceTitle(e.target.value)}
-                  placeholder="输入要生成的主题，如：Python入门..."
+                  value={targetTopic}
+                  onChange={(e) => setTargetTopic(e.target.value)}
+                  placeholder="如：反向传播算法、RESTful API 设计..."
                   disabled={isGenerating}
                   className="w-full px-3 py-2 rounded-lg border border-border bg-bg-secondary/30 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 disabled:opacity-60"
                 />
