@@ -57,6 +57,10 @@ def generate_resources(
     - 优先使用 Celery 异步队列，不可用时降级为 BackgroundTasks
     """
     try:
+        if not current_user.is_admin and not LearnerService.check_data_permission(
+            db, current_user.user_id, request.learner_id
+        ):
+            return unauthorized("无权限为该学习者生成资源")
         if _CELERY_AVAILABLE:
             task = generate_resources_task.delay(
                 learner_id=request.learner_id,

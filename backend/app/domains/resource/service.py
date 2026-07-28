@@ -229,27 +229,17 @@ class ResourceGenerationService(BaseService):
                 difficulty_level=resource_data.get("difficulty_level", 3),
                 version="1.0",
                 content=resource_data.get("content", ""),
-                content_json=json.dumps(
-                    resource_data.get("content_json", {}),
-                    ensure_ascii=False,
-                    default=str,
-                ),
+                content_json=resource_data.get("content_json", {}),
                 word_count=resource_data.get("word_count", 0),
-                source_slice_ids=json.dumps(
-                    resource_data.get("source_slice_ids", []),
-                    ensure_ascii=False,
-                ),
-                source_doc_ids=json.dumps(
-                    resource_data.get("source_doc_ids", []),
-                    ensure_ascii=False,
-                ),
+                source_slice_ids=resource_data.get("source_slice_ids", []),
+                source_doc_ids=resource_data.get("source_doc_ids", []),
                 generated_by_agent="generation_agent",
-                generation_method="knowledge_based",
+                generation_method=resource_data.get("generation_method", "deterministic_fallback"),
                 is_validated=True,
                 validation_passed=True,
                 validation_score=resource_data.get("_meta", {}).get("score", 80),
                 hallucination_detected=False,
-                status="published",
+                status="ready",
                 match_score=resource_data.get("match_score", 0),
             )
             db.add(resource)

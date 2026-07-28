@@ -44,14 +44,18 @@ def generate_tutoring_questions(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> BaseResponse:
-    """生成未计分练习题；答题提交仍使用既有题库流程。"""
+    """生成服务端保存的练习题；浏览器不会收到正确答案。"""
     if not current_user.is_admin and not LearnerService.check_data_permission(db, current_user.user_id, request.learner_id):
         return unauthorized("无权限为该学习者生成题目")
     try:
         questions = AdaptiveTutoringService.generate_dynamic_questions(
-            request.learner_id, request.topic, request.difficulty, request.question_count
+            current_user.user_id,
+            request.learner_id,
+            request.topic,
+            request.difficulty,
+            request.question_count,
         )
-        return success(data={"questions": questions, "generation_method": questions[0].get("generation_method", "deterministic_fallback") if questions else "deterministic_fallback"})
+        return success(data={"questions": questions, "generation_method": questions[0].get("generationMethod", "deterministic_fallback") if questions else "deterministic_fallback"})
     except Exception as e:
         LoggerUtil.log_error("动态生成题目失败", e)
         return error(message=f"动态生成题目失败: {str(e)}")

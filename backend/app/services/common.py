@@ -428,7 +428,9 @@ class ResourceServiceHelper(BaseService):
             格式化后的资源字典
         """
         return {
+            "id": resource.id,
             "resource_id": resource.id,
+            "learner_id": resource.learner_id,
             "title": resource.title,
             "resource_type": resource.resource_type,
             "resource_type_name": cls.RESOURCE_TYPE_NAMES.get(
@@ -439,6 +441,11 @@ class ResourceServiceHelper(BaseService):
             "word_count": resource.word_count,
             "match_score": resource.match_score,
             "validation_score": resource.validation_score,
+            "validation_passed": resource.validation_passed,
+            "hallucination_detected": resource.hallucination_detected,
+            "generation_method": resource.generation_method,
+            "source_slice_ids": cls.parse_json_field(resource.source_slice_ids, []),
+            "source_doc_ids": cls.parse_json_field(resource.source_doc_ids, []),
             "status": resource.status,
             "view_count": resource.view_count or 0,
             "download_count": resource.download_count or 0,

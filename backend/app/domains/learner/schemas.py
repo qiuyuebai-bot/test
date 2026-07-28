@@ -107,7 +107,7 @@ class LearnerProfileResponse(BaseModel):
 
 class LearnerBatchImportItem(BaseModel):
     """批量导入项"""
-    user_id: Optional[int] = None
+    user_id: int = Field(..., gt=0, description="关联用户ID")
     real_name: Optional[str] = None
     education_level: str
     major: str

@@ -209,6 +209,30 @@ class AdaptiveDecisionEnum(enum.Enum):
     REVIEW = "review"
 
 
+class IssuedTutoringQuestion(Base):
+    """Server-owned question payload and answer key for secure adaptive grading."""
+
+    __tablename__ = "issued_tutoring_questions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    learner_id = Column(Integer, ForeignKey("learner_profiles.id"), nullable=False, index=True)
+    question_type = Column(String(30), nullable=False, default="single")
+    topic = Column(String(100), nullable=False, index=True)
+    difficulty = Column(Integer, nullable=False, default=3)
+    content = Column(Text, nullable=False)
+    options = Column(JSON, default=list, nullable=False)
+    answer_key = Column(JSON, nullable=False)
+    explanation = Column(Text, nullable=True)
+    knowledge_points = Column(JSON, default=list)
+    source_slice_ids = Column(JSON, default=list)
+    source_doc_ids = Column(JSON, default=list)
+    generation_method = Column(String(50), nullable=False)
+    status = Column(String(20), nullable=False, default="issued", index=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    answered_at = Column(DateTime, nullable=True)
+
+
 class AnswerRecord(Base):
     """用户答题交互记录表"""
 

@@ -273,28 +273,18 @@ class TaskRepository:
                 difficulty_level=generation_result.get("difficulty_level", 3),
                 version="1.0",
                 content=generation_result.get("content", ""),
-                content_json=json.dumps(
-                    generation_result.get("content_json", {}),
-                    ensure_ascii=False,
-                    default=str,
-                ),
+                content_json=generation_result.get("content_json", {}),
                 word_count=generation_result.get("word_count", 0),
-                source_slice_ids=json.dumps(
-                    generation_result.get("source_slice_ids", []),
-                    ensure_ascii=False,
-                ),
-                source_doc_ids=json.dumps(
-                    generation_result.get("source_doc_ids", []),
-                    ensure_ascii=False,
-                ),
+                source_slice_ids=generation_result.get("source_slice_ids", []),
+                source_doc_ids=generation_result.get("source_doc_ids", []),
                 generated_by_agent="generation_agent",
                 generation_task_id=task_id,
-                generation_method="knowledge_based",
+                generation_method=generation_result.get("generation_method", "deterministic_fallback"),
                 is_validated=audit_result.get("passed", False),
                 validation_passed=audit_result.get("passed", False),
                 validation_score=audit_result.get("overall_score", 0),
                 hallucination_detected=audit_result.get("hallucination_detected", False),
-                status="published",
+                status="ready" if audit_result.get("passed", False) else "failed",
             )
             db.add(resource)
             db.flush()

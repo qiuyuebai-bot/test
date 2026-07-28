@@ -14,6 +14,10 @@ class PathPlanner:
         if not LLMUtil.is_available():
             raise RuntimeError("LLM is unavailable")
         context = {
+            "ability_scores": {
+                key: getattr(learner, key, 0) or 0
+                for key in ("theoretical_foundation", "programming_ability", "algorithm_design", "system_architecture", "data_analysis", "engineering_practice")
+            },
             "target_industry": getattr(learner, "target_industry", None),
             "target_position": getattr(learner, "target_position", None),
             "blind_areas": blind_areas[:5],
@@ -37,39 +41,71 @@ class PathPlanner:
         # A one-node plan is valid for a narrow topic with one available resource.
         raw_nodes = bounded_list(payload.get("nodes"), "nodes", minimum=1, maximum=8)
         nodes = []
-        current_count = 0
+        name_to_id = {}
+        pending_dependencies = {}
         for index, item in enumerate(raw_nodes, 1):
             if not isinstance(item, dict):
                 raise ValueError("path node must be an object")
-            status = item.get("status", "locked")
-            if status not in {"completed", "current", "locked"}:
-                status = "locked"
-            current_count += status == "current"
+            node_name = bounded_text(item.get("name"), "node name", maximum=120)
+            node_id = f"step-{index}"
             node_resources = [resource for resource in item.get("resources", []) if isinstance(resource, dict) and resource.get("resource_id") in resource_ids]
             nodes.append({
-                "id": f"step-{index}",
-                "name": bounded_text(item.get("name"), "node name", maximum=120),
+                "id": node_id,
+                "name": node_name,
                 "difficulty": bounded_int(item.get("difficulty", 3), "difficulty", minimum=1, maximum=5),
-                "status": status,
+                "status": "locked",
                 "estimated_time": bounded_text(item.get("estimated_time", "2小时"), "estimated_time", maximum=40),
                 "resources": node_resources,
                 "description": bounded_text(item.get("description"), "description", maximum=800),
             })
-        if current_count != 1:
-            for node in nodes:
-                if node["status"] == "current":
-                    node["status"] = "locked"
-            next((node for node in nodes if node["status"] != "completed"), nodes[0])["status"] = "current"
-        current_step = next(index for index, node in enumerate(nodes, 1) if node["status"] == "current")
-        completed = sum(node["status"] == "completed" for node in nodes)
+            name_to_id[node_name] = node_id
+            pending_dependencies[node_id] = item.get("depends_on", [])
+
+        edges = []
+        for node in nodes:
+            for dependency_name in pending_dependencies[node["id"]]:
+                dependency_id = name_to_id.get(str(dependency_name))
+                if dependency_id and dependency_id != node["id"]:
+                    edges.append({"source": dependency_id, "target": node["id"]})
+        if not edges:
+            edges = [{"source": nodes[index]["id"], "target": nodes[index + 1]["id"]} for index in range(len(nodes) - 1)]
+        if not cls._is_acyclic(nodes, edges):
+            raise ValueError("learning path dependencies contain a cycle")
+
+        dependent_ids = {edge["target"] for edge in edges}
+        current_node = next((node for node in nodes if node["id"] not in dependent_ids), nodes[0])
+        current_node["status"] = "current"
+        current_step = nodes.index(current_node) + 1
+        completed = 0
         return {
             "total_steps": len(nodes),
             "current_step": current_step,
             "progress": round(completed / len(nodes) * 100, 1),
             "estimated_total_time": f"{sum(cls._hours(node['estimated_time']) for node in nodes)}小时",
             "nodes": nodes,
-            "edges": [{"source": nodes[index]["id"], "target": nodes[index + 1]["id"]} for index in range(len(nodes) - 1)],
+            "edges": edges,
         }
+
+    @staticmethod
+    def _is_acyclic(nodes: List[Dict[str, Any]], edges: List[Dict[str, str]]) -> bool:
+        adjacency = {node["id"]: [] for node in nodes}
+        for edge in edges:
+            adjacency[edge["source"]].append(edge["target"])
+        visiting, visited = set(), set()
+
+        def visit(node_id: str) -> bool:
+            if node_id in visiting:
+                return False
+            if node_id in visited:
+                return True
+            visiting.add(node_id)
+            if not all(visit(target) for target in adjacency[node_id]):
+                return False
+            visiting.remove(node_id)
+            visited.add(node_id)
+            return True
+
+        return all(visit(node["id"]) for node in nodes)
 
     @staticmethod
     def _hours(value: str) -> int:

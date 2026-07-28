@@ -36,6 +36,8 @@ class LLMGenerator:
         topic: str,
         question_count: int | None = None,
     ) -> Dict[str, Any]:
+        if not knowledge:
+            raise LLMResponseError("retrieved knowledge is required for LLM question generation")
         difficulty = cls._difficulty(diagnosis)
         question_count = max(1, min(6, question_count or max(3, difficulty + 1)))
         response, _ = LLMUtil.call_with_prompt_template(
@@ -59,6 +61,8 @@ class LLMGenerator:
     def _generate_resource(
         cls, resource_type: str, diagnosis: Dict[str, Any], knowledge: List[Dict[str, Any]], profile: Dict[str, Any], topic: str
     ) -> Dict[str, Any]:
+        if not knowledge:
+            raise LLMResponseError("retrieved knowledge is required for LLM resource generation")
         difficulty = cls._difficulty(diagnosis)
         response, _ = LLMUtil.call_with_prompt_template(
             "resource_generation",

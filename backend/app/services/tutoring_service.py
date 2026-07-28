@@ -4,6 +4,7 @@
 """
 import json
 import uuid
+from datetime import datetime
 from typing import Dict, Any, List, Optional
 from loguru import logger
 
@@ -12,6 +13,7 @@ from app.models import (
     LearnerProfile,
     AnswerRecord,
     LearningResource,
+    IssuedTutoringQuestion,
 )
 from app.agents.diagnosis_agent import DiagnosisAgent
 from app.services.common import BaseService
@@ -19,6 +21,7 @@ from app.constants import ADAPTIVE_DECISION_THRESHOLD, MAX_DIFFICULTY
 from app.utils.seed_loader import load_seed_payload
 from app.services.llm_question_generator import LLMQuestionGenerator
 from app.utils.llm import LLMUtil
+from app.domains.knowledge.service import KnowledgeService
 
 # 题库与知识点解释从 JSON 配置加载，避免在源码中硬编码业务数据
 _QUESTION_BANK_PAYLOAD = load_seed_payload("questions.json")
@@ -41,22 +44,97 @@ class AdaptiveTutoringService(BaseService):
     
     @classmethod
     def generate_dynamic_questions(
-        cls, learner_id: int, topic: str, difficulty: int, question_count: int
+        cls, user_id: int, learner_id: int, topic: str, difficulty: int, question_count: int
     ) -> List[Dict[str, Any]]:
-        """Generate ungraded practice questions, falling back to the local seed bank."""
+        """Issue server-owned questions; answer keys never leave this service."""
         learner = cls.get_learner(learner_id)
         if not learner:
             raise ValueError("学习者不存在")
-        if LLMUtil.is_available():
+
+        learner_profile = cls.model_to_dict(learner)
+        diagnosis = DiagnosisAgent().execute({"learner_id": learner_id, "learner_profile": learner_profile})
+        effective_difficulty = diagnosis.get("recommended_difficulty", {}).get("recommended_difficulty", difficulty)
+        effective_difficulty = max(1, min(5, round((effective_difficulty + difficulty) / 2)))
+        with get_db_context() as db:
+            knowledge = KnowledgeService.search(
+                db=db,
+                query=topic,
+                industry=learner.target_industry,
+                top_k=6,
+            )
+
+        generated: List[Dict[str, Any]] = []
+        if knowledge and LLMUtil.is_available():
             try:
-                return LLMQuestionGenerator.generate_question_set(topic, difficulty, question_count)
+                generated = LLMQuestionGenerator.generate_question_set(
+                    topic, effective_difficulty, question_count, knowledge
+                )
             except Exception as exc:
                 logger.warning(f"[自适应导学] LLM 动态出题失败，使用题库兜底: {exc}")
-        fallback = [
-            question for question in _QUESTION_BANK
-            if question.get("topic") == topic and question.get("difficulty") == difficulty
-        ] or list(_QUESTION_BANK)
-        return [{**question, "generation_method": "deterministic_fallback"} for question in fallback[:question_count]]
+
+        if not generated:
+            fallback = [
+                question for question in _QUESTION_BANK
+                if question.get("topic") == topic and question.get("difficulty") == effective_difficulty
+            ] or list(_QUESTION_BANK)
+            generated = [
+                {
+                    "id": str(question.get("id", uuid.uuid4().hex)),
+                    "type": question.get("type", "single"),
+                    "topic": question.get("topic", topic),
+                    "question": question["question"],
+                    "options": question["options"],
+                    "correctAnswer": question.get("correctAnswer", question.get("correct_answer")),
+                    "correctIndex": question.get("correctIndex", question.get("correct_answer")),
+                    "difficulty": question.get("difficulty", effective_difficulty),
+                    "explanation": question.get("explanation", _QUESTION_EXPLANATIONS.get(topic, "")),
+                    "knowledgePoints": _QUESTION_KEY_POINTS.get(topic, []),
+                    "generation_method": "deterministic_fallback",
+                }
+                for question in fallback[:question_count]
+            ]
+
+        return cls._persist_issued_questions(user_id, learner_id, generated, knowledge)
+
+    @classmethod
+    def _persist_issued_questions(
+        cls, user_id: int, learner_id: int, questions: List[Dict[str, Any]], knowledge: List[Dict[str, Any]]
+    ) -> List[Dict[str, Any]]:
+        """Persist server-only keys and return only the public question payload."""
+        public_questions = []
+        source_slice_ids = [item["slice_id"] for item in knowledge if item.get("slice_id") is not None]
+        source_doc_ids = list({item["doc_id"] for item in knowledge if item.get("doc_id") is not None})
+        with get_db_context() as db:
+            for question in questions:
+                answer = question.get("correctAnswer", question.get("correct_answer", question.get("correctIndex")))
+                issued = IssuedTutoringQuestion(
+                    user_id=user_id,
+                    learner_id=learner_id,
+                    question_type=question.get("type", "single"),
+                    topic=question.get("topic", ""),
+                    difficulty=question.get("difficulty", 3),
+                    content=question["question"],
+                    options=question["options"],
+                    answer_key=answer if isinstance(answer, list) else [answer],
+                    explanation=question.get("explanation", ""),
+                    knowledge_points=question.get("knowledgePoints", question.get("knowledge_points", [])),
+                    source_slice_ids=source_slice_ids,
+                    source_doc_ids=source_doc_ids,
+                    generation_method=question.get("generation_method", "deterministic_fallback"),
+                )
+                db.add(issued)
+                db.flush()
+                public_questions.append({
+                    "id": str(issued.id),
+                    "type": issued.question_type,
+                    "topic": issued.topic,
+                    "question": issued.content,
+                    "options": issued.options,
+                    "difficulty": issued.difficulty,
+                    "knowledgePoints": issued.knowledge_points,
+                    "generationMethod": issued.generation_method,
+                })
+        return public_questions
 
     @classmethod
     def process_answer(
@@ -80,9 +158,30 @@ class AdaptiveTutoringService(BaseService):
             f"topic={question_topic}, score={score}"
         )
 
-        # Dynamic LLM questions are deliberately ungraded until server-side question persistence is added.
-        if str(question_id or "").startswith("llm-"):
-            return {"success": False, "error": "动态练习题暂不支持计分提交"}
+        issued_question = None
+        if str(question_id).isdigit():
+            with get_db_context() as db:
+                issued_question = db.query(IssuedTutoringQuestion).filter(
+                    IssuedTutoringQuestion.id == int(question_id),
+                    IssuedTutoringQuestion.user_id == user_id,
+                    IssuedTutoringQuestion.learner_id == learner_id,
+                    IssuedTutoringQuestion.status == "issued",
+                ).first()
+                if not issued_question:
+                    return {"success": False, "error": "题目不存在、无权限或已提交"}
+
+                normalized_answer = user_answer if isinstance(user_answer, list) else [user_answer]
+                normalized_answer = sorted(str(value) for value in normalized_answer)
+                expected_answer = sorted(str(value) for value in (issued_question.answer_key or []))
+                is_correct = normalized_answer == expected_answer
+                question_type = issued_question.question_type
+                question_topic = issued_question.topic
+                question_difficulty = issued_question.difficulty
+                question_content = issued_question.content
+                correct_answer = issued_question.answer_key
+                score = 100.0 if is_correct else 0.0
+                issued_question.status = "answered"
+                issued_question.answered_at = datetime.utcnow()
 
         try:
             learner = cls.get_learner(learner_id)

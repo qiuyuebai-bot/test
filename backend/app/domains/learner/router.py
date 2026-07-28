@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 from typing import Optional
 from loguru import logger
+from sqlalchemy.exc import IntegrityError
 
 from app.database import get_db
 from app.schemas.response import success, bad_request, not_found, paged_success, unauthorized
@@ -50,9 +51,14 @@ def create_learner(
         if learner is None:
             return bad_request("用户已存在学习者画像")
         return success({"id": learner.id}, "创建成功")
+    except IntegrityError:
+        db.rollback()
+        logger.warning(f"创建学习者失败：学习者画像已存在或关联用户无效: user_id={current_user.user_id}")
+        return bad_request("当前用户已存在学习者画像或关联用户无效")
     except Exception as e:
-        logger.error(f"创建学习者失败: {e}")
-        return bad_request(f"创建失败: {str(e)}")
+        db.rollback()
+        logger.exception("创建学习者失败")
+        return bad_request("创建失败，请检查输入后重试")
 
 
 # ===========================================

@@ -159,7 +159,12 @@ class AgentOrchestrator:
             debate_results, corrected_content = self._run_debate_process(
                 task_id, generation_result.get("content", ""), knowledge_results, audit_result
             )
-            self._update_running_task(task_id, debate_results=debate_results, corrected_content=corrected_content)
+            final_audit = audit_result
+            if corrected_content != generation_result.get("content", ""):
+                final_audit = self._run_audit(task_id, corrected_content, knowledge_results, debate_round=len(debate_results) + 1)
+            if debate_results and debate_results[-1].get("final_decision") == "rejected":
+                final_audit = {**final_audit, "passed": False}
+            self._update_running_task(task_id, debate_results=debate_results, corrected_content=corrected_content, final_audit=final_audit)
 
             # 阶段6：最终修正与完成
             self._update_task_stage(task_id, "final_revision", 95, "生成最终版本...")
@@ -170,13 +175,13 @@ class AgentOrchestrator:
                 generation_result["_debate_rounds"] = len(debate_results)
 
             final_result = self.task_repo.save_resource_and_complete(
-                task_id, learner_id, generation_result, audit_result, len(debate_results)
+                task_id, learner_id, generation_result, final_audit, len(debate_results)
             )
             self._update_running_task(task_id, final_result=final_result)
 
             # 统计指标
             self._update_task_stage(task_id, "complete", 100, "任务完成")
-            self.task_repo.save_metrics(task_id, audit_result, debate_results)
+            self.task_repo.save_metrics(task_id, final_audit, debate_results)
 
             # 广播完成事件
             self.event_bus.broadcast(task_id, "task_completed", {
@@ -305,7 +310,7 @@ class AgentOrchestrator:
                 "progress": debate_progress + 3, "timestamp": time.time(),
             })
 
-            if debate_result.get("debate_ended", False) or decision == "approved":
+            if decision == "approved":
                 debate_result["corrected_content"] = current_content
                 self.task_repo.save_debate_record(task_id, current_round, debate_result)
                 break
@@ -321,6 +326,8 @@ class AgentOrchestrator:
             )
             debate_result["corrected_content"] = current_content
             self.task_repo.save_debate_record(task_id, current_round, debate_result)
+            if debate_result.get("debate_ended", False) or decision == "rejected":
+                break
             current_round += 1
 
         logger.info(f"[Agent调度中心] 辩论完成: task_id={task_id}, rounds={len(debate_records)}")
