@@ -46,7 +46,7 @@ def create_learner(
     - 以及其他能力维度、知识盲区等
     """
     try:
-        learner = LearnerService.create_learner(db, learner_data)
+        learner = LearnerService.create_learner(db, learner_data, current_user.user_id)
         if learner is None:
             return bad_request("用户已存在学习者画像")
         return success({"id": learner.id}, "创建成功")
