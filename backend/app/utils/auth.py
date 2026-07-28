@@ -246,7 +246,11 @@ class CurrentUser:
         self.user_id = user_id
         self.username = username
         self.role = role
-    
+
+    @property
+    def id(self) -> int:
+        return self.user_id
+
     @property
     def is_admin(self) -> bool:
         return self.role == UserRoleEnum.ADMIN.value
