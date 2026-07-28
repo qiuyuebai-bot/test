@@ -34,7 +34,8 @@ class PathPlanner:
     @classmethod
     def _validate(cls, payload: Dict[str, Any], resources: List[Dict[str, Any]]) -> Dict[str, Any]:
         resource_ids = {item.get("resource_id") for item in resources}
-        raw_nodes = bounded_list(payload.get("nodes"), "nodes", minimum=2, maximum=8)
+        # A one-node plan is valid for a narrow topic with one available resource.
+        raw_nodes = bounded_list(payload.get("nodes"), "nodes", minimum=1, maximum=8)
         nodes = []
         current_count = 0
         for index, item in enumerate(raw_nodes, 1):
