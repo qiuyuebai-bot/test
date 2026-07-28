@@ -303,3 +303,4 @@ class InteractionHistoryResponse(BaseModel):
     total: int
     page: int
     page_size: int
+
