@@ -36,8 +36,6 @@ class LLMGenerator:
         topic: str,
         question_count: int | None = None,
     ) -> Dict[str, Any]:
-        if not knowledge:
-            raise LLMResponseError("retrieved knowledge is required for LLM question generation")
         difficulty = cls._difficulty(diagnosis)
         question_count = max(1, min(6, question_count or max(3, difficulty + 1)))
         response, _ = LLMUtil.call_with_prompt_template(
@@ -61,8 +59,6 @@ class LLMGenerator:
     def _generate_resource(
         cls, resource_type: str, diagnosis: Dict[str, Any], knowledge: List[Dict[str, Any]], profile: Dict[str, Any], topic: str
     ) -> Dict[str, Any]:
-        if not knowledge:
-            raise LLMResponseError("retrieved knowledge is required for LLM resource generation")
         difficulty = cls._difficulty(diagnosis)
         response, _ = LLMUtil.call_with_prompt_template(
             "resource_generation",
@@ -79,10 +75,14 @@ class LLMGenerator:
         payload = parse_json_object(response)
         if payload.get("_meta", {}).get("model") == "mock":
             raise LLMResponseError("LLM returned fallback mock response")
-        content = bounded_text(payload.get("content"), "content", minimum=100, maximum=16000)
-        title = bounded_text(payload.get("resource_title", f"{topic} {resource_type}"), "resource_title", maximum=200)
+        content = bounded_text(payload.get("content") or "", "content", minimum=100, maximum=16000)
+        title = bounded_text(payload.get("resource_title") or f"{topic} {resource_type}", "resource_title", maximum=200)
         actual_difficulty = bounded_int(payload.get("difficulty_level", difficulty), "difficulty_level", minimum=1, maximum=5)
-        topics = [bounded_text(item, "topic", maximum=100) for item in bounded_list(payload.get("topics", [topic]), "topics", minimum=1, maximum=8)]
+        # 容错：LLM 可能返回 null / 空数组 / 非数组，兜底为 [topic]
+        raw_topics = payload.get("topics")
+        if not isinstance(raw_topics, list) or len(raw_topics) == 0:
+            raw_topics = [topic]
+        topics = [bounded_text(item, "topic", maximum=100) for item in bounded_list(raw_topics, "topics", minimum=1, maximum=8)]
         return {
             "content": content,
             "content_json": {
@@ -152,7 +152,13 @@ class LLMGenerator:
             content = str(item.get("content", "")).strip()[:2500]
             if content:
                 entries.append(f"[{item.get('slice_id', 'unknown')}] {item.get('title', '知识片段')}: {content}")
-        return "\n\n".join(entries) or "未检索到参考资料；请明确说明信息不足。"
+        if entries:
+            return "\n\n".join(entries)
+        return (
+            "（知识库中暂无相关参考资料，请基于你的训练知识生成高质量、专业的内容。"
+            "内容应覆盖该领域核心概念、实操方法和常见问题，确保学习资源有实质价值。"
+            "不要使用占位文字或模糊表述，要给出具体的知识点和可操作的指导。）"
+        )
 
     @staticmethod
     def _learner_summary(profile: Dict[str, Any], diagnosis: Dict[str, Any]) -> str:

@@ -696,15 +696,53 @@ class LLMUtil:
             }, ensure_ascii=False)
 
         elif "生成" in prompt or "资源" in prompt:
+            # 提取 prompt 中的目标主题信息，使 mock 响应更有意义
+            topic_hint = ""
+            for line in prompt.split("\n"):
+                if "知识" in line and "点" in line or "knowledge_topic" in line.lower() or "目标知识点" in line:
+                    topic_hint = line.split("：")[-1].strip() if "：" in line else line.split(":")[-1].strip()
+                    break
+            if not topic_hint:
+                for line in prompt.split("\n"):
+                    stripped = line.strip()
+                    if stripped and len(stripped) < 60 and not stripped.startswith("{") and "{" not in stripped:
+                        topic_hint = stripped
+                        break
+            if not topic_hint:
+                topic_hint = "指定领域"
+
+            resource_type_hint = "学习资源"
+            for line in prompt.split("\n"):
+                if "resource_type" in line.lower() or "资源类型" in line:
+                    rt = line.split("：")[-1].strip() if "：" in line else line.split(":")[-1].strip()
+                    type_map = {"guide": "实操指南", "exercise": "分阶测试题", "lecture": "专属讲义"}
+                    resource_type_hint = type_map.get(rt, resource_type_hint)
+                    break
+
             return json.dumps({
-                "resource_title": "个性化学习资源",
-                "content": "模拟内容生成（LLM 不可用时）",
+                "resource_title": f"{topic_hint} - {resource_type_hint}",
+                "content": (
+                    f"# {topic_hint} {resource_type_hint}\n\n"
+                    f"## 概述\n\n"
+                    f"本资源聚焦于 **{topic_hint}** 领域的核心知识与实践。"
+                    f"系统当前运行在确定性兜底模式（未配置 LLM API Key），"
+                    f"以下内容基于知识库检索结果生成。\n\n"
+                    f"## 学习指引\n\n"
+                    f"1. 建议先了解 {topic_hint} 的基础概念和背景\n"
+                    f"2. 通过实操练习加深理解\n"
+                    f"3. 结合真实案例掌握应用场景\n\n"
+                    f"> 💡 **提示**：配置 LLM API Key 后，系统将能够生成更丰富、"
+                    f"更个性化的学习内容，包括详细的代码示例、案例分析、"
+                    f"以及针对你学习风格定制的讲解方式。\n\n"
+                    f"当前模式下，知识库中与「{topic_hint}」相关的内容"
+                    f"将自动填充到资源中，请确保已在\"知识库管理\"中上传了相关文档。"
+                ),
                 "difficulty_level": 3,
-                "topics": ["机器学习", "深度学习"],
-                "word_count": 2500,
-                "source_slice_ids": [1, 2, 3],
-                "source_doc_ids": [1],
-                "_meta": {"model": "mock", "score": 85}
+                "topics": [topic_hint],
+                "word_count": 300,
+                "source_slice_ids": [],
+                "source_doc_ids": [],
+                "_meta": {"model": "mock", "score": 75, "note": "LLM unavailable, deterministic fallback will enrich with knowledge base content"}
             }, ensure_ascii=False)
 
         elif "校验" in prompt or "审核" in prompt or "修正" in prompt:

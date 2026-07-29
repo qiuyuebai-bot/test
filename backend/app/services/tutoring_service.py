@@ -319,26 +319,57 @@ class AdaptiveTutoringService(BaseService):
         user_answer: str,
         correct_answer: str,
     ) -> Dict[str, Any]:
-        """生成简化通俗知识点解释"""
+        """生成简化通俗知识点解释（接入知识库检索）"""
         learning_style = learner.learning_style or "visual"
-        
+
         style_prefixes = {
             "visual": "通过图解方式理解：",
             "auditory": "简单来说：",
             "reading": "核心要点是：",
             "kinesthetic": "动手实践中理解：",
         }
-        
-        explanations = _QUESTION_EXPLANATIONS
 
-        style_prefix = style_prefixes.get(learning_style)
-        explanation_text = explanations.get(question_topic)
-        if explanation_text:
-            simple_text = f"{style_prefix}{explanation_text}"
+        style_prefix = style_prefixes.get(learning_style, "核心要点是：")
+
+        # 1. 尝试从知识库检索相关内容
+        knowledge_explanation = ""
+        knowledge_key_points: List[str] = []
+        with get_db_context() as db:
+            kb_results = KnowledgeService.search(
+                db=db,
+                query=question_topic,
+                industry=learner.target_industry,
+                top_k=5,
+            )
+            if kb_results:
+                # 从知识库提取用于解释的内容
+                kb_contents = [k.get("content", "").strip() for k in kb_results if k.get("content", "").strip()]
+                if kb_contents:
+                    # 取最相关的前2段作为解释素材
+                    knowledge_explanation = " ".join(kb_contents[:2])[:500]
+                    # 提取关键点
+                    for k in kb_results[:3]:
+                        title = k.get("title", "") or k.get("doc_title", "")
+                        if title:
+                            knowledge_key_points.append(title)
+
+        # 2. 先从种子JSON取解释，没有则用知识库内容
+        explanations = _QUESTION_EXPLANATIONS
+        seed_explanation = explanations.get(question_topic)
+        if seed_explanation:
+            simple_text = f"{style_prefix}{seed_explanation}"
+        elif knowledge_explanation:
+            simple_text = f"{style_prefix}{knowledge_explanation}"
         else:
-            simple_text = f"{style_prefix}{question_topic}的核心思想是..."
-        
-        # 查找相关资源
+            simple_text = f"{style_prefix}{question_topic}是相关领域的重要概念，建议结合实操练习加深理解..."
+
+        # 3. 关键要点：优先知识库提取的，其次种子数据
+        if knowledge_key_points:
+            key_points = knowledge_key_points
+        else:
+            key_points = cls._extract_key_points(question_topic)
+
+        # 4. 查找相关资源
         suggested_resources = []
         with get_db_context() as db:
             resources = (
@@ -358,14 +389,15 @@ class AdaptiveTutoringService(BaseService):
                     "type": r.resource_type,
                     "match_score": r.match_score,
                 })
-        
+
         return {
             "type": "simplify",
             "title": f"{question_topic} - 简化理解",
             "simple_explanation": simple_text,
-            "key_points": cls._extract_key_points(question_topic),
-            "practice_tips": f"建议从简单的{question_topic}基础问题开始练习",
+            "key_points": key_points,
+            "practice_tips": f"建议从简单的{question_topic}基础问题开始练习，结合实际案例加深理解。",
             "suggested_resources": suggested_resources,
+            "knowledge_source": "knowledge_base" if knowledge_explanation else "seed_data",
         }
     
     @classmethod
@@ -375,27 +407,63 @@ class AdaptiveTutoringService(BaseService):
         question_topic: str,
         current_difficulty: int,
     ) -> Dict[str, Any]:
-        """生成高阶进阶挑战任务"""
+        """生成高阶进阶挑战任务（接入知识库检索）"""
         advanced_difficulty = min(MAX_DIFFICULTY, current_difficulty + 1)
         levels = ["基础", "进阶", "高级", "专家", "大师"]
         times = ["2小时", "4小时", "8小时", "12小时", "20小时"]
-        
+
+        # 从知识库检索高阶内容作为挑战素材
+        challenge_objectives = [
+            "独立完成一个完整项目",
+            "优化模型性能",
+            "撰写技术文档",
+        ]
+        challenge_description = f"挑战：在理解{question_topic}基础概念的前提下，完成{levels[advanced_difficulty-1]}级实践任务。"
+        kb_results = []  # 初始化避免作用域问题
+
+        with get_db_context() as db:
+            kb_results = KnowledgeService.search(
+                db=db,
+                query=question_topic,
+                industry=learner.target_industry,
+                top_k=5,
+            )
+            if kb_results:
+                # 用知识库内容构建更具挑战性的目标
+                kb_objectives = []
+                for k in kb_results[:4]:
+                    title = k.get("title", "") or k.get("doc_title", "")
+                    content = k.get("content", "").strip()
+                    if content:
+                        # 从知识库片段中提取可作为挑战任务的内容
+                        sentences = [s.strip() for s in content.split("。") if len(s.strip()) > 15]
+                        if sentences:
+                            kb_objectives.append(f"深入理解并实践：{sentences[0][:100]}")
+                        elif title:
+                            kb_objectives.append(f"掌握「{title}」的高级应用")
+                if kb_objectives:
+                    challenge_objectives = kb_objectives[:3]
+                    # 用知识库相关内容构建更详细的挑战描述
+                    first_content = kb_results[0].get("content", "").strip()[:200]
+                    if first_content:
+                        challenge_description = (
+                            f"挑战：基于知识库中的「{question_topic}」相关内容，"
+                            f"完成以下{levels[advanced_difficulty-1]}级实践任务。"
+                        )
+
         challenge = {
             "type": "advance",
             "title": f"{question_topic} - 进阶挑战",
             "current_difficulty": current_difficulty,
             "advanced_difficulty": advanced_difficulty,
-            "challenge_description": f"挑战：在理解{question_topic}基础概念的前提下，完成{levels[advanced_difficulty-1]}级实践任务。",
-            "challenge_objectives": [
-                "独立完成一个完整项目",
-                "优化模型性能",
-                "撰写技术文档",
-            ],
+            "challenge_description": challenge_description,
+            "challenge_objectives": challenge_objectives,
             "estimated_time": times[advanced_difficulty - 1],
             "bonus_points": advanced_difficulty * 20,
             "suggested_resources": [],
+            "knowledge_source": "knowledge_base" if kb_results else "template",
         }
-        
+
         # 查找高阶资源
         with get_db_context() as db:
             resources = (
@@ -415,7 +483,7 @@ class AdaptiveTutoringService(BaseService):
                     "type": r.resource_type,
                     "difficulty_level": r.difficulty_level,
                 })
-        
+
         return challenge
     
     @classmethod

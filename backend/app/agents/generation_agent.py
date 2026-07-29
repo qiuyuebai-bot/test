@@ -2,7 +2,8 @@
 领域知识生成 Agent
 读取专业知识库向量检索结果，基于学情参数生成初稿学习资源
 """
-from typing import Dict, Any, List
+import random
+from typing import Dict, Any, List, Tuple
 from loguru import logger
 from app.agents.base import BaseAgent
 from app.agents.llm_generator import LLMGenerator
@@ -36,11 +37,11 @@ class GenerationAgent(BaseAgent):
     def execute(self, input_data: Dict[str, Any], context: Dict[str, Any] = None) -> Dict[str, Any]:
         """
         执行资源生成
-        
+
         Args:
             input_data: 输入数据，包含 diagnosis_result, knowledge_results, learner_profile
             context: 上下文数据
-            
+
         Returns:
             生成结果
         """
@@ -49,10 +50,17 @@ class GenerationAgent(BaseAgent):
         learner_profile = input_data.get("learner_profile", {})
         resource_type = input_data.get("resource_type", "guide")
         target_topic = input_data.get("target_topic", "")
-        
+
+        llm_available = LLMUtil.is_available()
+        kb_count = len(knowledge_results) if knowledge_results else 0
+        logger.info(
+            f"[知识生成Agent] 开始生成: resource_type={resource_type}, topic={target_topic}, "
+            f"llm_available={llm_available}, knowledge_items={kb_count}"
+        )
+
         if not knowledge_results:
-            logger.warning("[知识生成Agent] 知识库检索结果为空")
-        
+            logger.warning("[知识生成Agent] 知识库检索结果为空，LLM将基于自身训练知识生成")
+
         # 根据资源类型调用不同生成方法
         if resource_type == "guide":
             resource_content = self._generate_guide(
@@ -95,8 +103,12 @@ class GenerationAgent(BaseAgent):
             "generation_method": resource_content.get("generation_method", "deterministic_fallback"),
         }
         
-        logger.debug(f"[知识生成Agent] 生成完成: 类型={resource_type}, 字数={result['word_count']}")
-        
+        logger.info(
+            f"[知识生成Agent] 生成完成: resource_type={resource_type}, "
+            f"generation_method={result.get('generation_method', 'unknown')}, "
+            f"word_count={result['word_count']}, content_preview={result['content'][:80]}..."
+        )
+
         return result
     
     def _generate_guide(
@@ -108,69 +120,101 @@ class GenerationAgent(BaseAgent):
     ) -> Dict[str, Any]:
         """
         生成实操指南
-        
+
         Args:
             diagnosis: 诊断结果
             knowledge: 知识库检索结果
             profile: 学习者画像
             topic: 主题
-            
+
         Returns:
             指南内容
         """
         if LLMUtil.is_available():
             try:
+                logger.info(f"[知识生成Agent] 调用 DeepSeek 生成 实操指南: topic={topic}")
                 return {**LLMGenerator.generate_guide(diagnosis, knowledge, profile, topic), "generation_method": "llm"}
             except Exception as exc:
                 logger.warning(f"[知识生成Agent] LLM 实操指南生成失败，使用规则兜底: {exc}")
 
         difficulty = diagnosis.get("recommended_difficulty", {}).get("recommended_difficulty", 3)
         learning_style = profile.get("learning_style", "visual")
+        blind_areas = diagnosis.get("knowledge_blind_areas", [])
 
-        # 从知识库提取关键内容
-        key_points = self._extract_key_points(knowledge, max_points=5)
-        
-        # 生成章节结构
-        chapters = []
-        for i, point in enumerate(key_points):
-            chapter = {
-                "title": f"第{i+1}章 {point['title']}",
-                "content": point["content"],
-                "steps": self._generate_steps(point["content"], difficulty),
-                "tips": self._generate_tips(point["content"]),
-            }
-            chapters.append(chapter)
-        
         # 生成完整文本
         content_lines = []
         content_lines.append(f"# {topic} 实操指南\n")
         content_lines.append(f"**难度等级**：{'★' * difficulty}（{self._difficulty_text(difficulty)}）\n")
         content_lines.append(f"**适用人群**：{self._audience_text(difficulty)}\n")
-        content_lines.append("---\n")
-        
-        for i, ch in enumerate(chapters):
-            content_lines.append(f"\n## {ch['title']}\n")
-            content_lines.append(ch["content"][:300] + "...\n")
-            
-            if ch["steps"]:
-                content_lines.append("\n**实操步骤**：\n")
-                for j, step in enumerate(ch["steps"]):
-                    content_lines.append(f"{j+1}. {step}")
+
+        # 学习目标——基于知识盲区
+        if blind_areas:
+            blind_names = [b.get('name', '') for b in blind_areas[:3]]
+            content_lines.append(f"\n## 🎯 学习目标\n")
+            content_lines.append(f"通过本指南的学习，你将掌握 **{topic}** 的核心概念与实操方法。")
+            if blind_names:
+                content_lines.append(f"重点补强：{'、'.join(blind_names)}。\n")
+        content_lines.append("\n---\n")
+
+        if knowledge:
+            # 从知识库提取关键内容构建章节（使用完整内容，不再截断）
+            for i, k in enumerate(knowledge[:8]):
+                k_title = k.get("title", "") or k.get("doc_title", "") or f"知识点{i+1}"
+                k_content = k.get("content", "").strip()
+                if not k_content:
+                    continue
+
+                content_lines.append(f"\n## 第{i+1}章 {k_title}\n")
+                # 如果是长内容，保留完整（最多2000字，足够详实）
+                display_content = k_content[:2000]
+                content_lines.append(display_content)
+                if len(k_content) > 2000:
+                    content_lines.append("\n\n*（完整内容请参见知识库原文）*")
                 content_lines.append("")
-            
-            if ch["tips"]:
-                content_lines.append("\n> 💡 小贴士：" + ch["tips"] + "\n")
-        
+
+                # 添加实操建议
+                steps = self._generate_steps(k_content, difficulty)
+                if steps:
+                    content_lines.append("\n**实操步骤**：\n")
+                    for j, step in enumerate(steps):
+                        content_lines.append(f"{j+1}. {step}")
+                    content_lines.append("")
+
+                tips = self._generate_tips(k_content)
+                if tips:
+                    content_lines.append(f"\n> 💡 小贴士：{tips}\n")
+        else:
+            # 知识库为空时给出有用提示
+            content_lines.append("\n## ⚠️ 知识库暂未收录相关内容\n")
+            content_lines.append(f"当前知识库中未检索到与 **{topic}** 相关的资料。\n")
+            content_lines.append("\n**建议操作**：\n")
+            content_lines.append("1. 前往「知识库管理」上传相关文档\n")
+            content_lines.append("2. 上传后可重新生成包含丰富内容的个性化资源\n")
+            content_lines.append(f"\n> 系统已记录你的学习需求，管理员可据此补充知识库内容。\n")
+
+        # 盲区专项突破建议
+        if blind_areas:
+            content_lines.append("\n---\n")
+            content_lines.append("\n## 🎯 知识盲区专项突破\n")
+            for i, blind in enumerate(blind_areas[:5]):
+                severity = blind.get("severity", "中")
+                desc = blind.get("description", "")
+                bname = blind.get("name", f"盲区{i+1}")
+                content_lines.append(f"\n### {i+1}. {bname}（严重程度：{severity}）\n")
+                if desc:
+                    content_lines.append(f"{desc}\n")
+                content_lines.append(f"建议花额外时间专项学习此领域内容。\n")
+
         # 收集来源切片ID
         source_slice_ids = [k.get("slice_id") for k in knowledge if k.get("slice_id")]
         source_doc_ids = list(set([k.get("doc_id") for k in knowledge if k.get("doc_id")]))
-        
+
         return {
             "content": "\n".join(content_lines),
             "content_json": {
-                "chapters": chapters,
                 "difficulty": difficulty,
                 "learning_style": learning_style,
+                "knowledge_items_used": len(knowledge),
             },
             "source_slice_ids": source_slice_ids,
             "source_doc_ids": source_doc_ids,
@@ -185,53 +229,63 @@ class GenerationAgent(BaseAgent):
     ) -> Dict[str, Any]:
         """
         生成分阶测试题
-        
+
         Args:
             diagnosis: 诊断结果
             knowledge: 知识库检索结果
             profile: 学习者画像
             topic: 主题
-            
+
         Returns:
             测试题内容
         """
         if LLMUtil.is_available():
             try:
+                logger.info(f"[知识生成Agent] 调用 DeepSeek 生成 测试题: topic={topic}")
                 return {**LLMGenerator.generate_exercises(diagnosis, knowledge, profile, topic), "generation_method": "llm"}
             except Exception as exc:
                 logger.warning(f"[知识生成Agent] LLM 测试题生成失败，使用规则兜底: {exc}")
 
         difficulty = diagnosis.get("recommended_difficulty", {}).get("recommended_difficulty", 3)
 
-        # 生成不同难度的题目
-        basic_questions = self._generate_question_set(knowledge, topic, "basic", min(3, difficulty))
-        advanced_questions = self._generate_question_set(knowledge, topic, "advanced", max(0, 5 - difficulty))
-        
+        # 基于知识库内容生成题目
+        basic_questions, advanced_questions = self._generate_questions_from_knowledge(
+            knowledge, topic, difficulty
+        )
+
         # 生成完整文本
         content_lines = []
         content_lines.append(f"# {topic} 分阶测试题\n")
-        content_lines.append(f"**基础题**（{len(basic_questions)}题）\n")
-        content_lines.append(f"**进阶挑战**（{len(advanced_questions)}题）\n")
+        content_lines.append(f"**基础题**（{len(basic_questions)}题） | **进阶挑战**（{len(advanced_questions)}题）\n")
         content_lines.append("---\n")
-        
-        content_lines.append("\n## 一、基础题\n")
-        for i, q in enumerate(basic_questions):
-            content_lines.append(f"\n### 第{i+1}题：{q['question']}\n")
-            for j, opt in enumerate(q["options"]):
-                content_lines.append(f"- {chr(65+j)}. {opt}")
-            content_lines.append(f"\n*难度：{'★' * q['difficulty']}*")
-        
-        content_lines.append("\n\n## 二、进阶挑战题\n")
-        for i, q in enumerate(advanced_questions):
-            content_lines.append(f"\n### 第{i+1}题：{q['question']}\n")
-            for j, opt in enumerate(q["options"]):
-                content_lines.append(f"- {chr(65+j)}. {opt}")
-            content_lines.append(f"\n*难度：{'★' * q['difficulty']}*")
-        
+
+        if basic_questions:
+            content_lines.append("\n## 一、基础题\n")
+            for i, q in enumerate(basic_questions):
+                content_lines.append(f"\n### 第{i+1}题：{q['question']}\n")
+                for j, opt in enumerate(q["options"]):
+                    content_lines.append(f"- {chr(65+j)}. {opt}")
+                content_lines.append(f"\n*答案：{q['correct_letter']} | 难度：{'★' * q['difficulty']}*\n")
+                content_lines.append(f"*解析：{q['explanation']}*\n")
+
+        if advanced_questions:
+            content_lines.append("\n## 二、进阶挑战题\n")
+            for i, q in enumerate(advanced_questions):
+                content_lines.append(f"\n### 第{i+1}题：{q['question']}\n")
+                for j, opt in enumerate(q["options"]):
+                    content_lines.append(f"- {chr(65+j)}. {opt}")
+                content_lines.append(f"\n*答案：{q['correct_letter']} | 难度：{'★' * q['difficulty']}*\n")
+                content_lines.append(f"*解析：{q['explanation']}*\n")
+
+        if not basic_questions and not advanced_questions:
+            content_lines.append("\n## ⚠️ 知识库内容不足\n")
+            content_lines.append(f"当前知识库中未检索到足够内容来生成与 **{topic}** 相关的测试题。\n")
+            content_lines.append("\n**建议**：上传包含测试题或知识要点的文档到知识库，然后重新生成。\n")
+
         # 收集来源切片ID
         source_slice_ids = [k.get("slice_id") for k in knowledge if k.get("slice_id")]
         source_doc_ids = list(set([k.get("doc_id") for k in knowledge if k.get("doc_id")]))
-        
+
         return {
             "content": "\n".join(content_lines),
             "content_json": {
@@ -252,18 +306,19 @@ class GenerationAgent(BaseAgent):
     ) -> Dict[str, Any]:
         """
         生成专属知识讲义
-        
+
         Args:
             diagnosis: 诊断结果
             knowledge: 知识库检索结果
             profile: 学习者画像
             topic: 主题
-            
+
         Returns:
             讲义内容
         """
         if LLMUtil.is_available():
             try:
+                logger.info(f"[知识生成Agent] 调用 DeepSeek 生成 讲义: topic={topic}")
                 return {**LLMGenerator.generate_lecture(diagnosis, knowledge, profile, topic), "generation_method": "llm"}
             except Exception as exc:
                 logger.warning(f"[知识生成Agent] LLM 讲义生成失败，使用规则兜底: {exc}")
@@ -271,55 +326,89 @@ class GenerationAgent(BaseAgent):
         difficulty = diagnosis.get("recommended_difficulty", {}).get("recommended_difficulty", 3)
         blind_areas = diagnosis.get("knowledge_blind_areas", [])
 
-        # 组织章节
-        sections = []
-        for i, k in enumerate(knowledge[:6]):
-            section = {
-                "title": f"{i+1}. {k.get('title', f'知识点{i+1}')}",
-                "content": k.get("content", ""),
-                "key_points": self._extract_key_points_text(k.get("content", ""), 3),
-            }
-            sections.append(section)
-        
         # 生成完整文本
         content_lines = []
         content_lines.append(f"# {topic} 专属知识讲义\n")
         content_lines.append(f"**难度等级**：{'★' * difficulty} | **适用**：{self._audience_text(difficulty)}\n")
-        
+
         # 学习目标
-        content_lines.append("\n## 学习目标\n")
-        content_lines.append(f"通过本讲义学习，你将掌握{topic}的核心概念与应用方法，")
-        content_lines.append(f"弥补在{', '.join([b['name'] for b in blind_areas[:3]]) if blind_areas else '相关领域'}方面的知识盲区。\n")
-        
+        content_lines.append("\n## 📋 学习目标\n")
+        content_lines.append(f"通过本讲义学习，你将掌握 **{topic}** 的核心概念与应用方法。")
+        if blind_areas:
+            blind_names = [b.get('name', '') for b in blind_areas[:3]]
+            content_lines.append(f"\n重点补强领域：{'、'.join(blind_names)}。")
+        content_lines.append("\n")
+
         content_lines.append("---\n")
-        
-        # 各章节
-        for sec in sections:
-            content_lines.append(f"\n## {sec['title']}\n")
-            content_lines.append(sec["content"][:400] + "...\n")
-            if sec["key_points"]:
-                content_lines.append("\n**核心要点**：")
-                for point in sec["key_points"]:
-                    content_lines.append(f"- {point}")
-                content_lines.append("")
-        
+
+        if knowledge:
+            # 组织章节，使用完整知识库内容
+            for i, k in enumerate(knowledge[:10]):
+                section_title = k.get("title", "") or k.get("doc_title", "") or f"知识点{i+1}"
+                section_content = k.get("content", "").strip()
+                if not section_content:
+                    continue
+
+                content_lines.append(f"\n## {i+1}. {section_title}\n")
+                # 完整内容（最多3000字，足够详实）
+                display_content = section_content[:3000]
+                content_lines.append(display_content)
+                if len(section_content) > 3000:
+                    content_lines.append("\n\n*（完整内容请参见知识库原文）*\n")
+
+                # 核心要点提取
+                key_points = self._extract_key_points_text(section_content, 3)
+                if key_points:
+                    content_lines.append("\n**📌 核心要点**：\n")
+                    for point in key_points:
+                        content_lines.append(f"- {point}")
+                    content_lines.append("")
+        else:
+            content_lines.append("\n## ⚠️ 知识库暂无相关内容\n")
+            content_lines.append(f"当前知识库中未检索到与 **{topic}** 相关的学习资料。\n")
+            content_lines.append("\n**下一步操作**：\n")
+            content_lines.append("1. 前往「知识库管理」上传 {topic} 相关的文档、教材或资料\n")
+            content_lines.append("2. 上传并处理完成后，重新生成讲义即可获得完整内容\n")
+            content_lines.append("\n> 💡 提示：支持上传 PDF、Word、Markdown、TXT 等多种格式的文档。\n")
+
         # 知识盲区专项
         if blind_areas:
             content_lines.append("\n---\n")
-            content_lines.append("\n## 🎯 知识盲区专项突破\n")
-            for i, blind in enumerate(blind_areas[:3]):
-                content_lines.append(f"\n### {i+1}. {blind['name']}\n")
-                content_lines.append(f"当前水平：{blind.get('severity', '中')}，建议优先学习提升。\n")
-        
+            content_lines.append("\n## 🎯 知识盲区专项突破计划\n")
+            for i, blind in enumerate(blind_areas[:5]):
+                bname = blind.get("name", f"盲区{i+1}")
+                severity = blind.get("severity", "中")
+                desc = blind.get("description", "")
+                priority_icon = {"高": "🔴", "中": "🟡", "低": "🟢"}.get(severity, "🟡")
+                content_lines.append(f"\n### {priority_icon} {i+1}. {bname}\n")
+                content_lines.append(f"- **严重程度**：{severity}\n")
+                if desc:
+                    content_lines.append(f"- **描述**：{desc}\n")
+                content_lines.append(f"- **建议**：将本讲义中与「{bname}」相关的章节作为优先学习内容\n")
+
+        # 学习建议
+        content_lines.append("\n---\n")
+        content_lines.append("\n## 📖 学习建议\n")
+        style_name = profile.get("learning_style", "visual")
+        style_tips = {
+            "visual": "建议使用思维导图整理本讲义的知识结构，配合图表加深理解。",
+            "auditory": "建议朗读关键概念，或将讲义内容录制成音频反复收听。",
+            "reading": "建议逐章精读并做笔记，每学完一章尝试用自己的话总结。",
+            "kinesthetic": "建议边学边动手实践，将讲义中的示例代码或操作步骤亲自运行一遍。",
+        }
+        content_lines.append(f"你的学习风格：**{style_name}**\n")
+        content_lines.append(f"\n{style_tips.get(style_name, '建议按照自己的节奏循序渐进地学习。')}\n")
+
         # 收集来源切片ID
         source_slice_ids = [k.get("slice_id") for k in knowledge if k.get("slice_id")]
         source_doc_ids = list(set([k.get("doc_id") for k in knowledge if k.get("doc_id")]))
-        
+
         return {
             "content": "\n".join(content_lines),
             "content_json": {
-                "sections": sections,
                 "blind_areas": blind_areas,
+                "knowledge_items_used": len(knowledge),
+                "learning_style": style_name,
             },
             "source_slice_ids": source_slice_ids,
             "source_doc_ids": source_doc_ids,
@@ -378,35 +467,80 @@ class GenerationAgent(BaseAgent):
         ]
         return tips[hash(content) % len(tips)]
     
-    def _generate_question_set(
+    def _generate_questions_from_knowledge(
         self,
         knowledge: List[Dict],
         topic: str,
-        level: str,
-        count: int,
-    ) -> List[Dict]:
-        """生成题目集（模拟）"""
-        questions = []
-        difficulty_map = {"basic": [1, 2, 3], "advanced": [3, 4, 5]}
-        diff_levels = difficulty_map.get(level, [3])
-        
-        for i in range(count):
-            diff = diff_levels[i % len(diff_levels)]
+        base_difficulty: int,
+    ) -> Tuple[List[Dict], List[Dict]]:
+        """
+        基于知识库内容生成有意义的题目（确定性兜底）
+
+        相比原来的纯模板题目，此方法从知识库中提取关键信息来构造
+        有实际内容的题干和选项，大幅提升可用性。
+
+        Returns:
+            (basic_questions, advanced_questions)
+        """
+        basic_questions = []
+        advanced_questions = []
+
+        if not knowledge:
+            return basic_questions, advanced_questions
+
+        for i, k in enumerate(knowledge[:6]):
+            k_content = k.get("content", "").strip()
+            k_title = k.get("title", "") or k.get("doc_title", "") or f"知识片段{i+1}"
+            if not k_content:
+                continue
+
+            # 从知识库内容中提取句子作为题干基础
+            sentences = [s.strip() for s in k_content.replace("。", "。\n").replace("！", "！\n").replace("？", "？\n").split("\n") if len(s.strip()) > 10]
+            if len(sentences) < 2:
+                continue
+
+            # 用第一个有效句子构建题干
+            fact_sentence = sentences[0][:120]
+            # 判断难度分配
+            diff = min(base_difficulty + (i % 3), 5)
+
+            # 构建有意义的选项
+            correct_opt = sentences[0][:80] if len(sentences) > 0 else f"正确理解{topic}"
+            # 用其他句子片段构建干扰项
+            distractors = []
+            for s in sentences[1:]:
+                short = s[:60]
+                if short and short != correct_opt[:60]:
+                    distractors.append(short)
+                if len(distractors) >= 3:
+                    break
+            while len(distractors) < 3:
+                distractors.append(f"关于{topic}的常见误解选项{len(distractors)+1}")
+
+            options = [correct_opt] + distractors
+            # 打乱选项顺序（简单随机）
+            correct_idx = 0
+            shuffled = list(enumerate(options))
+            random.shuffle(shuffled)
+            new_correct_idx = next(j for j, (orig_idx, _) in enumerate(shuffled) if orig_idx == 0)
+            shuffled_options = [opt for _, opt in shuffled]
+
             q = {
-                "question": f"关于{topic}的第{i+1}道{level}题",
-                "options": [
-                    "选项A（正确答案）",
-                    "选项B（干扰项）",
-                    "选项C（干扰项）",
-                    "选项D（干扰项）",
-                ],
-                "correct_answer": 0,
+                "question": f"关于「{k_title}」，以下说法正确的是？",
+                "options": shuffled_options,
+                "correct_answer": new_correct_idx,
+                "correct_letter": chr(65 + new_correct_idx),
                 "difficulty": diff,
-                "explanation": f"本题考查{topic}的核心概念，正确答案为A。",
+                "explanation": f"根据知识库资料：{correct_opt[:100]}",
+                "knowledge_points": [k_title],
             }
-            questions.append(q)
-        
-        return questions
+
+            if diff <= 3:
+                basic_questions.append(q)
+            else:
+                advanced_questions.append(q)
+
+        return basic_questions, advanced_questions
     
     def _extract_key_points_text(self, content: str, count: int) -> List[str]:
         """从文本中提取要点（模拟）"""

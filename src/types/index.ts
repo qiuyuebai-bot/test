@@ -197,6 +197,7 @@ export interface LearningResource {
   reviewStatus: 'pending' | 'approved' | 'rejected' | 'revised'
   versionNumber: number
   generatedByAgent: string
+  generationMethod?: string
   createdByAgent?: string
   generationTime: string
   metaData?: Record<string, unknown>

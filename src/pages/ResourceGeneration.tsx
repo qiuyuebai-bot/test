@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import type { LearningResource } from '@/types'
-import { agentApi } from '@/api'
+import { agentApi, coreApi } from '@/api'
 import { useTaskSSE } from '@/hooks'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
@@ -102,6 +102,7 @@ export default function ResourceGeneration() {
   const [industryOptions, setIndustryOptions] = useState<{ value: string; label: string }[]>([])
   const [activeTab, setActiveTab] = useState<ResourceType>('guide')
   const [selectedResource, setSelectedResource] = useState<LearningResource | null>(null)
+  const [loadingDetail, setLoadingDetail] = useState(false)
   const [selectedLearnerId, setSelectedLearnerId] = useState<number | null>(null)
   const [targetTopic, setTargetTopic] = useState('')
   const [selectedIndustry, setSelectedIndustry] = useState('人工智能训练')
@@ -260,6 +261,22 @@ export default function ResourceGeneration() {
     }
   }, [selectedLearner, targetTopic, activeTab, selectedIndustry])
 
+  const handleSelectResource = useCallback(async (resource: LearningResource) => {
+    setSelectedResource(resource)
+    // 列表接口不含 content 字段，需要调详情接口获取完整内容
+    if (!resource.content) {
+      setLoadingDetail(true)
+      try {
+        const detail = await coreApi.getResourceDetail(resource.id)
+        setSelectedResource({ ...resource, ...detail })
+      } catch {
+        // keep the list-level data if detail fails
+      } finally {
+        setLoadingDetail(false)
+      }
+    }
+  }, [])
+
   const handleCancel = () => {
     cancelledRef.current = true
     setSseTaskId(null)
@@ -343,7 +360,7 @@ export default function ResourceGeneration() {
             </div>
             <h3 className="text-base font-semibold text-text-primary mb-1">{selectedResource.title}</h3>
             <p className="text-xs text-text-tertiary">
-              v{selectedResource.versionNumber} · {selectedResource.generatedByAgent} · {new Date(selectedResource.generationTime).toLocaleString('zh-CN')}
+              v{selectedResource.versionNumber} · {selectedResource.generationMethod === 'llm' ? '🤖 LLM生成' : '📋 规则生成'} · {new Date(selectedResource.generationTime).toLocaleString('zh-CN')}
             </p>
           </div>
           <div className="flex flex-col items-center">
@@ -694,7 +711,7 @@ export default function ResourceGeneration() {
                   return (
                     <button
                       key={resource.id}
-                      onClick={() => setSelectedResource(resource)}
+                      onClick={() => handleSelectResource(resource)}
                       className={`w-full p-3 rounded-lg border text-left transition-all ${
                         isSelected
                           ? 'border-primary/30 bg-primary/5'
@@ -788,6 +805,11 @@ export default function ResourceGeneration() {
                   {debateRoundText && (
                     <p className="mt-2 text-xs text-primary">{debateRoundText}</p>
                   )}
+                </div>
+              ) : loadingDetail ? (
+                <div className="flex flex-col items-center justify-center h-full min-h-[400px]">
+                  <div className="w-10 h-10 rounded-full border-3 border-primary/20 border-t-primary animate-spin" />
+                  <p className="mt-3 text-sm text-text-secondary">加载资源内容...</p>
                 </div>
               ) : (
                 renderResourceDetail()

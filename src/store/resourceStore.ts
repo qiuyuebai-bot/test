@@ -39,6 +39,7 @@ export const createResourceSlice: StateCreator<AppState, [], [], ResourceSlice> 
         reviewStatus: (item.reviewStatus || 'pending') as LearningResource['reviewStatus'],
         versionNumber: item.versionNumber ?? item.version ?? 1,
         generatedByAgent: item.generatedByAgent ?? item.createdByAgent ?? 'generation-agent',
+        generationMethod: item.generationMethod ?? 'deterministic_fallback',
         generationTime: item.generationTime ?? item.createdAt ?? new Date().toISOString(),
         metaData: item.metaData ?? {},
       }))
