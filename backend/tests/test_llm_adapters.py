@@ -126,6 +126,7 @@ def test_diagnosis_preserves_rule_scores_without_api_key(monkeypatch):
 
 def test_llm_question_generation_allows_ten_questions(monkeypatch):
     captured = {}
+    monkeypatch.setattr(LLMUtil, "is_available", classmethod(lambda cls: True))
 
     def fake_call(cls, template_name, variables=None, temperature=None, model=None, use_cache=True):
         captured["template_name"] = template_name

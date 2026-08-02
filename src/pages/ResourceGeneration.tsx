@@ -249,12 +249,16 @@ export default function ResourceGeneration() {
 
   const handleSelectResource = useCallback(async (resource: LearningResource) => {
     setSelectedResource(resource)
+    // 列表接口不含 content 字段，需要调详情接口获取完整内容
     if (!resource.content) {
+      setLoadingDetail(true)
       try {
         const detail = await coreApi.getResourceDetail(resource.id)
         setSelectedResource({ ...resource, ...detail })
       } catch {
-        // keep list data if detail load fails
+        // keep the list-level data if detail fails
+      } finally {
+        setLoadingDetail(false)
       }
     }
   }, [])
@@ -300,22 +304,6 @@ export default function ResourceGeneration() {
       setError(err instanceof Error ? err.message : '资源生成失败，请重试')
     }
   }, [selectedLearner, targetTopic, activeTab, selectedIndustry])
-
-  const handleSelectResource = useCallback(async (resource: LearningResource) => {
-    setSelectedResource(resource)
-    // 列表接口不含 content 字段，需要调详情接口获取完整内容
-    if (!resource.content) {
-      setLoadingDetail(true)
-      try {
-        const detail = await coreApi.getResourceDetail(resource.id)
-        setSelectedResource({ ...resource, ...detail })
-      } catch {
-        // keep the list-level data if detail fails
-      } finally {
-        setLoadingDetail(false)
-      }
-    }
-  }, [])
 
   const handleCancel = () => {
     cancelledRef.current = true
