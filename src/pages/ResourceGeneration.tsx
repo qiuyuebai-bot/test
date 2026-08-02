@@ -7,7 +7,6 @@ import { useTaskSSE } from '@/hooks'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
-import { SCORE_EXCELLENT_THRESHOLD, SCORE_GOOD_THRESHOLD } from '@/lib/constants'
 import {
   FileText,
   ListChecks,
@@ -155,15 +154,44 @@ export default function ResourceGeneration() {
     }
   }, [])
 
+  const selectResourceById = useCallback(async (resourceId: number) => {
+    const listItem = resources.find(r => r.id === resourceId)
+    try {
+      const detail = await coreApi.getResourceDetail(resourceId)
+      const normalized = {
+        ...(listItem || detail),
+        ...detail,
+        resourceType: detail.resourceType || listItem?.resourceType || activeTab,
+        targetLearnerId: detail.targetLearnerId ?? detail.learnerId ?? listItem?.targetLearnerId ?? 0,
+        contentSummary: detail.contentSummary ?? detail.summary ?? listItem?.contentSummary ?? '',
+        contentType: detail.contentType || listItem?.contentType || 'text',
+        qualityScore: detail.qualityScore ?? Math.round((detail.matchScore || listItem?.matchScore || 0) * 100),
+        hallucinationDetected: detail.hallucinationDetected ?? detail.hasHallucination ?? listItem?.hallucinationDetected ?? false,
+        reviewStatus: detail.reviewStatus || listItem?.reviewStatus || 'pending',
+        versionNumber: detail.versionNumber ?? detail.version ?? listItem?.versionNumber ?? 1,
+        generatedByAgent: detail.generatedByAgent ?? detail.createdByAgent ?? listItem?.generatedByAgent ?? 'generation-agent',
+        generationTime: detail.generationTime ?? detail.createdAt ?? listItem?.generationTime ?? new Date().toISOString(),
+        metaData: detail.metaData ?? listItem?.metaData ?? {},
+      } as LearningResource
+      setSelectedResource(normalized)
+      setActiveTab(normalized.resourceType as ResourceType)
+    } catch {
+      if (listItem) setSelectedResource(listItem)
+    }
+  }, [activeTab, resources])
+
   const sse = useTaskSSE(sseTaskId, {
     onEvent: handleSSEEvent,
-    onComplete: () => {
+    onComplete: (data) => {
       setStageDescription('任务完成')
       setDebateInfo(null)
       if (completeTimeoutRef.current) clearTimeout(completeTimeoutRef.current)
       completeTimeoutRef.current = setTimeout(() => {
         setIsGenerating(false)
-        fetchResources({ page: 1, pageSize: 20 })
+        void fetchResources({ page: 1, pageSize: 20 })
+        const completed = data as { result?: { resourceId?: number; resource_id?: number } }
+        const resourceId = completed?.result?.resourceId ?? completed?.result?.resource_id
+        if (resourceId) void selectResourceById(resourceId)
       }, 1500)
       setSseTaskId(null)
     },
@@ -196,15 +224,6 @@ export default function ResourceGeneration() {
   }, [learners, currentLearner, selectedLearnerId, setCurrentLearner])
 
   useEffect(() => {
-    if (resources.length > 0 && !selectedResource) {
-      const filtered = resources.filter(r => r.resourceType === activeTab)
-      if (filtered.length > 0) {
-        setSelectedResource(filtered[0])
-      }
-    }
-  }, [resources, activeTab, selectedResource])
-
-  useEffect(() => {
     setCurrentStepDesc(stageDescription)
   }, [stageDescription])
 
@@ -227,6 +246,27 @@ export default function ResourceGeneration() {
       setCurrentLearner(learner)
     }
   }
+
+  const handleSelectResource = useCallback(async (resource: LearningResource) => {
+    setSelectedResource(resource)
+    if (!resource.content) {
+      try {
+        const detail = await coreApi.getResourceDetail(resource.id)
+        setSelectedResource({ ...resource, ...detail })
+      } catch {
+        // keep list data if detail load fails
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (resources.length > 0 && !selectedResource) {
+      const filtered = resources.filter(r => r.resourceType === activeTab)
+      if (filtered.length > 0) {
+        void handleSelectResource(filtered[0])
+      }
+    }
+  }, [resources, activeTab, selectedResource, handleSelectResource])
 
   const handleGenerate = useCallback(async () => {
     if (!selectedLearner) {
@@ -286,12 +326,6 @@ export default function ResourceGeneration() {
   }
 
   const filteredResources = resources.filter(r => r.resourceType === activeTab)
-
-  const getQualityScoreColor = (score: number) => {
-    if (score >= SCORE_EXCELLENT_THRESHOLD) return 'text-success'
-    if (score >= SCORE_GOOD_THRESHOLD) return 'text-warning'
-    return 'text-danger'
-  }
 
   const getResourceText = () => {
     if (!selectedResource) return ''
@@ -362,12 +396,6 @@ export default function ResourceGeneration() {
             <p className="text-xs text-text-tertiary">
               v{selectedResource.versionNumber} · {selectedResource.generationMethod === 'llm' ? '🤖 LLM生成' : '📋 规则生成'} · {new Date(selectedResource.generationTime).toLocaleString('zh-CN')}
             </p>
-          </div>
-          <div className="flex flex-col items-center">
-            <span className={`text-2xl font-bold ${getQualityScoreColor(selectedResource.qualityScore)}`}>
-              {selectedResource.qualityScore}
-            </span>
-            <span className="text-xs text-text-tertiary">质量分</span>
           </div>
         </div>
 
@@ -722,9 +750,6 @@ export default function ResourceGeneration() {
                         <p className="text-sm font-medium text-text-primary line-clamp-1 flex-1">
                           {resource.title}
                         </p>
-                        <span className={`text-sm font-bold flex-shrink-0 ${getQualityScoreColor(resource.qualityScore)}`}>
-                          {resource.qualityScore}
-                        </span>
                       </div>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <Badge variant={statusInfo.variant} size="sm">{statusInfo.label}</Badge>

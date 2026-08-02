@@ -30,6 +30,7 @@ backend/build/
 .env
 .env.local
 .env.*.local
+backend/.env.development
 *.pem
 *.key
 *.p12

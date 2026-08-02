@@ -194,7 +194,7 @@ class GenerateTutoringQuestionsRequest(BaseModel):
     learner_id: int = Field(..., description="学习者ID", gt=0)
     topic: str = Field(..., description="目标知识点", min_length=1, max_length=200)
     difficulty: int = Field(..., description="题目难度", ge=1, le=5)
-    question_count: int = Field(3, description="题目数量", ge=1, le=6)
+    question_count: int = Field(10, description="question count", ge=1, le=10)
 
 
 class SubmitAnswerRequest(BaseModel):
@@ -303,4 +303,3 @@ class InteractionHistoryResponse(BaseModel):
     total: int
     page: int
     page_size: int
-
