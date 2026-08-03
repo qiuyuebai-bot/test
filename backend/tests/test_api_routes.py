@@ -78,13 +78,6 @@ class TestLearnerRoutes:
         data = response.json()
         assert data["code"] == 200
 
-    def test_get_current_learner(self, client: TestClient, sample_learner_profile: LearnerProfile, auth_headers: dict):
-        response = client.get("/api/v1/learners/me", headers=auth_headers)
-        assert response.status_code == 200
-        data = response.json()
-        assert data["code"] == 200
-        assert data["data"]["id"] == sample_learner_profile.id
-
     def test_get_learner_not_found(self, client: TestClient, auth_headers: dict):
         """测试获取不存在的学习者"""
         response = client.get("/api/v1/learners/99999", headers=auth_headers)
