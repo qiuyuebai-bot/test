@@ -39,6 +39,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: knowledge-backend
+    env_file:
+      - ./backend/.env.development
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     environment:
@@ -51,11 +53,6 @@ services:
       - APP_ENV=${APP_ENV:-development}
       - DEBUG_MODE=${DEBUG_MODE:-false}
       - SECRET_KEY=${SECRET_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - OPENAI_API_BASE=${OPENAI_API_BASE:-https://api.deepseek.com/v1}
-      - OPENAI_MODEL_NAME=${OPENAI_MODEL_NAME:-deepseek-chat}
-      - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.7}
-      - OPENAI_MAX_TOKENS=${OPENAI_MAX_TOKENS:-4096}
     volumes:
       - backend-data:/app/data
       - backend-logs:/app/logs
@@ -119,6 +116,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: knowledge-celery
+    env_file:
+      - ./backend/.env.development
     command: celery -A app.celery_app worker --loglevel=info --concurrency=2
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:password@postgres:5432/knowledge_system}
@@ -126,11 +125,6 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - SECRET_KEY=${SECRET_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - OPENAI_API_BASE=${OPENAI_API_BASE:-https://api.deepseek.com/v1}
-      - OPENAI_MODEL_NAME=${OPENAI_MODEL_NAME:-deepseek-chat}
-      - OPENAI_TEMPERATURE=${OPENAI_TEMPERATURE:-0.7}
-      - OPENAI_MAX_TOKENS=${OPENAI_MAX_TOKENS:-4096}
     volumes:
       - backend-data:/app/data
       - backend-logs:/app/logs

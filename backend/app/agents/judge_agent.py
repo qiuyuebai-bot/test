@@ -70,7 +70,7 @@ class JudgeAgent(BaseAgent):
         
         # 4. 综合评估
         issues = []
-        if hallucination_info.get("detected_keywords"):
+        if is_hallucination and hallucination_info.get("detected_keywords"):
             issues.append({
                 "type": "hallucination_keyword",
                 "severity": "high",
@@ -163,7 +163,8 @@ class JudgeAgent(BaseAgent):
         
         # 优先使用真实 LLM 辩论；失败时保留确定性辩论回应。
         llm_round = None
-        if LLMUtil.is_available():
+        has_reference = any(k.get("content") for k in reference_knowledge)
+        if LLMUtil.is_available() and has_reference:
             try:
                 llm_round = LLMDebater.run_debate_round(
                     generated_content, reference_knowledge, audit_result, current_round

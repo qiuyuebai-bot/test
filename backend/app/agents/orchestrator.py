@@ -243,6 +243,7 @@ class AgentOrchestrator:
         result = self.generation_agent.run(
             task_id=task_id,
             input_data={
+                "task_id": task_id,
                 "diagnosis_result": diagnosis_result,
                 "knowledge_results": knowledge_results,
                 "learner_profile": learner_dict,

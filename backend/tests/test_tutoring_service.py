@@ -43,7 +43,7 @@ def _make_fake_agent(blind_areas=None):
 class TestGetQuestions:
     """get_questions 返回内置题库"""
 
-    def test_returns_all_seed_questions(self):
+    def test_returns_ten_questions(self):
         questions = AdaptiveTutoringService.get_questions()
         assert len(questions) == 10
 

@@ -10,6 +10,7 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
+from sqlalchemy import and_, or_
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.attributes import flag_modified
 
@@ -348,6 +349,132 @@ class TaskRepository:
             "final_score": audit_result.get("overall_score", 0),
             "passed": audit_result.get("passed", False),
             "issued_question_count": issued_question_count,
+        }
+
+    def find_reusable_resource(
+        self,
+        learner_id: int,
+        target_topic: str,
+        resource_type: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Find the latest validated resource matching a learner and topic."""
+        topic = (target_topic or "").strip()
+        if not topic:
+            return None
+
+        with get_db_context() as db:
+            resource = (
+                db.query(LearningResource)
+                .filter(
+                    LearningResource.learner_id == learner_id,
+                    LearningResource.resource_type == resource_type,
+                    LearningResource.status == "ready",
+                    LearningResource.content.isnot(None),
+                    LearningResource.content != "",
+                    LearningResource.word_count >= 200,
+                    or_(
+                        LearningResource.knowledge_topic == topic,
+                        and_(
+                            LearningResource.knowledge_topic.is_(None),
+                            LearningResource.title.contains(topic),
+                        ),
+                    ),
+                )
+                .order_by(LearningResource.created_at.desc(), LearningResource.id.desc())
+                .first()
+            )
+            if not resource:
+                return None
+            return {
+                "id": resource.id,
+                "title": resource.title,
+                "resource_type": resource.resource_type,
+                "knowledge_topic": resource.knowledge_topic or topic,
+                "difficulty_level": resource.difficulty_level,
+                "content": resource.content,
+                "content_json": resource.content_json or {},
+                "word_count": resource.word_count or len(resource.content or ""),
+                "source_slice_ids": resource.source_slice_ids or [],
+                "source_doc_ids": resource.source_doc_ids or [],
+                "generation_method": resource.generation_method or "deterministic_fallback",
+                "validation_score": resource.validation_score or 0,
+                "hallucination_detected": bool(resource.hallucination_detected),
+            }
+
+    def save_reused_resource_and_complete(
+        self,
+        task_id: int,
+        learner_id: int,
+        reusable_resource: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Copy an existing resource and complete the current task."""
+        generation_result = {
+            "resource_type": reusable_resource.get("resource_type", "guide"),
+            "knowledge_topic": reusable_resource.get("knowledge_topic"),
+            "resource_title": reusable_resource.get("title", "Unnamed resource"),
+            "difficulty_level": reusable_resource.get("difficulty_level", 3),
+            "content": reusable_resource.get("content", ""),
+            "content_json": reusable_resource.get("content_json", {}),
+            "word_count": reusable_resource.get("word_count") or len(reusable_resource.get("content", "")),
+            "source_slice_ids": reusable_resource.get("source_slice_ids", []),
+            "source_doc_ids": reusable_resource.get("source_doc_ids", []),
+            "generation_method": "reused_existing",
+            "reused_from_resource_id": reusable_resource.get("id"),
+        }
+        audit_result = {
+            "passed": True,
+            "overall_score": reusable_resource.get("validation_score", 0),
+            "hallucination_detected": reusable_resource.get("hallucination_detected", False),
+        }
+
+        with get_db_context() as db:
+            resource = LearningResource(
+                learner_id=learner_id,
+                parent_resource_id=reusable_resource.get("id"),
+                title=generation_result["resource_title"],
+                resource_type=generation_result["resource_type"],
+                knowledge_topic=generation_result["knowledge_topic"],
+                difficulty_level=generation_result["difficulty_level"],
+                version="1.0",
+                content=generation_result["content"],
+                content_json=generation_result["content_json"],
+                word_count=generation_result["word_count"],
+                source_slice_ids=generation_result["source_slice_ids"],
+                source_doc_ids=generation_result["source_doc_ids"],
+                generated_by_agent="generation_agent",
+                generation_task_id=task_id,
+                generation_method=generation_result["generation_method"],
+                is_validated=True,
+                validation_passed=True,
+                validation_score=audit_result["overall_score"],
+                hallucination_detected=audit_result["hallucination_detected"],
+                status="ready",
+            )
+            db.add(resource)
+            db.flush()
+            resource_id = resource.id
+
+            task = db.query(AgentTask).filter(AgentTask.id == task_id).first()
+            if task:
+                task.status = "completed"
+                task.progress = 100
+                task.flow_stage = "complete"
+                task.output_data = json.dumps(
+                    {"resource_id": resource_id, "reused_from_resource_id": reusable_resource.get("id")},
+                    ensure_ascii=False,
+                )
+                task.completed_at = datetime.now()
+            db.commit()
+
+        return {
+            "task_id": task_id,
+            "resource_id": resource_id,
+            "generation_result": generation_result,
+            "audit_result": audit_result,
+            "debate_rounds": 0,
+            "final_score": audit_result["overall_score"],
+            "passed": True,
+            "reused_from_resource_id": reusable_resource.get("id"),
         }
 
     def save_metrics(

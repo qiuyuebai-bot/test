@@ -233,17 +233,78 @@ class HallucinationUtil:
         
         for category, keywords in HallucinationUtil.HALLUCINATION_KEYWORDS.items():
             for kw in keywords:
-                if kw in content:
+                weight = {
+                    "fake_markers": 15,
+                    "over_confident": 10,
+                    "ambiguous": 1,
+                    "contradiction": 1,
+                }.get(category, 5)
+
+                index = content.find(kw)
+                while index != -1:
+                    if category == "over_confident" and HallucinationUtil._is_harmless_overconfident_context(content, kw, index):
+                        index = content.find(kw, index + len(kw))
+                        continue
+
                     detected.append(kw)
-                    weight = {
-                        "fake_markers": 15,
-                        "over_confident": 10,
-                        "ambiguous": 5,
-                        "contradiction": 20,
-                    }.get(category, 5)
                     score += weight
+                    break
         
         return score, detected
+
+    @staticmethod
+    def _is_negated_keyword(content: str, keyword: str) -> bool:
+        negation_markers = ("不", "无", "没有", "并非", "并不", "未必", "非")
+        start = 0
+        while True:
+            index = content.find(keyword, start)
+            if index == -1:
+                return False
+            prefix = content[max(0, index - 6):index]
+            if any(marker in prefix for marker in negation_markers):
+                return True
+            start = index + len(keyword)
+
+    @staticmethod
+    def _is_harmless_overconfident_context(content: str, keyword: str, index: int) -> bool:
+        local_window = content[max(0, index - 4): min(len(content), index + len(keyword) + 6)]
+
+        line_start = content.rfind("\n", 0, index) + 1
+        line_end = content.find("\n", index)
+        if line_end == -1:
+            line_end = len(content)
+        current_line = content[line_start:line_end].strip()
+        if re.match(r"^-\s*[A-D][.．、]", current_line):
+            return True
+
+        if keyword == "绝对":
+            harmless_phrases = (
+                "绝对值",
+                "绝对误差",
+                "绝对位置",
+                "绝对位置编码",
+                "绝对坐标",
+                "绝对路径",
+            )
+            if any(phrase in local_window for phrase in harmless_phrases):
+                return True
+
+        if keyword == "一定":
+            harmless_phrases = (
+                "不一定",
+                "并不一定",
+                "并非一定",
+                "未必一定",
+                "一定程度",
+                "一定要",
+                "一定的",
+                "有一定",
+                "一定帮助",
+            )
+            if any(phrase in local_window for phrase in harmless_phrases):
+                return True
+
+        return HallucinationUtil._is_negated_keyword(local_window, keyword)
 
     @staticmethod
     def _check_contradiction(
