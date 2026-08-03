@@ -15,6 +15,7 @@ from app.schemas.response import (
     bad_request,
     not_found,
     paged_success,
+    forbidden,
     unauthorized,
     BaseResponse,
 )
@@ -264,10 +265,15 @@ def get_resource_list(
     - 返回资源匹配度等关键指标
     """
     if not current_user.is_admin:
-        if learner_id is None or not LearnerService.check_data_permission(
+        if learner_id is None:
+            learner = LearnerService.get_learner_by_user_id(db, current_user.user_id)
+            if learner is None:
+                return forbidden("暂未找到当前学习者资料")
+            learner_id = learner.id
+        elif not LearnerService.check_data_permission(
             db, current_user.user_id, learner_id
         ):
-            return unauthorized("无权限查看该学习者资源")
+            return forbidden("无权限查看该学习者资源")
     try:
         result = ResourceGenerationService.get_resource_list(
             learner_id=learner_id,
