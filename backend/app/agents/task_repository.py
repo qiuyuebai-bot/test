@@ -15,7 +15,6 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.database import get_db_context
 from app.models import AgentTask, DebateRecord, LearningResource, LearnerProfile
-from app.services.tutoring_service import AdaptiveTutoringService
 
 
 class TaskRepository:
@@ -315,6 +314,8 @@ class TaskRepository:
 
             issued_question_count = 0
             if resource.validation_passed and resource.resource_type == "exercise":
+                from app.services.tutoring_service import AdaptiveTutoringService
+
                 learner = db.query(LearnerProfile).filter(LearnerProfile.id == learner_id).first()
                 if not learner:
                     raise ValueError("学习者不存在，无法发布导学题目")

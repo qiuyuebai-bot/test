@@ -16,7 +16,6 @@ from app.agents.diagnosis_agent import DiagnosisAgent
 from app.agents.generation_agent import GenerationAgent
 from app.domains.knowledge.service import KnowledgeService
 from app.services.common import BaseService, ResourceServiceHelper, MetricsServiceHelper
-from app.services.tutoring_service import AdaptiveTutoringService
 
 
 class ResourceGenerationService(BaseService):
@@ -247,6 +246,8 @@ class ResourceGenerationService(BaseService):
             db.add(resource)
             db.flush()
             if resource_type == "exercise":
+                from app.services.tutoring_service import AdaptiveTutoringService
+
                 learner = db.query(LearnerProfile).filter(LearnerProfile.id == learner_id).first()
                 if not learner:
                     raise ValueError("学习者不存在，无法发布导学题目")

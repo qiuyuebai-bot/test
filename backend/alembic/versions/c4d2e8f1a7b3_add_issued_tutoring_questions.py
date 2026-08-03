@@ -16,6 +16,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    # Development startup may have created this table through SQLAlchemy's
+    # create_all before Alembic recorded the revision. Keep that existing
+    # schema and let later migrations add their columns and constraints.
+    if inspector.has_table("issued_tutoring_questions"):
+        return
+
     op.create_table(
         "issued_tutoring_questions",
         sa.Column("id", sa.Integer(), primary_key=True, autoincrement=True),
