@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.models import User, LearnerProfile, KnowledgeDoc
+from app.models import IssuedTutoringQuestion, User, LearnerProfile, KnowledgeDoc
 
 
 class TestBaseRoutes:
@@ -18,6 +18,7 @@ class TestBaseRoutes:
         assert response.status_code == 200
         data = response.json()
         assert data["code"] == 200
+
         assert data["data"]["status"] == "running"
 
     def test_health_check(self, client: TestClient):
@@ -220,7 +221,12 @@ class TestCoreRoutes:
         data = response.json()
         assert data["code"] == 200
 
-    def test_get_resources(self, client: TestClient, auth_headers: dict):
+    def test_get_resources(
+        self,
+        client: TestClient,
+        auth_headers: dict,
+        sample_learner_profile: LearnerProfile,
+    ):
         """测试获取资源列表"""
         response = client.get("/api/v1/resources?page=1&page_size=10", headers=auth_headers)
         assert response.status_code == 200
@@ -249,11 +255,30 @@ class TestCoreRoutes:
         response = client.get("/api/v1/report/metrics")
         assert response.status_code == 200
 
-    def test_submit_answer(self, client: TestClient, sample_user: User, sample_learner_profile: LearnerProfile, auth_headers: dict):
+    def test_submit_answer(self, client: TestClient, db_session: Session, sample_user: User, sample_learner_profile: LearnerProfile, auth_headers: dict):
         """测试提交答题"""
+        question = IssuedTutoringQuestion(
+            user_id=sample_user.id,
+            learner_id=sample_learner_profile.id,
+            question_type="single",
+            topic="CNN基础",
+            difficulty=3,
+            content="CNN的全称是什么？",
+            options=["A", "B"],
+            answer_key=["A"],
+            explanation="CNN是卷积神经网络。",
+            knowledge_points=["CNN"],
+            generation_method="test",
+            status="issued",
+        )
+        db_session.add(question)
+        db_session.commit()
+        db_session.refresh(question)
+
         response = client.post("/api/v1/tutoring/answer", json={
             "user_id": sample_user.id,
             "learner_id": sample_learner_profile.id,
+            "question_id": str(question.id),
             "question_type": "single",
             "question_topic": "CNN基础",
             "question_difficulty": 3,

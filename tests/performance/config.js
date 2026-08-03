@@ -74,7 +74,7 @@ export const ENDPOINTS = {
   },
   tutorQuestions: {
     method: 'GET',
-    path: '/api/v1/tutoring/questions?page=1&page_size=10',
+    path: '/api/v1/tutoring/questions?learner_id=1&page=1&page_size=10',
     weight: 10,
     authRequired: true,
   },
