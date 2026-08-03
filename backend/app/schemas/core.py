@@ -198,20 +198,12 @@ class GenerateTutoringQuestionsRequest(BaseModel):
 
 
 class SubmitAnswerRequest(BaseModel):
-    """提交答题请求。动态题由服务端根据 question_id 判分。"""
+    """提交学习者对服务端下发题目的答案。"""
     learner_id: int = Field(..., description="学习者ID", gt=0)
-    question_id: Optional[str] = Field(None, description="题目ID")
+    question_id: str = Field(..., description="服务端下发题目ID", min_length=1)
     user_answer: Any = Field(..., description="用户答案")
     time_spent_ms: int = Field(..., description="答题耗时(毫秒)", ge=0)
     hints_used: int = Field(0, description="使用提示次数")
-
-    # Legacy seed-bank fields remain optional while clients migrate. They are ignored for server-issued questions.
-    question_type: Optional[str] = Field(None, description="题目类型")
-    question_topic: Optional[str] = Field(None, description="题目主题")
-    question_difficulty: Optional[int] = Field(None, description="题目难度", ge=1, le=5)
-    question_content: Optional[str] = Field(None, description="题目内容")
-    correct_answer: Optional[Any] = Field(None, description="旧题库答案")
-    score: Optional[float] = Field(None, description="旧题库得分", ge=0, le=100)
 
 
 class SimplifiedExplanation(BaseModel):

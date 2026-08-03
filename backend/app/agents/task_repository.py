@@ -10,10 +10,12 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.database import get_db_context
-from app.models import AgentTask, DebateRecord, LearningResource
+from app.models import AgentTask, DebateRecord, LearningResource, LearnerProfile
+from app.services.tutoring_service import AdaptiveTutoringService
 
 
 class TaskRepository:
@@ -266,31 +268,63 @@ class TaskRepository:
     ) -> Dict[str, Any]:
         """保存学习资源并标记任务完成"""
         with get_db_context() as db:
-            resource = LearningResource(
-                learner_id=learner_id,
-                title=generation_result.get("resource_title", "未命名资源"),
-                resource_type=generation_result.get("resource_type", "guide"),
-                difficulty_level=generation_result.get("difficulty_level", 3),
-                version="1.0",
-                content=generation_result.get("content", ""),
-                content_json=generation_result.get("content_json", {}),
-                word_count=generation_result.get("word_count", 0),
-                source_slice_ids=generation_result.get("source_slice_ids", []),
-                source_doc_ids=generation_result.get("source_doc_ids", []),
-                generated_by_agent="generation_agent",
-                generation_task_id=task_id,
-                generation_method=generation_result.get("generation_method", "deterministic_fallback"),
-                is_validated=audit_result.get("passed", False),
-                validation_passed=audit_result.get("passed", False),
-                validation_score=audit_result.get("overall_score", 0),
-                hallucination_detected=audit_result.get("hallucination_detected", False),
-                status="ready" if audit_result.get("passed", False) else "failed",
-            )
-            db.add(resource)
-            db.flush()
+            task = db.query(AgentTask).filter(AgentTask.id == task_id).first()
+            task_input = task.input_data if task else {}
+            if isinstance(task_input, str):
+                try:
+                    task_input = json.loads(task_input)
+                except json.JSONDecodeError:
+                    task_input = {}
+            topic = task_input.get("target_topic", "") if isinstance(task_input, dict) else ""
+            resource = db.query(LearningResource).filter(
+                LearningResource.generation_task_id == task_id
+            ).first()
+            if not resource:
+                try:
+                    with db.begin_nested():
+                        resource = LearningResource(
+                            learner_id=learner_id,
+                            title=generation_result.get("resource_title", "未命名资源"),
+                            resource_type=generation_result.get("resource_type", "guide"),
+                            knowledge_topic=topic or None,
+                            difficulty_level=generation_result.get("difficulty_level", 3),
+                            version="1.0",
+                            content=generation_result.get("content", ""),
+                            content_json=generation_result.get("content_json", {}),
+                            word_count=generation_result.get("word_count", 0),
+                            source_slice_ids=generation_result.get("source_slice_ids", []),
+                            source_doc_ids=generation_result.get("source_doc_ids", []),
+                            generated_by_agent="generation_agent",
+                            generation_task_id=task_id,
+                            generation_method=generation_result.get("generation_method", "deterministic_fallback"),
+                            is_validated=audit_result.get("passed", False),
+                            validation_passed=audit_result.get("passed", False),
+                            validation_score=audit_result.get("overall_score", 0),
+                            hallucination_detected=audit_result.get("hallucination_detected", False),
+                            status="ready" if audit_result.get("passed", False) else "failed",
+                        )
+                        db.add(resource)
+                        db.flush()
+                except IntegrityError:
+                    resource = db.query(LearningResource).filter(
+                        LearningResource.generation_task_id == task_id
+                    ).first()
+                    if not resource:
+                        raise
             resource_id = resource.id
 
-            task = db.query(AgentTask).filter(AgentTask.id == task_id).first()
+            issued_question_count = 0
+            if resource.validation_passed and resource.resource_type == "exercise":
+                learner = db.query(LearnerProfile).filter(LearnerProfile.id == learner_id).first()
+                if not learner:
+                    raise ValueError("学习者不存在，无法发布导学题目")
+                issued_question_count = AdaptiveTutoringService.publish_resource_questions(
+                    db=db,
+                    resource=resource,
+                    learner=learner,
+                    topic=topic,
+                )
+
             if task:
                 task.status = "completed"
                 task.progress = 100
@@ -312,6 +346,7 @@ class TaskRepository:
             "debate_rounds": debate_rounds,
             "final_score": audit_result.get("overall_score", 0),
             "passed": audit_result.get("passed", False),
+            "issued_question_count": issued_question_count,
         }
 
     def save_metrics(

@@ -2,7 +2,9 @@
 公共工具服务层
 统一模型转换、数据库查询、日志记录等公共方法，消除各服务层重复代码
 """
+import copy
 import json
+import re
 import time
 import random
 import threading
@@ -121,6 +123,8 @@ class BaseService:
         """
         if not value:
             return default
+        if isinstance(value, (dict, list)):
+            return copy.deepcopy(value)
         try:
             return json.loads(value)
         except (json.JSONDecodeError, TypeError):
@@ -453,7 +457,9 @@ class ResourceServiceHelper(BaseService):
         }
     
     @classmethod
-    def format_resource_detail(cls, resource: LearningResource) -> Dict[str, Any]:
+    def format_resource_detail(
+        cls, resource: LearningResource, include_answers: bool = True
+    ) -> Dict[str, Any]:
         """
         格式化资源详情数据
         
@@ -463,15 +469,49 @@ class ResourceServiceHelper(BaseService):
         Returns:
             格式化后的资源详情字典
         """
+        content_json = cls.parse_json_field(resource.content_json, {})
+        content = resource.content
+        if resource.resource_type == "exercise" and not include_answers:
+            content_json = cls._redact_exercise_answers(content_json)
+            content = cls._redact_exercise_answer_lines(content)
+
         result = cls.format_resource(resource)
         result.update({
             "learner_id": resource.learner_id,
-            "content": resource.content,
-            "content_json": cls.parse_json_field(resource.content_json, {}),
+            "content": content,
+            "content_json": content_json,
             "source_slice_ids": cls.parse_json_field(resource.source_slice_ids, []),
             "source_doc_ids": cls.parse_json_field(resource.source_doc_ids, []),
         })
         return result
+
+    @staticmethod
+    def _redact_exercise_answers(content_json: Any) -> Any:
+        """Remove answer-bearing fields before an exercise reaches a learner."""
+        sensitive_keys = {
+            "answer", "answers", "correct_answer", "correctanswer", "correctindex",
+            "correct_letter", "explanation", "answer_explanation",
+        }
+
+        def redact(value: Any) -> Any:
+            if isinstance(value, dict):
+                return {
+                    key: redact(item)
+                    for key, item in value.items()
+                    if key.lower() not in sensitive_keys
+                }
+            if isinstance(value, list):
+                return [redact(item) for item in value]
+            return copy.deepcopy(value)
+
+        return redact(content_json)
+
+    @staticmethod
+    def _redact_exercise_answer_lines(content: str) -> str:
+        return "\n".join(
+            line for line in (content or "").splitlines()
+            if not re.search(r"(?:答案|正确答案|解析|answer|explanation)", line, re.IGNORECASE)
+        )
     
     @classmethod
     def calculate_match_score(

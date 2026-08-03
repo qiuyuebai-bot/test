@@ -18,6 +18,7 @@ from app.schemas.response import (
 from app.schemas.core import GenerateTutoringQuestionsRequest, SubmitAnswerRequest
 from app.services.tutoring_service import AdaptiveTutoringService
 from app.domains.learner.service import LearnerService
+from app.models import LearnerProfile
 from app.utils.logger import LoggerUtil
 from app.utils.auth import get_current_user, CurrentUser
 
@@ -26,12 +27,16 @@ router = APIRouter(prefix="", tags=["自适应导学"])
 
 @router.get("/tutoring/questions", summary="获取导学题库")
 def get_tutoring_questions(
+    learner_id: int = Query(..., gt=0, description="学习者ID"),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> BaseResponse:
-    """获取自适应导学题库"""
+    """获取当前学习者尚未作答的导学题目。"""
+    if not current_user.is_admin:
+        if not LearnerService.check_data_permission(db, current_user.user_id, learner_id):
+            return unauthorized("无权限查看该学习者导学题目")
     try:
-        questions = AdaptiveTutoringService.get_questions()
+        questions = AdaptiveTutoringService.get_issued_questions(learner_id)
         return success(data=questions)
     except Exception as e:
         LoggerUtil.log_error("获取题库失败", e)
@@ -76,18 +81,15 @@ def submit_answer(
 
     完整留存交互记录，支持历史回溯
     """
+    learner = db.query(LearnerProfile).filter(LearnerProfile.id == request.learner_id).first()
+    if not learner or learner.user_id != current_user.user_id:
+        return unauthorized("导学题目必须由对应学习者本人作答")
     try:
         result = AdaptiveTutoringService.process_answer(
             user_id=current_user.user_id,
             learner_id=request.learner_id,
             question_id=request.question_id,
-            question_type=request.question_type,
-            question_topic=request.question_topic,
-            question_difficulty=request.question_difficulty,
-            question_content=request.question_content,
             user_answer=request.user_answer,
-            correct_answer=request.correct_answer,
-            score=request.score,
             time_spent_ms=request.time_spent_ms,
             hints_used=request.hints_used,
         )

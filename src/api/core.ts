@@ -13,22 +13,13 @@ export interface TutoringQuestion {
   topic: string
   question: string
   options: string[]
-  correctAnswer: string
-  correctIndex?: number
-  correctIndexes?: number[]
   difficulty: number
 }
 
 export interface SubmitAnswerRequest {
   learnerId: number
   questionId: string
-  questionType: string
-  questionTopic: string
-  questionDifficulty: number
-  questionContent: string
   userAnswer: string
-  correctAnswer: string
-  score: number
   timeSpentMs: number
   hintsUsed: number
 }
@@ -102,7 +93,7 @@ export const coreApi = {
     return http.get('/tutoring/decision-logic')
   },
 
-  getTutoringQuestions(): Promise<TutoringQuestion[]> {
-    return http.get<TutoringQuestion[]>('/tutoring/questions')
+  getTutoringQuestions(learnerId: number): Promise<TutoringQuestion[]> {
+    return http.get<TutoringQuestion[]>('/tutoring/questions', { learnerId })
   },
 }
