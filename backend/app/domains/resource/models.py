@@ -2,7 +2,7 @@
 学习资源领域 ORM 模型
 合并 learning_resource + resource_section + resource_exercise + resource_media + resource_template + resource_version
 """
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Float, JSON
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, ForeignKey, Text, Float, JSON, UniqueConstraint
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -111,6 +111,9 @@ class LearningResource(Base):
     """个性化学习资源表 - 核心资源存储"""
 
     __tablename__ = "learning_resources"
+    __table_args__ = (
+        UniqueConstraint("generation_task_id", name="uq_learning_resource_generation_task"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True, comment="资源ID")
     learner_id = Column(Integer, ForeignKey("learner_profiles.id"), nullable=False, index=True, comment="关联学习者ID")

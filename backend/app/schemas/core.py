@@ -189,21 +189,29 @@ class SystemMetricsResponse(BaseModel):
 
 # ========== 交互式自适应导学 ==========
 
-class SubmitAnswerRequest(BaseModel):
-    """提交答题请求"""
+class GenerateTutoringQuestionsRequest(BaseModel):
+    """Request an ungraded, dynamically generated practice set."""
     learner_id: int = Field(..., description="学习者ID", gt=0)
-    user_id: Optional[int] = Field(None, description="用户ID")
+    topic: str = Field(..., description="目标知识点", min_length=1, max_length=200)
+    difficulty: int = Field(..., description="题目难度", ge=1, le=5)
+    question_count: int = Field(10, description="question count", ge=1, le=10)
+
+
+class SubmitAnswerRequest(BaseModel):
+    """提交答题请求。动态题由服务端根据 question_id 判分。"""
+    learner_id: int = Field(..., description="学习者ID", gt=0)
     question_id: Optional[str] = Field(None, description="题目ID")
-    question_type: str = Field(..., description="题目类型")
-    question_topic: str = Field(..., description="题目主题")
-    question_difficulty: int = Field(..., description="题目难度", ge=1, le=5)
-    question_content: str = Field(..., description="题目内容")
     user_answer: Any = Field(..., description="用户答案")
-    correct_answer: Any = Field(..., description="正确答案")
-    result: Optional[str] = Field(None, description="答题结果")
-    score: float = Field(..., description="得分", ge=0, le=100)
     time_spent_ms: int = Field(..., description="答题耗时(毫秒)", ge=0)
     hints_used: int = Field(0, description="使用提示次数")
+
+    # Legacy seed-bank fields remain optional while clients migrate. They are ignored for server-issued questions.
+    question_type: Optional[str] = Field(None, description="题目类型")
+    question_topic: Optional[str] = Field(None, description="题目主题")
+    question_difficulty: Optional[int] = Field(None, description="题目难度", ge=1, le=5)
+    question_content: Optional[str] = Field(None, description="题目内容")
+    correct_answer: Optional[Any] = Field(None, description="旧题库答案")
+    score: Optional[float] = Field(None, description="旧题库得分", ge=0, le=100)
 
 
 class SimplifiedExplanation(BaseModel):

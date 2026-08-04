@@ -139,6 +139,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Trivy Scan
         uses: aquasecurity/trivy-action@master
         with:
@@ -169,6 +176,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Trivy Scan
         uses: aquasecurity/trivy-action@master
@@ -230,7 +244,9 @@ jobs:
     name: Update Helm Values Image Tag
     needs: [build-frontend, build-backend, scan-frontend, scan-backend]
     runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && vars.KUBERNETES_DEPLOY_ENABLED == 'true'
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
@@ -299,7 +315,7 @@ jobs:
     name: Deploy to Kubernetes
     needs: [build-frontend, build-backend, scan-frontend, scan-backend]
     uses: ./.github/workflows/deploy.yml
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' && vars.KUBERNETES_DEPLOY_ENABLED == 'true'
     with:
       image-tag: ${{ needs.build-backend.outputs.image-tag }}
       environment: ${{ github.ref == 'refs/heads/main' && 'production' || github.ref == 'refs/heads/develop' && 'staging' || 'development' }}

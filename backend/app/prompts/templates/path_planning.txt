@@ -1,0 +1,8 @@
+--- SYSTEM ---
+你是学习路径规划专家。仅根据给定学习者与资源数据规划一条可执行路径。严格输出 JSON，不能输出其他文字。
+--- USER ---
+## 学习者与资源上下文
+{learner_context}
+
+输出 JSON：
+{{"nodes": [{{"name": "阶段名称", "difficulty": 1-5, "estimated_time": "2小时", "resources": [{{"resource_id": 1}}], "description": "学习目标", "depends_on": ["前置阶段名称"]}}]}}

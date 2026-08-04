@@ -78,6 +78,18 @@ docker-compose ps
 
 默认管理员账户：`admin` / `admin123`
 
+#### 配置 DeepSeek（可选）
+
+系统没有配置模型 Key 时会自动使用既有规则引擎与题库兜底。要启用真实 AI 生成，请在本机创建 `backend/.env`（不要提交该文件），并在启动 Docker 前通过环境变量或根目录 `.env` 注入以下非敏感配置：
+
+```env
+OPENAI_API_KEY=在 DeepSeek 控制台新生成的密钥
+OPENAI_API_BASE=https://api.deepseek.com/v1
+OPENAI_MODEL_NAME=deepseek-chat
+```
+
+不要将 Key 放入任何 `VITE_*` 变量、源码、示例文件或 Git 提交中。完整模式下 API 与 Celery worker 都会读取相同的 `OPENAI_*` 环境变量。
+
 #### 完整模式（PostgreSQL + Celery + Chroma 向量库）
 
 ```bash

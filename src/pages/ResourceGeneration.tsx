@@ -2,13 +2,11 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import { useStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import type { LearningResource } from '@/types'
-import { agentApi, configApi } from '@/api'
-import type { IndustryOption } from '@/api/config'
+import { agentApi, coreApi } from '@/api'
 import { useTaskSSE } from '@/hooks'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
-import { SCORE_EXCELLENT_THRESHOLD, SCORE_GOOD_THRESHOLD } from '@/lib/constants'
 import {
   FileText,
   ListChecks,
@@ -28,8 +26,6 @@ import {
   Copy,
   Printer,
   Route,
-  GraduationCap,
-  BookMarked,
   Search,
   X,
   Building2,
@@ -38,14 +34,12 @@ import EmptyState from '@/components/EmptyState'
 import { CardSkeleton } from '@/components/Skeleton'
 import { toast } from '@/components/toastStore'
 
-type ResourceType = 'guide' | 'lecture' | 'case' | 'quiz' | 'roadmap'
+type ResourceType = 'guide' | 'exercise' | 'lecture'
 
 const resourceTypeConfig: Record<ResourceType, { label: string; icon: typeof FileText; color: string }> = {
-  guide: { label: '学习路径指南', icon: Route, color: 'text-primary' },
-  lecture: { label: '图文讲义', icon: BookOpen, color: 'text-warning' },
-  case: { label: '案例场景', icon: BookMarked, color: 'text-purple-500' },
-  quiz: { label: '测试题', icon: ListChecks, color: 'text-success' },
-  roadmap: { label: '学习路线图', icon: GraduationCap, color: 'text-info' },
+  guide: { label: '实操指南', icon: Route, color: 'text-primary' },
+  exercise: { label: '分阶测试题', icon: ListChecks, color: 'text-success' },
+  lecture: { label: '专属讲义', icon: BookOpen, color: 'text-warning' },
 }
 
 const reviewStatusMap: Record<string, { label: string; variant: 'success' | 'warning' | 'error' | 'default' }> = {
@@ -104,11 +98,13 @@ export default function ResourceGeneration() {
   const [sseTaskId, setSseTaskId] = useState<number | null>(null)
   const [stageDescription, setStageDescription] = useState('')
   const [debateInfo, setDebateInfo] = useState<{ round: number; total: number } | null>(null)
-  const [industryOptions, setIndustryOptions] = useState<IndustryOption[]>([])
+  const [industryOptions, setIndustryOptions] = useState<{ value: string; label: string }[]>([])
   const [activeTab, setActiveTab] = useState<ResourceType>('guide')
   const [selectedResource, setSelectedResource] = useState<LearningResource | null>(null)
-  const [resourceTitle, setResourceTitle] = useState('')
-  const [selectedIndustry, setSelectedIndustry] = useState('technology')
+  const [loadingDetail, setLoadingDetail] = useState(false)
+  const [selectedLearnerId, setSelectedLearnerId] = useState<number | null>(null)
+  const [targetTopic, setTargetTopic] = useState('')
+  const [selectedIndustry, setSelectedIndustry] = useState('人工智能训练')
   const [isGenerating, setIsGenerating] = useState(false)
   const [currentStepDesc, setCurrentStepDesc] = useState('')
   const [error, setError] = useState<string | null>(null)
@@ -117,8 +113,10 @@ export default function ResourceGeneration() {
 
   const debateRoundText = debateInfo ? `第${debateInfo.round}/${debateInfo.total}轮辩论中...` : ''
 
+  const industryLabels = ['智能制造', '工业互联网', '软件开发', '人工智能训练', '数据分析', '通用']
+
   useEffect(() => {
-    configApi.getOptions().then(opts => setIndustryOptions(opts.industries)).catch(() => {})
+    setIndustryOptions(industryLabels.map(name => ({ value: name, label: name })))
   }, [])
 
   useEffect(() => {
@@ -156,16 +154,44 @@ export default function ResourceGeneration() {
     }
   }, [])
 
+  const selectResourceById = useCallback(async (resourceId: number) => {
+    const listItem = resources.find(r => r.id === resourceId)
+    try {
+      const detail = await coreApi.getResourceDetail(resourceId)
+      const normalized = {
+        ...(listItem || detail),
+        ...detail,
+        resourceType: detail.resourceType || listItem?.resourceType || activeTab,
+        targetLearnerId: detail.targetLearnerId ?? detail.learnerId ?? listItem?.targetLearnerId ?? 0,
+        contentSummary: detail.contentSummary ?? detail.summary ?? listItem?.contentSummary ?? '',
+        contentType: detail.contentType || listItem?.contentType || 'text',
+        qualityScore: detail.qualityScore ?? Math.round((detail.matchScore || listItem?.matchScore || 0) * 100),
+        hallucinationDetected: detail.hallucinationDetected ?? detail.hasHallucination ?? listItem?.hallucinationDetected ?? false,
+        reviewStatus: detail.reviewStatus || listItem?.reviewStatus || 'pending',
+        versionNumber: detail.versionNumber ?? detail.version ?? listItem?.versionNumber ?? 1,
+        generatedByAgent: detail.generatedByAgent ?? detail.createdByAgent ?? listItem?.generatedByAgent ?? 'generation-agent',
+        generationTime: detail.generationTime ?? detail.createdAt ?? listItem?.generationTime ?? new Date().toISOString(),
+        metaData: detail.metaData ?? listItem?.metaData ?? {},
+      } as LearningResource
+      setSelectedResource(normalized)
+      setActiveTab(normalized.resourceType as ResourceType)
+    } catch {
+      if (listItem) setSelectedResource(listItem)
+    }
+  }, [activeTab, resources])
+
   const sse = useTaskSSE(sseTaskId, {
     onEvent: handleSSEEvent,
-    onComplete: () => {
+    onComplete: (data) => {
       setStageDescription('任务完成')
       setDebateInfo(null)
-      setResourceTitle('')
       if (completeTimeoutRef.current) clearTimeout(completeTimeoutRef.current)
       completeTimeoutRef.current = setTimeout(() => {
         setIsGenerating(false)
-        fetchResources({ page: 1, pageSize: 20 })
+        void fetchResources({ page: 1, pageSize: 20 })
+        const completed = data as { result?: { resourceId?: number; resource_id?: number } }
+        const resourceId = completed?.result?.resourceId ?? completed?.result?.resource_id
+        if (resourceId) void selectResourceById(resourceId)
       }, 1500)
       setSseTaskId(null)
     },
@@ -180,19 +206,22 @@ export default function ResourceGeneration() {
   }, [fetchLearners, fetchResources])
 
   useEffect(() => {
-    if (!currentLearner && learners.length > 0) {
-      setCurrentLearner(learners[0])
-    }
-  }, [learners, currentLearner, setCurrentLearner])
+    if (learners.length === 0) return
 
-  useEffect(() => {
-    if (resources.length > 0 && !selectedResource) {
-      const filtered = resources.filter(r => r.resourceType === activeTab)
-      if (filtered.length > 0) {
-        setSelectedResource(filtered[0])
-      }
+    const currentId = currentLearner?.id
+    const hasSelectedLearner = selectedLearnerId ? learners.some(l => l.id === selectedLearnerId) : false
+    const nextLearner = hasSelectedLearner
+      ? learners.find(l => l.id === selectedLearnerId)
+      : learners.find(l => l.id === currentId) || learners[0]
+
+    if (!nextLearner) return
+    if (selectedLearnerId !== nextLearner.id) {
+      setSelectedLearnerId(nextLearner.id)
     }
-  }, [resources, activeTab, selectedResource])
+    if (currentLearner?.id !== nextLearner.id) {
+      setCurrentLearner(nextLearner)
+    }
+  }, [learners, currentLearner, selectedLearnerId, setCurrentLearner])
 
   useEffect(() => {
     setCurrentStepDesc(stageDescription)
@@ -205,7 +234,7 @@ export default function ResourceGeneration() {
     }
   }, [sse.error])
 
-  const selectedLearner = currentLearner || learners[0]
+  const selectedLearner = learners.find(l => l.id === selectedLearnerId) || currentLearner || learners[0]
 
   const currentStepIndex = (sse.currentStage ? stageToStepIndex[sse.currentStage] : undefined) ?? (isGenerating ? 0 : -1)
   const generationProgress = sse.progress
@@ -213,17 +242,43 @@ export default function ResourceGeneration() {
   const handleSelectLearner = (learnerId: number) => {
     const learner = learners.find(l => l.id === learnerId)
     if (learner) {
+      setSelectedLearnerId(learner.id)
       setCurrentLearner(learner)
     }
   }
+
+  const handleSelectResource = useCallback(async (resource: LearningResource) => {
+    setSelectedResource(resource)
+    // 列表接口不含 content 字段，需要调详情接口获取完整内容
+    if (!resource.content) {
+      setLoadingDetail(true)
+      try {
+        const detail = await coreApi.getResourceDetail(resource.id)
+        setSelectedResource({ ...resource, ...detail })
+      } catch {
+        // keep the list-level data if detail fails
+      } finally {
+        setLoadingDetail(false)
+      }
+    }
+  }, [])
+
+  useEffect(() => {
+    if (resources.length > 0 && !selectedResource) {
+      const filtered = resources.filter(r => r.resourceType === activeTab)
+      if (filtered.length > 0) {
+        void handleSelectResource(filtered[0])
+      }
+    }
+  }, [resources, activeTab, selectedResource, handleSelectResource])
 
   const handleGenerate = useCallback(async () => {
     if (!selectedLearner) {
       setError('请先选择学习者')
       return
     }
-    if (!resourceTitle.trim()) {
-      setError('请输入资源标题')
+    if (!targetTopic.trim()) {
+      setError('请输入目标知识点')
       return
     }
 
@@ -236,7 +291,7 @@ export default function ResourceGeneration() {
     try {
       const result = await agentApi.runFullPipeline({
         learnerId: selectedLearner.id,
-        targetTopic: resourceTitle.trim(),
+        targetTopic: targetTopic.trim(),
         resourceType: activeTab,
         industry: selectedIndustry,
       })
@@ -248,7 +303,7 @@ export default function ResourceGeneration() {
       setIsGenerating(false)
       setError(err instanceof Error ? err.message : '资源生成失败，请重试')
     }
-  }, [selectedLearner, resourceTitle, activeTab, selectedIndustry])
+  }, [selectedLearner, targetTopic, activeTab, selectedIndustry])
 
   const handleCancel = () => {
     cancelledRef.current = true
@@ -259,12 +314,6 @@ export default function ResourceGeneration() {
   }
 
   const filteredResources = resources.filter(r => r.resourceType === activeTab)
-
-  const getQualityScoreColor = (score: number) => {
-    if (score >= SCORE_EXCELLENT_THRESHOLD) return 'text-success'
-    if (score >= SCORE_GOOD_THRESHOLD) return 'text-warning'
-    return 'text-danger'
-  }
 
   const getResourceText = () => {
     if (!selectedResource) return ''
@@ -333,14 +382,8 @@ export default function ResourceGeneration() {
             </div>
             <h3 className="text-base font-semibold text-text-primary mb-1">{selectedResource.title}</h3>
             <p className="text-xs text-text-tertiary">
-              v{selectedResource.versionNumber} · {selectedResource.generatedByAgent} · {new Date(selectedResource.generationTime).toLocaleString('zh-CN')}
+              v{selectedResource.versionNumber} · {selectedResource.generationMethod === 'llm' ? '🤖 LLM生成' : '📋 规则生成'} · {new Date(selectedResource.generationTime).toLocaleString('zh-CN')}
             </p>
-          </div>
-          <div className="flex flex-col items-center">
-            <span className={`text-2xl font-bold ${getQualityScoreColor(selectedResource.qualityScore)}`}>
-              {selectedResource.qualityScore}
-            </span>
-            <span className="text-xs text-text-tertiary">质量分</span>
           </div>
         </div>
 
@@ -422,21 +465,35 @@ export default function ResourceGeneration() {
               <div>
                 <label className="block text-xs font-medium text-text-secondary mb-2">选择学习者</label>
                 <div className="space-y-2 max-h-36 overflow-y-auto">
-                  {learners.map((l) => (
-                    <button
-                      key={l.id}
-                      onClick={() => handleSelectLearner(l.id)}
-                      disabled={isGenerating}
-                      className={`w-full p-3 rounded-lg border text-left text-sm transition-all ${
-                        selectedLearner?.id === l.id
-                          ? 'border-primary/30 bg-primary/5'
-                          : 'border-border bg-bg-secondary/30 hover:border-primary/20'
-                      } ${isGenerating ? 'opacity-60 cursor-not-allowed' : ''}`}
-                    >
-                      <p className="font-medium text-text-primary">{l.realName}</p>
-                      <p className="text-xs text-text-tertiary">{l.educationLevel} · {l.major}</p>
-                    </button>
-                  ))}
+                  {learners.map((l) => {
+                    const isSelected = selectedLearner?.id === l.id
+                    return (
+                      <button
+                        key={l.id}
+                        onClick={() => handleSelectLearner(l.id)}
+                        disabled={isGenerating}
+                        className={`w-full p-3 rounded-lg border text-left text-sm transition-all ${
+                          isSelected
+                            ? 'border-primary bg-primary/10 shadow-sm'
+                            : 'border-border bg-bg-secondary/30 hover:border-primary/30 hover:bg-bg-card'
+                        } ${isGenerating ? 'opacity-60 cursor-not-allowed' : ''}`}
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <p className={`font-medium ${isSelected ? 'text-primary' : 'text-text-primary'}`}>{l.realName}</p>
+                          {isSelected && (
+                            <span className="inline-flex items-center gap-1 text-[11px] font-medium text-primary">
+                              <CheckCircle2 className="w-3 h-3" />
+                              已选
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-text-tertiary mt-1">{l.educationLevel} · {l.major}</p>
+                      </button>
+                    )
+                  })}
+                  {learners.length === 0 && (
+                    <p className="text-xs text-text-tertiary py-2">暂无可选学习者</p>
+                  )}
                 </div>
               </div>
 
@@ -489,12 +546,12 @@ export default function ResourceGeneration() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-text-secondary mb-2">资源主题/标题</label>
+                <label className="block text-xs font-medium text-text-secondary mb-2">目标知识点 / 主题</label>
                 <input
                   type="text"
-                  value={resourceTitle}
-                  onChange={(e) => setResourceTitle(e.target.value)}
-                  placeholder="输入要生成的主题，如：Python入门..."
+                  value={targetTopic}
+                  onChange={(e) => setTargetTopic(e.target.value)}
+                  placeholder="如：反向传播算法、RESTful API 设计..."
                   disabled={isGenerating}
                   className="w-full px-3 py-2 rounded-lg border border-border bg-bg-secondary/30 text-sm text-text-primary placeholder:text-text-tertiary focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 disabled:opacity-60"
                 />
@@ -670,7 +727,7 @@ export default function ResourceGeneration() {
                   return (
                     <button
                       key={resource.id}
-                      onClick={() => setSelectedResource(resource)}
+                      onClick={() => handleSelectResource(resource)}
                       className={`w-full p-3 rounded-lg border text-left transition-all ${
                         isSelected
                           ? 'border-primary/30 bg-primary/5'
@@ -681,9 +738,6 @@ export default function ResourceGeneration() {
                         <p className="text-sm font-medium text-text-primary line-clamp-1 flex-1">
                           {resource.title}
                         </p>
-                        <span className={`text-sm font-bold flex-shrink-0 ${getQualityScoreColor(resource.qualityScore)}`}>
-                          {resource.qualityScore}
-                        </span>
                       </div>
                       <div className="flex items-center gap-1.5 flex-wrap">
                         <Badge variant={statusInfo.variant} size="sm">{statusInfo.label}</Badge>
@@ -764,6 +818,11 @@ export default function ResourceGeneration() {
                   {debateRoundText && (
                     <p className="mt-2 text-xs text-primary">{debateRoundText}</p>
                   )}
+                </div>
+              ) : loadingDetail ? (
+                <div className="flex flex-col items-center justify-center h-full min-h-[400px]">
+                  <div className="w-10 h-10 rounded-full border-3 border-primary/20 border-t-primary animate-spin" />
+                  <p className="mt-3 text-sm text-text-secondary">加载资源内容...</p>
                 </div>
               ) : (
                 renderResourceDetail()

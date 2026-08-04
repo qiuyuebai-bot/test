@@ -46,6 +46,8 @@ async def lifespan(app: FastAPI):
             logger.info("跳过种子数据初始化（SEED_ON_STARTUP=false，可用 CLI: python -m app.seed_data）")
     except Exception as e:
         logger.error(f"数据库初始化失败: {e}")
+        if settings.APP_ENV == "production":
+            raise  # 生产环境数据库初始化失败必须阻止启动
 
     yield
 

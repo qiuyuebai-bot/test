@@ -547,8 +547,20 @@ class KnowledgeService:
             return results
         
         try:
+            has_indexed_slices = False
+            if db:
+                indexed_query = db.query(KnowledgeSlice.id).join(KnowledgeDoc).filter(
+                    KnowledgeDoc.is_enabled == True,
+                    KnowledgeSlice.is_indexed == True,
+                )
+                if filter_industry:
+                    indexed_query = indexed_query.filter(KnowledgeDoc.industry == filter_industry)
+                if filter_doc_id:
+                    indexed_query = indexed_query.filter(KnowledgeSlice.doc_id == filter_doc_id)
+                has_indexed_slices = indexed_query.first() is not None
+
             # 1. Chroma 向量语义检索（如果可用）
-            if _CHROMA_AVAILABLE:
+            if _CHROMA_AVAILABLE and has_indexed_slices:
                 collection = _get_chroma_collection()
                 
                 if collection is not None:
@@ -632,6 +644,8 @@ class KnowledgeService:
                                 "keywords": keywords,
                                 "highlighted_content": content[:200] + "..." if len(content) > 200 else content,
                             })
+            elif _CHROMA_AVAILABLE and db:
+                logger.debug("没有已索引知识切片，跳过 Chroma 检索")
             else:
                 logger.debug("Chroma 不可用，使用数据库关键词检索")
             

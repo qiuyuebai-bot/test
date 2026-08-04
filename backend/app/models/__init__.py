@@ -23,7 +23,7 @@ from app.domains.resource.models import ResourceExercise, ExerciseLevelEnum, Exe
 from app.domains.resource.models import ResourceMedia, MediaTypeEnum
 from app.domains.resource.models import ResourceTemplate, TemplateCategoryEnum
 from app.domains.resource.models import ResourceVersion
-from app.domains.learner.models import AnswerRecord, QuestionTypeEnum, AnswerResultEnum, AdaptiveDecisionEnum
+from app.domains.learner.models import IssuedTutoringQuestion, AnswerRecord, QuestionTypeEnum, AnswerResultEnum, AdaptiveDecisionEnum
 from app.domains.learner.models import LearningPath, PathNodeTypeEnum, NodeStatusEnum
 
 # 企业培训相关模型
@@ -77,6 +77,7 @@ __all__ = [
     "ResourceTemplate",
     "TemplateCategoryEnum",
     "ResourceVersion",
+    "IssuedTutoringQuestion",
     "AnswerRecord",
     "QuestionTypeEnum",
     "AnswerResultEnum",

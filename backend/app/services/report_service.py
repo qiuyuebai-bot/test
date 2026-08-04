@@ -2,9 +2,7 @@
 学情可视化报告与学习路径规划服务
 输出结构化图表数据，字段对齐前端Recharts组件需求
 """
-import io
 from typing import Dict, Any, List, Optional
-from datetime import datetime
 from loguru import logger
 from sqlalchemy import func
 
@@ -21,6 +19,8 @@ from app.services.common import (
     LearnerServiceHelper,
     MetricsServiceHelper,
 )
+from app.services.path_planner import PathPlanner
+from app.utils.llm import LLMUtil
 
 
 class ReportService(BaseService):
@@ -153,13 +153,15 @@ class ReportService(BaseService):
         for i, r in enumerate(resources):
             labels.append(f"资源{i+1}")
             difficulty_data.append(r.difficulty_level or DEFAULT_DIFFICULTY)
-            match_data.append(r.match_score or 70)
-            
+            raw_match_score = r.match_score if r.match_score is not None else 70
+            match_score = raw_match_score * 100 if 0 <= raw_match_score <= 1 else raw_match_score
+            match_data.append(match_score)
+
             data_points.append({
                 "name": f"资源{i+1}",
                 "difficulty": r.difficulty_level or DEFAULT_DIFFICULTY,
-                "match_score": r.match_score or 70,
-                "learner_ability": avg_ability / 20,
+                "match_score": match_score,
+                "learner_ability": avg_ability,
                 "resource_id": r.id,
                 "title": r.title,
             })
@@ -168,7 +170,7 @@ class ReportService(BaseService):
             "labels": labels,
             "difficulty": difficulty_data,
             "match_score": match_data,
-            "learner_ability": [avg_ability / 20] * len(labels),
+            "learner_ability": [avg_ability] * len(labels),
             "data": data_points,
             "learner_ability_raw": avg_ability,
         }
@@ -203,9 +205,17 @@ class ReportService(BaseService):
                 "match_score": r.match_score,
             })
         
+        if LLMUtil.is_available():
+            try:
+                return PathPlanner.plan_path(learner, blind_areas, [
+                    resource for group in resources_by_diff.values() for resource in group
+                ])
+            except Exception as exc:
+                logger.warning(f"[报告服务] LLM 学习路径规划失败，使用规则兜底: {exc}")
+
         nodes = []
         edges = []
-        
+
         # 阶段1: 基础
         for i, (name, time_val) in enumerate([("基础概念", "2小时"), ("入门实践", "4小时")]):
             node_id = f"step-{i+1}"
@@ -213,7 +223,7 @@ class ReportService(BaseService):
                 "id": node_id,
                 "name": name,
                 "difficulty": i + 1,
-                "status": "completed" if i < 2 else "current",
+                "status": "completed" if i == 0 else "current",
                 "estimated_time": time_val,
                 "resources": resources_by_diff.get(i + 1, []),
                 "description": ["建立知识框架", "动手实践基础案例"][i],
@@ -252,11 +262,14 @@ class ReportService(BaseService):
         for i in range(len(nodes) - 1):
             edges.append({"source": nodes[i]["id"], "target": nodes[i + 1]["id"]})
         
+        current_step = next((index for index, node in enumerate(nodes, 1) if node["status"] == "current"), len(nodes))
+        completed_steps = sum(node["status"] == "completed" for node in nodes)
+        total_hours = sum(int("".join(char for char in node["estimated_time"] if char.isdigit()) or 0) for node in nodes)
         return {
             "total_steps": len(nodes),
-            "current_step": 3,
-            "progress": 37.5,
-            "estimated_total_time": "32小时",
+            "current_step": current_step,
+            "progress": round(completed_steps / len(nodes) * 100, 1) if nodes else 0,
+            "estimated_total_time": f"{total_hours}小时",
             "nodes": nodes,
             "edges": edges,
         }
@@ -385,347 +398,11 @@ class ReportService(BaseService):
         Returns:
             PDF 字节流，失败返回 None
         """
-        from reportlab.lib.pagesizes import A4
-        from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
-        from reportlab.lib.units import mm
-        from reportlab.lib.colors import HexColor, grey
-        from reportlab.lib.enums import TA_CENTER
-        from reportlab.platypus import (
-            SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle,
-            HRFlowable,
-        )
-        
-        # 生成报告数据
+        from app.services.pdf_exporter import PDFExporter
         report = cls.generate_learner_report(learner_id)
         if not report.get("success"):
             return None
-        
-        buffer = io.BytesIO()
-        
-        # 文档设置
-        doc = SimpleDocTemplate(
-            buffer,
-            pagesize=A4,
-            leftMargin=25*mm,
-            rightMargin=25*mm,
-            topMargin=20*mm,
-            bottomMargin=20*mm,
-            title=f"学情报告 - {report['learner_info']['name']}",
-        )
-        
-        # 样式定义
-        styles = getSampleStyleSheet()
-        
-        # 自定义颜色
-        primary_color = HexColor("#1a365d")      # 深空蓝
-        secondary_color = HexColor("#4a5568")    # 灰色
-        accent_color = HexColor("#2b6cb0")       # 亮蓝
-        light_bg = HexColor("#f7fafc")           # 浅灰背景
-        border_color = HexColor("#e2e8f0")       # 边框色
-        success_color = HexColor("#38a169")      # 绿色
-        warning_color = HexColor("#d69e2e")      # 黄色
-        danger_color = HexColor("#e53e3e")       # 红色
-        
-        # 自定义样式
-        title_style = ParagraphStyle(
-            "CustomTitle",
-            parent=styles["Title"],
-            fontSize=22,
-            textColor=primary_color,
-            spaceAfter=6*mm,
-            alignment=TA_CENTER,
-            fontName="Helvetica-Bold",
-        )
-        
-        subtitle_style = ParagraphStyle(
-            "CustomSubtitle",
-            parent=styles["Normal"],
-            fontSize=10,
-            textColor=secondary_color,
-            alignment=TA_CENTER,
-            spaceAfter=12*mm,
-        )
-        
-        h1_style = ParagraphStyle(
-            "H1",
-            parent=styles["Heading1"],
-            fontSize=16,
-            textColor=primary_color,
-            spaceBefore=10*mm,
-            spaceAfter=5*mm,
-            fontName="Helvetica-Bold",
-        )
-
-        body_style = ParagraphStyle(
-            "CustomBody",
-            parent=styles["Normal"],
-            fontSize=9,
-            textColor=secondary_color,
-            leading=14,
-            spaceAfter=2*mm,
-        )
-        
-        metric_label_style = ParagraphStyle(
-            "MetricLabel",
-            parent=styles["Normal"],
-            fontSize=8,
-            textColor=grey,
-            alignment=TA_CENTER,
-        )
-        
-        metric_value_style = ParagraphStyle(
-            "MetricValue",
-            parent=styles["Normal"],
-            fontSize=18,
-            textColor=primary_color,
-            alignment=TA_CENTER,
-            fontName="Helvetica-Bold",
-        )
-        
-        # 构建内容
-        story = []
-        
-        learner_info = report["learner_info"]
-        core_metrics = report["core_metrics"]
-        statistics = report["statistics"]
-        heatmap = report["blind_area_heatmap"]
-        match_curve = report["difficulty_match_curve"]
-        path_topology = report["learning_path_topology"]
-        ability_radar = report["ability_radar"]
-        
-        # === 封面标题 ===
-        story.append(Spacer(1, 15*mm))
-        story.append(Paragraph("学情可视化报告", title_style))
-        story.append(Paragraph(
-            f"生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M')}",
-            subtitle_style,
-        ))
-        
-        # 分隔线
-        story.append(HRFlowable(width="100%", thickness=0.5, color=border_color))
-        story.append(Spacer(1, 5*mm))
-        
-        # === 学习者信息 ===
-        story.append(Paragraph("学习者基本信息", h1_style))
-        info_data = [
-            [Paragraph("<b>姓名</b>", body_style), Paragraph(learner_info.get("name", ""), body_style)],
-            [Paragraph("<b>学历</b>", body_style), Paragraph(learner_info.get("education", ""), body_style)],
-            [Paragraph("<b>专业</b>", body_style), Paragraph(learner_info.get("major", ""), body_style)],
-            [Paragraph("<b>目标行业</b>", body_style), Paragraph(learner_info.get("target_industry", ""), body_style)],
-            [Paragraph("<b>目标岗位</b>", body_style), Paragraph(learner_info.get("target_position", ""), body_style)],
-            [Paragraph("<b>学习风格</b>", body_style), Paragraph(learner_info.get("learning_style", ""), body_style)],
-        ]
-        info_table = Table(info_data, colWidths=[40*mm, 120*mm])
-        info_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (0, -1), light_bg),
-            ("GRID", (0, 0), (-1, -1), 0.5, border_color),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING", (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ]))
-        story.append(info_table)
-        
-        # === 核心指标卡片 ===
-        story.append(Paragraph("核心评审指标", h1_style))
-        metrics_grid = [
-            [
-                Paragraph("资源匹配准确率", metric_label_style),
-                Paragraph("知识点覆盖率", metric_label_style),
-                Paragraph("答题正确率", metric_label_style),
-            ],
-            [
-                Paragraph(f"{core_metrics.get('resource_match_accuracy', 0):.1f}%", metric_value_style),
-                Paragraph(f"{core_metrics.get('knowledge_coverage_rate', 0):.1f}%", metric_value_style),
-                Paragraph(f"{core_metrics.get('answer_accuracy', 0):.1f}%", metric_value_style),
-            ],
-        ]
-        metrics_table = Table(metrics_grid, colWidths=[53*mm, 53*mm, 53*mm])
-        metrics_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), light_bg),
-            ("GRID", (0, 0), (-1, -1), 0.5, border_color),
-            ("ALIGN", (0, 0), (-1, -1), "CENTER"),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING", (0, 0), (-1, -1), 8),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 8),
-        ]))
-        story.append(metrics_table)
-        story.append(Spacer(1, 3*mm))
-        
-        # 统计信息
-        stats_data = [
-            [Paragraph("<b>统计项</b>", body_style), Paragraph("<b>数值</b>", body_style)],
-            [Paragraph("生成资源总数", body_style), Paragraph(str(statistics.get("total_resources", 0)), body_style)],
-            [Paragraph("答题总数", body_style), Paragraph(str(statistics.get("total_answers", 0)), body_style)],
-            [Paragraph("平均答题得分", body_style), Paragraph(f"{statistics.get('avg_answer_score', 0):.1f}", body_style)],
-            [Paragraph("知识盲区数量", body_style), Paragraph(str(statistics.get("knowledge_blind_count", 0)), body_style)],
-        ]
-        stats_table = Table(stats_data, colWidths=[80*mm, 80*mm])
-        stats_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), light_bg),
-            ("GRID", (0, 0), (-1, -1), 0.5, border_color),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING", (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ]))
-        story.append(stats_table)
-        
-        # === 知识盲区分析 ===
-        story.append(Paragraph("知识盲区热力图分析", h1_style))
-        
-        heatmap_header = [
-            [Paragraph("<b>能力维度</b>", body_style), Paragraph("<b>得分</b>", body_style),
-             Paragraph("<b>严重程度</b>", body_style), Paragraph("<b>是否盲区</b>", body_style)],
-        ]
-        heatmap_rows = []
-        for item in heatmap.get("data", []):
-            severity_color = danger_color if item["severity"] == "high" else (
-                warning_color if item["severity"] == "medium" else success_color
-            )
-            heatmap_rows.append([
-                Paragraph(item["dimension"], body_style),
-                Paragraph(f"{item['score']:.0f}", body_style),
-                Paragraph(f'<font color="{severity_color}">{item["severity_label"]}</font>', body_style),
-                Paragraph("是" if item["is_blind"] else "否", body_style),
-            ])
-        
-        heatmap_table = Table(heatmap_header + heatmap_rows, colWidths=[50*mm, 30*mm, 40*mm, 40*mm])
-        heatmap_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), light_bg),
-            ("GRID", (0, 0), (-1, -1), 0.5, border_color),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING", (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ("LEFTPADDING", (0, 0), (-1, -1), 6),
-        ]))
-        story.append(heatmap_table)
-        
-        # === 能力雷达图摘要 ===
-        story.append(Paragraph("能力维度评估", h1_style))
-        radar = ability_radar
-        story.append(Paragraph(
-            f"综合能力平均分: <b>{radar.get('average_score', 0):.1f}</b> / 100",
-            body_style,
-        ))
-        
-        radar_header = [[Paragraph("<b>能力维度</b>", body_style), Paragraph("<b>得分</b>", body_style)]]
-        radar_rows = []
-        for item in radar.get("data", []):
-            radar_rows.append([
-                Paragraph(item["dimension"], body_style),
-                Paragraph(f"{item['score']:.0f}", body_style),
-            ])
-        
-        radar_table = Table(radar_header + radar_rows, colWidths=[80*mm, 80*mm])
-        radar_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), light_bg),
-            ("GRID", (0, 0), (-1, -1), 0.5, border_color),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING", (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ("LEFTPADDING", (0, 0), (-1, -1), 8),
-        ]))
-        story.append(radar_table)
-        
-        # === 资源难度匹配 ===
-        story.append(Paragraph("资源难度匹配曲线", h1_style))
-        if match_curve.get("data"):
-            curve_header = [
-                [Paragraph("<b>资源名称</b>", body_style), Paragraph("<b>难度</b>", body_style),
-                 Paragraph("<b>匹配度</b>", body_style)],
-            ]
-            curve_rows = []
-            for item in match_curve.get("data", [])[:6]:
-                match_color = success_color if (item.get("match_score", 0) or 0) >= 80 else (
-                    warning_color if (item.get("match_score", 0) or 0) >= 60 else danger_color
-                )
-                curve_rows.append([
-                    Paragraph(item.get("title", item.get("name", "")), body_style),
-                    Paragraph(str(item.get("difficulty", "-")), body_style),
-                    Paragraph(
-                        f'<font color="{match_color}">{item.get("match_score", 0) or 0:.0f}%</font>',
-                        body_style,
-                    ),
-                ])
-            
-            curve_table = Table(curve_header + curve_rows, colWidths=[80*mm, 40*mm, 40*mm])
-            curve_table.setStyle(TableStyle([
-                ("BACKGROUND", (0, 0), (-1, 0), light_bg),
-                ("GRID", (0, 0), (-1, -1), 0.5, border_color),
-                ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-                ("TOPPADDING", (0, 0), (-1, -1), 4),
-                ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-                ("LEFTPADDING", (0, 0), (-1, -1), 6),
-            ]))
-            story.append(curve_table)
-        else:
-            story.append(Paragraph("暂无资源匹配数据", body_style))
-        
-        # === 学习路径规划 ===
-        story.append(Paragraph("学习路径规划", h1_style))
-        story.append(Paragraph(
-            f"当前进度: <b>{path_topology.get('progress', 0):.1f}%</b> | "
-            f"总步骤: {path_topology.get('total_steps', 0)} | "
-            f"预计总时间: {path_topology.get('estimated_total_time', '未知')}",
-            body_style,
-        ))
-        
-        path_header = [
-            [Paragraph("<b>阶段</b>", body_style), Paragraph("<b>名称</b>", body_style),
-             Paragraph("<b>难度</b>", body_style), Paragraph("<b>状态</b>", body_style),
-             Paragraph("<b>预计时间</b>", body_style)],
-        ]
-        path_rows = []
-        for node in path_topology.get("nodes", []):
-            status_map = {"completed": "已完成", "current": "进行中", "locked": "待解锁"}
-            status_color = {"completed": success_color, "current": accent_color, "locked": grey}
-            status = status_map.get(node.get("status", ""), node.get("status", ""))
-            sc = status_color.get(node.get("status", ""), grey)
-            path_rows.append([
-                Paragraph(str(node.get("difficulty", "")), body_style),
-                Paragraph(node.get("name", ""), body_style),
-                Paragraph("★" * node.get("difficulty", 1), body_style),
-                Paragraph(f'<font color="{sc}">{status}</font>', body_style),
-                Paragraph(node.get("estimated_time", ""), body_style),
-            ])
-        
-        path_table = Table(path_header + path_rows, colWidths=[20*mm, 50*mm, 30*mm, 30*mm, 30*mm])
-        path_table.setStyle(TableStyle([
-            ("BACKGROUND", (0, 0), (-1, 0), light_bg),
-            ("GRID", (0, 0), (-1, -1), 0.5, border_color),
-            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
-            ("TOPPADDING", (0, 0), (-1, -1), 4),
-            ("BOTTOMPADDING", (0, 0), (-1, -1), 4),
-            ("LEFTPADDING", (0, 0), (-1, -1), 4),
-        ]))
-        story.append(path_table)
-        
-        # === 页脚 ===
-        story.append(Spacer(1, 15*mm))
-        story.append(HRFlowable(width="100%", thickness=0.5, color=border_color))
-        story.append(Spacer(1, 3*mm))
-        story.append(Paragraph(
-            "本报告由领域知识个性化生成与多智能体协同决策系统自动生成 | "
-            f"生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}",
-            ParagraphStyle(
-                "Footer",
-                parent=styles["Normal"],
-                fontSize=7,
-                textColor=grey,
-                alignment=TA_CENTER,
-            ),
-        ))
-        
-        # 生成 PDF
-        doc.build(story)
-        
-        pdf_bytes = buffer.getvalue()
-        buffer.close()
-        
-        logger.info(f"[报告服务] PDF 生成完成: learner_id={learner_id}, size={len(pdf_bytes)} bytes")
-        
-        return pdf_bytes
+        return PDFExporter.export_report(report)
     
     @classmethod
     def update_metrics_periodically(cls) -> None:

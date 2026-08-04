@@ -187,7 +187,7 @@ export interface DebateRecord {
 export interface LearningResource {
   id: number
   title: string
-  resourceType: 'guide' | 'lecture' | 'case' | 'quiz' | 'roadmap'
+  resourceType: 'guide' | 'exercise' | 'lecture' | 'case' | 'quiz' | 'roadmap'
   targetLearnerId: number
   contentSummary: string
   contentPath?: string
@@ -197,6 +197,7 @@ export interface LearningResource {
   reviewStatus: 'pending' | 'approved' | 'rejected' | 'revised'
   versionNumber: number
   generatedByAgent: string
+  generationMethod?: string
   createdByAgent?: string
   generationTime: string
   metaData?: Record<string, unknown>

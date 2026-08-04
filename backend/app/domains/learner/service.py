@@ -45,7 +45,7 @@ class LearnerService:
     ]
     
     @staticmethod
-    def create_learner(db: Session, learner_data: LearnerProfileCreate) -> Optional[LearnerProfile]:
+    def create_learner(db: Session, learner_data: LearnerProfileCreate, user_id: int) -> Optional[LearnerProfile]:
         """
         创建学习者画像
         
@@ -57,14 +57,15 @@ class LearnerService:
             学习者画像对象，已存在则返回None
         """
         existing = db.query(LearnerProfile).filter(
-            LearnerProfile.user_id == learner_data.user_id
+            LearnerProfile.user_id == user_id
         ).first()
         if existing:
-            logger.warning(f"用户已存在学习者画像: user_id={learner_data.user_id}")
+            logger.warning(f"用户已存在学习者画像: user_id={user_id}")
             return None
         
         learner = LearnerProfile(
-            user_id=learner_data.user_id,
+            # The authenticated user owns self-service profiles; request data is not authoritative.
+            user_id=user_id,
             real_name=learner_data.real_name,
             education_level=learner_data.education_level,
             major=learner_data.major,
@@ -85,12 +86,16 @@ class LearnerService:
             knowledge_blind_areas=learner_data.knowledge_blind_areas,
         )
         
-        db.add(learner)
-        db.commit()
-        db.refresh(learner)
-        
+        try:
+            db.add(learner)
+            db.commit()
+            db.refresh(learner)
+        except Exception:
+            db.rollback()
+            raise
+
         logger.info(f"创建学习者画像: id={learner.id}, user_id={learner.user_id}")
-        
+
         return learner
     
     @staticmethod
@@ -271,38 +276,48 @@ class LearnerService:
         errors = []
         
         for idx, learner_data in enumerate(import_data.learners):
+            user_id = learner_data.user_id
             try:
-                learner = LearnerProfile(
-                    user_id=learner_data.user_id,
-                    real_name=learner_data.real_name,
-                    education_level=learner_data.education_level,
-                    major=learner_data.major,
-                    learning_style=learner_data.learning_style,
-                    theoretical_foundation=learner_data.theoretical_foundation,
-                    programming_ability=learner_data.programming_ability,
-                    algorithm_design=learner_data.algorithm_design,
-                    system_architecture=learner_data.system_architecture,
-                    data_analysis=learner_data.data_analysis,
-                    engineering_practice=learner_data.engineering_practice,
-                    knowledge_blind_areas=learner_data.knowledge_blind_areas,
-                    target_industry=learner_data.target_industry,
-                )
-                
-                db.add(learner)
-                db.flush()
-                created_ids.append(learner.id)
-                success_count += 1
-                
+                if not user_id:
+                    raise ValueError("缺少关联用户ID")
+                if not db.query(User.id).filter(User.id == user_id).first():
+                    raise ValueError("关联用户不存在")
+                if db.query(LearnerProfile.id).filter(LearnerProfile.user_id == user_id).first():
+                    raise ValueError("关联用户已存在学习者画像")
+
+                # A row-level savepoint preserves earlier valid imports if a later row fails.
+                with db.begin_nested():
+                    learner = LearnerProfile(
+                        user_id=user_id,
+                        real_name=learner_data.real_name,
+                        education_level=learner_data.education_level,
+                        major=learner_data.major,
+                        learning_style=learner_data.learning_style,
+                        theoretical_foundation=learner_data.theoretical_foundation,
+                        programming_ability=learner_data.programming_ability,
+                        algorithm_design=learner_data.algorithm_design,
+                        system_architecture=learner_data.system_architecture,
+                        data_analysis=learner_data.data_analysis,
+                        engineering_practice=learner_data.engineering_practice,
+                        knowledge_blind_areas=learner_data.knowledge_blind_areas,
+                        target_industry=learner_data.target_industry,
+                    )
+                    db.add(learner)
+                    db.flush()
+                    created_ids.append(learner.id)
+                    success_count += 1
+
             except Exception as e:
-                db.rollback()
                 failed_count += 1
                 errors.append({
                     "index": idx,
-                    "name": learner_data.real_name,
-                    "error": str(e),
+                    "user_id": user_id,
+                    "field": "user_id",
+                    "code": "invalid_learner",
+                    "message": str(e),
                 })
-                logger.error(f"批量导入失败: index={idx}, error={e}")
-        
+                logger.warning(f"批量导入失败: index={idx}, user_id={user_id}, error={e}")
+
         db.commit()
         
         logger.info(f"批量导入: total={len(import_data.learners)}, success={success_count}, failed={failed_count}")

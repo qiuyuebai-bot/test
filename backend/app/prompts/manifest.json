@@ -18,11 +18,21 @@
   "resource_generation": {
     "version": "1.0.0",
     "description": "个性化学习资源生成：按学习者画像与知识点生成专属资源",
-    "variables": ["learner_summary", "knowledge_topic", "difficulty_level", "reference_knowledge"]
+    "variables": ["learner_summary", "knowledge_topic", "resource_type", "difficulty_level", "reference_knowledge"]
   },
   "question_generation": {
     "version": "1.0.0",
     "description": "分阶测试题生成：按难度等级生成对应题目与解析",
     "variables": ["knowledge_topic", "difficulty_level", "question_count", "reference_knowledge"]
+  },
+  "debate_review": {
+    "version": "1.0.0",
+    "description": "基于参考资料的生成内容辩论与最终裁决",
+    "variables": ["round_num", "generated_content", "reference_knowledge", "rule_issues"]
+  },
+  "path_planning": {
+    "version": "1.0.0",
+    "description": "根据能力、盲区与可用资源规划学习路径",
+    "variables": ["learner_context"]
   }
 }

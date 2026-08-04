@@ -27,7 +27,7 @@ services:
     networks:
       - knowledge-network
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1/"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -39,6 +39,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: knowledge-backend
+    env_file:
+      - ./backend/.env.development
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     environment:
@@ -48,11 +50,9 @@ services:
       - CELERY_BROKER_URL=redis://redis:6379/1
       - CELERY_RESULT_BACKEND=redis://redis:6379/2
       - CHROMA_DB_PATH=/app/data/chroma_db
+      - APP_ENV=${APP_ENV:-development}
       - DEBUG_MODE=${DEBUG_MODE:-false}
       - SECRET_KEY=${SECRET_KEY:-}
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - OPENAI_API_BASE=${OPENAI_API_BASE:-https://api.openai.com/v1}
-      - OPENAI_MODEL_NAME=${OPENAI_MODEL_NAME:-gpt-4-turbo-preview}
     volumes:
       - backend-data:/app/data
       - backend-logs:/app/logs
@@ -116,6 +116,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile
     container_name: knowledge-celery
+    env_file:
+      - ./backend/.env.development
     command: celery -A app.celery_app worker --loglevel=info --concurrency=2
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:password@postgres:5432/knowledge_system}

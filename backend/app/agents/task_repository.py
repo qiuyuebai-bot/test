@@ -10,10 +10,12 @@ from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 from loguru import logger
+from sqlalchemy import and_, or_
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm.attributes import flag_modified
 
 from app.database import get_db_context
-from app.models import AgentTask, DebateRecord, LearningResource
+from app.models import AgentTask, DebateRecord, LearningResource, LearnerProfile
 
 
 class TaskRepository:
@@ -266,41 +268,65 @@ class TaskRepository:
     ) -> Dict[str, Any]:
         """保存学习资源并标记任务完成"""
         with get_db_context() as db:
-            resource = LearningResource(
-                learner_id=learner_id,
-                title=generation_result.get("resource_title", "未命名资源"),
-                resource_type=generation_result.get("resource_type", "guide"),
-                difficulty_level=generation_result.get("difficulty_level", 3),
-                version="1.0",
-                content=generation_result.get("content", ""),
-                content_json=json.dumps(
-                    generation_result.get("content_json", {}),
-                    ensure_ascii=False,
-                    default=str,
-                ),
-                word_count=generation_result.get("word_count", 0),
-                source_slice_ids=json.dumps(
-                    generation_result.get("source_slice_ids", []),
-                    ensure_ascii=False,
-                ),
-                source_doc_ids=json.dumps(
-                    generation_result.get("source_doc_ids", []),
-                    ensure_ascii=False,
-                ),
-                generated_by_agent="generation_agent",
-                generation_task_id=task_id,
-                generation_method="knowledge_based",
-                is_validated=audit_result.get("passed", False),
-                validation_passed=audit_result.get("passed", False),
-                validation_score=audit_result.get("overall_score", 0),
-                hallucination_detected=audit_result.get("hallucination_detected", False),
-                status="published",
-            )
-            db.add(resource)
-            db.flush()
+            task = db.query(AgentTask).filter(AgentTask.id == task_id).first()
+            task_input = task.input_data if task else {}
+            if isinstance(task_input, str):
+                try:
+                    task_input = json.loads(task_input)
+                except json.JSONDecodeError:
+                    task_input = {}
+            topic = task_input.get("target_topic", "") if isinstance(task_input, dict) else ""
+            resource = db.query(LearningResource).filter(
+                LearningResource.generation_task_id == task_id
+            ).first()
+            if not resource:
+                try:
+                    with db.begin_nested():
+                        resource = LearningResource(
+                            learner_id=learner_id,
+                            title=generation_result.get("resource_title", "未命名资源"),
+                            resource_type=generation_result.get("resource_type", "guide"),
+                            knowledge_topic=topic or None,
+                            difficulty_level=generation_result.get("difficulty_level", 3),
+                            version="1.0",
+                            content=generation_result.get("content", ""),
+                            content_json=generation_result.get("content_json", {}),
+                            word_count=generation_result.get("word_count", 0),
+                            source_slice_ids=generation_result.get("source_slice_ids", []),
+                            source_doc_ids=generation_result.get("source_doc_ids", []),
+                            generated_by_agent="generation_agent",
+                            generation_task_id=task_id,
+                            generation_method=generation_result.get("generation_method", "deterministic_fallback"),
+                            is_validated=audit_result.get("passed", False),
+                            validation_passed=audit_result.get("passed", False),
+                            validation_score=audit_result.get("overall_score", 0),
+                            hallucination_detected=audit_result.get("hallucination_detected", False),
+                            status="ready" if audit_result.get("passed", False) else "failed",
+                        )
+                        db.add(resource)
+                        db.flush()
+                except IntegrityError:
+                    resource = db.query(LearningResource).filter(
+                        LearningResource.generation_task_id == task_id
+                    ).first()
+                    if not resource:
+                        raise
             resource_id = resource.id
 
-            task = db.query(AgentTask).filter(AgentTask.id == task_id).first()
+            issued_question_count = 0
+            if resource.validation_passed and resource.resource_type == "exercise":
+                from app.services.tutoring_service import AdaptiveTutoringService
+
+                learner = db.query(LearnerProfile).filter(LearnerProfile.id == learner_id).first()
+                if not learner:
+                    raise ValueError("学习者不存在，无法发布导学题目")
+                issued_question_count = AdaptiveTutoringService.publish_resource_questions(
+                    db=db,
+                    resource=resource,
+                    learner=learner,
+                    topic=topic,
+                )
+
             if task:
                 task.status = "completed"
                 task.progress = 100
@@ -322,6 +348,133 @@ class TaskRepository:
             "debate_rounds": debate_rounds,
             "final_score": audit_result.get("overall_score", 0),
             "passed": audit_result.get("passed", False),
+            "issued_question_count": issued_question_count,
+        }
+
+    def find_reusable_resource(
+        self,
+        learner_id: int,
+        target_topic: str,
+        resource_type: str,
+    ) -> Optional[Dict[str, Any]]:
+        """Find the latest validated resource matching a learner and topic."""
+        topic = (target_topic or "").strip()
+        if not topic:
+            return None
+
+        with get_db_context() as db:
+            resource = (
+                db.query(LearningResource)
+                .filter(
+                    LearningResource.learner_id == learner_id,
+                    LearningResource.resource_type == resource_type,
+                    LearningResource.status == "ready",
+                    LearningResource.content.isnot(None),
+                    LearningResource.content != "",
+                    LearningResource.word_count >= 200,
+                    or_(
+                        LearningResource.knowledge_topic == topic,
+                        and_(
+                            LearningResource.knowledge_topic.is_(None),
+                            LearningResource.title.contains(topic),
+                        ),
+                    ),
+                )
+                .order_by(LearningResource.created_at.desc(), LearningResource.id.desc())
+                .first()
+            )
+            if not resource:
+                return None
+            return {
+                "id": resource.id,
+                "title": resource.title,
+                "resource_type": resource.resource_type,
+                "knowledge_topic": resource.knowledge_topic or topic,
+                "difficulty_level": resource.difficulty_level,
+                "content": resource.content,
+                "content_json": resource.content_json or {},
+                "word_count": resource.word_count or len(resource.content or ""),
+                "source_slice_ids": resource.source_slice_ids or [],
+                "source_doc_ids": resource.source_doc_ids or [],
+                "generation_method": resource.generation_method or "deterministic_fallback",
+                "validation_score": resource.validation_score or 0,
+                "hallucination_detected": bool(resource.hallucination_detected),
+            }
+
+    def save_reused_resource_and_complete(
+        self,
+        task_id: int,
+        learner_id: int,
+        reusable_resource: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Copy an existing resource and complete the current task."""
+        generation_result = {
+            "resource_type": reusable_resource.get("resource_type", "guide"),
+            "knowledge_topic": reusable_resource.get("knowledge_topic"),
+            "resource_title": reusable_resource.get("title", "Unnamed resource"),
+            "difficulty_level": reusable_resource.get("difficulty_level", 3),
+            "content": reusable_resource.get("content", ""),
+            "content_json": reusable_resource.get("content_json", {}),
+            "word_count": reusable_resource.get("word_count") or len(reusable_resource.get("content", "")),
+            "source_slice_ids": reusable_resource.get("source_slice_ids", []),
+            "source_doc_ids": reusable_resource.get("source_doc_ids", []),
+            "generation_method": "reused_existing",
+            "reused_from_resource_id": reusable_resource.get("id"),
+        }
+        audit_result = {
+            "passed": True,
+            "overall_score": reusable_resource.get("validation_score", 0),
+            "hallucination_detected": reusable_resource.get("hallucination_detected", False),
+        }
+
+        with get_db_context() as db:
+            resource = LearningResource(
+                learner_id=learner_id,
+                parent_resource_id=reusable_resource.get("id"),
+                title=generation_result["resource_title"],
+                resource_type=generation_result["resource_type"],
+                knowledge_topic=generation_result["knowledge_topic"],
+                difficulty_level=generation_result["difficulty_level"],
+                version="1.0",
+                content=generation_result["content"],
+                content_json=generation_result["content_json"],
+                word_count=generation_result["word_count"],
+                source_slice_ids=generation_result["source_slice_ids"],
+                source_doc_ids=generation_result["source_doc_ids"],
+                generated_by_agent="generation_agent",
+                generation_task_id=task_id,
+                generation_method=generation_result["generation_method"],
+                is_validated=True,
+                validation_passed=True,
+                validation_score=audit_result["overall_score"],
+                hallucination_detected=audit_result["hallucination_detected"],
+                status="ready",
+            )
+            db.add(resource)
+            db.flush()
+            resource_id = resource.id
+
+            task = db.query(AgentTask).filter(AgentTask.id == task_id).first()
+            if task:
+                task.status = "completed"
+                task.progress = 100
+                task.flow_stage = "complete"
+                task.output_data = json.dumps(
+                    {"resource_id": resource_id, "reused_from_resource_id": reusable_resource.get("id")},
+                    ensure_ascii=False,
+                )
+                task.completed_at = datetime.now()
+            db.commit()
+
+        return {
+            "task_id": task_id,
+            "resource_id": resource_id,
+            "generation_result": generation_result,
+            "audit_result": audit_result,
+            "debate_rounds": 0,
+            "final_score": audit_result["overall_score"],
+            "passed": True,
+            "reused_from_resource_id": reusable_resource.get("id"),
         }
 
     def save_metrics(

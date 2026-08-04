@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
-import { screen } from '@testing-library/react'
+import { screen, waitFor } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import { renderWithRouter } from '../test/renderPage'
 
 vi.mock('@/store', async () => {
@@ -13,13 +14,16 @@ vi.mock('@/api', () => ({
         id: 'q1',
         type: 'single',
         topic: 'CNN',
-        question: '卷积神经网络的核心操作是什么？',
-        options: ['卷积', '排序', '哈希', '递归'],
-        correctAnswer: '卷积',
-        correctIndex: 0,
+        question: 'Which option is correct?',
+        options: ['Option A', 'Option B'],
         difficulty: 2,
       },
     ]),
+    submitAnswer: vi.fn().mockResolvedValue({
+      isCorrect: true,
+      score: 100,
+      generatedContent: {},
+    }),
     getInteractionHistory: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20, totalPages: 0 }),
     generateResources: vi.fn(),
     getResourceList: vi.fn(),
@@ -35,8 +39,22 @@ vi.mock('@/hooks', () => ({
 }))
 
 const { resetMockStore, setMockStore } = await import('../test/mockStore')
+const { coreApi } = await import('@/api')
 
 beforeEach(() => {
+  vi.clearAllMocks()
+  vi.mocked(coreApi.getTutoringQuestions).mockResolvedValue([
+    {
+      id: 'q1',
+      type: 'single',
+      topic: 'CNN',
+      question: 'Which option is correct?',
+      options: ['Option A', 'Option B'],
+      difficulty: 2,
+    },
+  ])
+  vi.mocked(coreApi.getInteractionHistory).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20, totalPages: 0 })
+  vi.mocked(coreApi.submitAnswer).mockResolvedValue({ isCorrect: true, score: 100, generatedContent: {} })
   resetMockStore()
   setMockStore({ currentLearner: { id: 1, realName: '测试学习者', displayName: 'L001' } })
 })
@@ -46,5 +64,23 @@ describe('AdaptiveGuidance page', () => {
     const { default: Page } = await import('./AdaptiveGuidance')
     renderWithRouter(<Page />)
     expect(await screen.findByText('动态自适应导学', undefined, { timeout: 3000 })).toBeInTheDocument()
+  })
+
+  it('loads questions and submits an answer for the current learner without answer data', async () => {
+    const user = userEvent.setup()
+    const { default: Page } = await import('./AdaptiveGuidance')
+    renderWithRouter(<Page />)
+
+    await waitFor(() => expect(coreApi.getTutoringQuestions).toHaveBeenCalledWith(1))
+    await user.click(await screen.findByRole('button', { name: /Option B/ }))
+    await user.click(screen.getByRole('button', { name: '提交答案' }))
+
+    await waitFor(() => expect(coreApi.submitAnswer).toHaveBeenCalledWith({
+      learnerId: 1,
+      questionId: 'q1',
+      userAnswer: 'B',
+      timeSpentMs: 0,
+      hintsUsed: 0,
+    }))
   })
 })

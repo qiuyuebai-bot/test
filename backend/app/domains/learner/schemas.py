@@ -27,7 +27,9 @@ class LearnerProfileBase(BaseModel):
 
 class LearnerProfileCreate(LearnerProfileBase):
     """创建学习者画像请求"""
-    user_id: int = Field(..., description="关联用户ID")
+    real_name: str = Field(..., min_length=1, max_length=50, description="真实姓名")
+    education_level: str = Field(..., min_length=1, description="学历层次")
+    major: str = Field(..., min_length=1, max_length=100, description="专业方向")
     
     # 先验能力评估
     theoretical_foundation: float = Field(0.0, ge=0, le=100, description="理论基础")
@@ -107,7 +109,7 @@ class LearnerProfileResponse(BaseModel):
 
 class LearnerBatchImportItem(BaseModel):
     """批量导入项"""
-    user_id: Optional[int] = None
+    user_id: int = Field(..., gt=0, description="关联用户ID")
     real_name: Optional[str] = None
     education_level: str
     major: str

@@ -35,13 +35,15 @@ RUN if [ "${VITE_MODE}" = "staging" ]; then \
     fi
 
 # ---- 运行阶段 ----
-FROM nginx:1.25-alpine AS runtime
+FROM nginx:alpine AS runtime
 
 LABEL maintainer="knowledge-system"
 LABEL description="领域知识个性化生成与多智能体协同决策系统 - 前端"
 
 # 复制自定义 Nginx 配置
 COPY deploy/nginx/nginx.conf /etc/nginx/conf.d/default.conf
+
+RUN apk upgrade --no-cache
 
 # 复制构建产物
 COPY --from=builder /app/dist /usr/share/nginx/html
@@ -51,6 +53,6 @@ EXPOSE 80
 
 # 健康检查：Nginx 自带 curl/wget 在 alpine 中用 wget
 HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost/ || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://127.0.0.1/ || exit 1
 
 CMD ["nginx", "-g", "daemon off;"]

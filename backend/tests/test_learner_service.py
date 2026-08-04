@@ -38,7 +38,7 @@ class TestLearnerProfileCRUD:
             learning_style="visual",
             target_industry="人工智能训练",
         )
-        profile = LearnerService.create_learner(db_session, data)
+        profile = LearnerService.create_learner(db_session, data, sample_user.id)
         
         assert profile is not None
         assert profile.real_name == "新学习者"
@@ -47,13 +47,12 @@ class TestLearnerProfileCRUD:
     def test_create_duplicate_learner(self, db_session: Session, sample_learner_profile: LearnerProfile):
         """测试为已有画像的用户创建画像"""
         data = LearnerProfileCreate(
-            user_id=sample_learner_profile.user_id,
             real_name="重复",
             education_level="本科",
             major="测试",
         )
-        profile = LearnerService.create_learner(db_session, data)
-        
+        profile = LearnerService.create_learner(db_session, data, sample_learner_profile.user_id)
+
         assert profile is None
 
     def test_get_learner_list(self, db_session: Session, sample_learner_profile: LearnerProfile):
@@ -173,8 +172,8 @@ class TestLearnerBatchOperations:
         
         request = LearnerBatchExportRequest(
             learner_ids=[sample_learner_profile.id],
-            format="json",
-            include_anonymized=False,
+            export_format="json",
+            include_sensitive=False,
         )
         result = LearnerService.batch_export(db_session, request)
         

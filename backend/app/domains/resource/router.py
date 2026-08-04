@@ -15,6 +15,7 @@ from app.schemas.response import (
     bad_request,
     not_found,
     paged_success,
+    forbidden,
     unauthorized,
     BaseResponse,
 )
@@ -57,6 +58,10 @@ def generate_resources(
     - 优先使用 Celery 异步队列，不可用时降级为 BackgroundTasks
     """
     try:
+        if not current_user.is_admin and not LearnerService.check_data_permission(
+            db, current_user.user_id, request.learner_id
+        ):
+            return unauthorized("无权限为该学习者生成资源")
         if _CELERY_AVAILABLE:
             task = generate_resources_task.delay(
                 learner_id=request.learner_id,
@@ -223,6 +228,10 @@ def generate_resources_sync(
     - 返回完整生成结果
     """
     try:
+        if not current_user.is_admin and not LearnerService.check_data_permission(
+            db, current_user.user_id, request.learner_id
+        ):
+            return unauthorized("无权限为该学习者生成资源")
         result = ResourceGenerationService.generate_all_resources(
             learner_id=request.learner_id,
             target_topic=request.target_topic,
@@ -255,6 +264,16 @@ def get_resource_list(
     - 支持按学习者、类型、难度、状态筛选
     - 返回资源匹配度等关键指标
     """
+    if not current_user.is_admin:
+        if learner_id is None:
+            learner = LearnerService.get_learner_by_user_id(db, current_user.user_id)
+            if learner is None:
+                return forbidden("暂未找到当前学习者资料")
+            learner_id = learner.id
+        elif not LearnerService.check_data_permission(
+            db, current_user.user_id, learner_id
+        ):
+            return forbidden("无权限查看该学习者资源")
     try:
         result = ResourceGenerationService.get_resource_list(
             learner_id=learner_id,
@@ -288,7 +307,10 @@ def get_resource_detail(
     - 返回资源完整信息，包括内容、匹配度、来源切片等
     """
     try:
-        result = ResourceGenerationService.get_resource_detail(resource_id)
+        result = ResourceGenerationService.get_resource_detail(
+            resource_id,
+            include_answers=not current_user.is_learner,
+        )
         if not result:
             return not_found(message=f"资源不存在: {resource_id}")
 
@@ -344,7 +366,11 @@ def export_resource(
                 ):
                     return unauthorized("无权限导出该资源")
 
-        content = ResourceGenerationService.export_resource(resource_id, format)
+        content = ResourceGenerationService.export_resource(
+            resource_id,
+            format,
+            include_answers=not current_user.is_learner,
+        )
         if not content:
             return not_found(message=f"资源不存在或无法导出: {resource_id}")
 

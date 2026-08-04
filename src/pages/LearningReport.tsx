@@ -99,8 +99,8 @@ interface LearningPathNode {
 
 interface MatchCurvePoint {
   difficulty: number
-  recommended: number
-  actual: number
+  match_score: number
+  learner_ability: number
 }
 
 interface TestHistoryItem {
@@ -195,6 +195,8 @@ export default function LearningReport() {
   const [testHistory, setTestHistory] = useState<TestHistoryItem[]>([])
   const [systemHallucinationRate, setSystemHallucinationRate] = useState(0)
   const [abilityTrendData, setAbilityTrendData] = useState<{ week: string; score: number }[]>([])
+  const [pdfExporting, setPdfExporting] = useState(false)
+  const [pdfError, setPdfError] = useState<string | null>(null)
   const cancelledRef = useRef(false)
 
   const loadReport = useCallback(async () => {
@@ -269,6 +271,28 @@ export default function LearningReport() {
   const displayEducation = learnerInfo?.education || learner?.educationLevel || '-'
   const displayMajor = learnerInfo?.major || learner?.major || '-'
 
+  const exportPdf = async () => {
+    if (!learner?.id || pdfExporting) return
+    setPdfExporting(true)
+    setPdfError(null)
+    try {
+      const blob = await coreApi.downloadLearnerReportPdf(learner.id)
+      if (!blob.type.includes('application/pdf')) throw new Error('服务器未返回 PDF 文件')
+      const url = URL.createObjectURL(blob)
+      const anchor = document.createElement('a')
+      anchor.href = url
+      anchor.download = `${displayName.replace(/[\\/:*?"<>|]/g, '_') || '学习者'}-学情报告.pdf`
+      document.body.appendChild(anchor)
+      anchor.click()
+      anchor.remove()
+      URL.revokeObjectURL(url)
+    } catch (err) {
+      setPdfError(err instanceof Error ? err.message : 'PDF 导出失败')
+    } finally {
+      setPdfExporting(false)
+    }
+  }
+
   return (
     <div className="space-y-5 animate-fade-in">
       {/* 顶部统计指标栏 */}
@@ -340,15 +364,18 @@ export default function LearningReport() {
               打印报告
             </button>
             <button
-              onClick={() => window.print()}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition-colors"
+              onClick={exportPdf}
+              disabled={pdfExporting}
+              className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary/10 text-primary text-sm font-medium hover:bg-primary/20 transition-colors disabled:opacity-60"
             >
               <Download className="w-4 h-4" />
-              导出 PDF
+              {pdfExporting ? '正在导出…' : '导出 PDF'}
             </button>
           </div>
         </div>
       </Card>
+
+      {pdfError && <ErrorState type="default" onRetry={() => { setPdfError(null); exportPdf() }} />}
 
       {/* 三大分区主区域 */}
       <div className="grid grid-cols-12 gap-4">
@@ -465,8 +492,8 @@ export default function LearningReport() {
                     <XAxis dataKey="difficulty" tick={{ fontSize: 10, fill: CHART_COLORS.text }} axisLine={false} tickLine={false} label={{ value: '难度等级', position: 'bottom', fontSize: 10, fill: CHART_COLORS.text }} />
                     <YAxis tick={{ fontSize: 10, fill: CHART_COLORS.text }} axisLine={false} tickLine={false} domain={[30, 100]} />
                     <Tooltip {...CHART_TOOLTIP_PROPS} />
-                    <Line type="monotone" dataKey="recommended" stroke={CHART_COLORS.text} strokeWidth={2} strokeDasharray="6 4" dot={false} name="推荐匹配度" />
-                    <Line type="monotone" dataKey="actual" stroke={CHART_COLORS.primary} strokeWidth={2.5} dot={{ fill: CHART_COLORS.primary, strokeWidth: 2, r: 4 }} name="实际匹配度" />
+                    <Line type="monotone" dataKey="learner_ability" stroke={CHART_COLORS.text} strokeWidth={2} strokeDasharray="6 4" dot={false} name="学习者能力" />
+                    <Line type="monotone" dataKey="match_score" stroke={CHART_COLORS.primary} strokeWidth={2.5} dot={{ fill: CHART_COLORS.primary, strokeWidth: 2, r: 4 }} name="实际匹配度" />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (

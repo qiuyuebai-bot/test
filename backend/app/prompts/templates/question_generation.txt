@@ -11,8 +11,19 @@
 ## 题目数量
 {question_count}
 
+## 本次变体要求
+{variation_hint}
+
+## 变体编号
+{variation_seed}
+
 ## 参考知识库
 {reference_knowledge}
 
-请按以上要求生成 {question_count} 道测试题，输出JSON：
-{{"questions": [{{"question": "题干", "options": ["A. ...", "B. ...", "C. ...", "D. ..."], "correct_answer": "A/B/C/D", "explanation": "解析", "difficulty_level": 1-5, "knowledge_points": ["知识点1"]}}]}}
+优先基于参考知识库命题；如果参考知识库为空或资料不足，可以使用你的专业知识生成通用测试题，但题干和解析必须具体。
+请生成 {question_count} 道题，按 difficulty_level 从 1 到 5 由易到难排列。
+每次生成都要遵循“本次变体要求”，避免与同主题历史输出使用完全相同的题干、选项、正确答案位置和解析措辞。
+每题必须有 2-6 个选项、一个可验证的正确答案和解析。不得使用占位文字或输出任何额外字段。
+解析要使用严谨措辞，避免“据说、传闻、未经证实、绝对、必然、百分百”等词；不要把普通对比词写成无来源断言。
+输出 JSON：
+{{"questions": [{{"question": "题干", "options": ["选项一", "选项二", "选项三", "选项四"], "correct_answer": "A", "explanation": "解析", "difficulty_level": 1-5, "knowledge_points": ["知识点1"]}}]}}

@@ -10,6 +10,7 @@ from loguru import logger
 from app.database import get_db_context
 from app.models import (
     LearningResource,
+    LearnerProfile,
 )
 from app.agents.diagnosis_agent import DiagnosisAgent
 from app.agents.generation_agent import GenerationAgent
@@ -229,31 +230,33 @@ class ResourceGenerationService(BaseService):
                 difficulty_level=resource_data.get("difficulty_level", 3),
                 version="1.0",
                 content=resource_data.get("content", ""),
-                content_json=json.dumps(
-                    resource_data.get("content_json", {}),
-                    ensure_ascii=False,
-                    default=str,
-                ),
+                content_json=resource_data.get("content_json", {}),
                 word_count=resource_data.get("word_count", 0),
-                source_slice_ids=json.dumps(
-                    resource_data.get("source_slice_ids", []),
-                    ensure_ascii=False,
-                ),
-                source_doc_ids=json.dumps(
-                    resource_data.get("source_doc_ids", []),
-                    ensure_ascii=False,
-                ),
+                source_slice_ids=resource_data.get("source_slice_ids", []),
+                source_doc_ids=resource_data.get("source_doc_ids", []),
                 generated_by_agent="generation_agent",
-                generation_method="knowledge_based",
+                generation_method=resource_data.get("generation_method", "deterministic_fallback"),
                 is_validated=True,
                 validation_passed=True,
                 validation_score=resource_data.get("_meta", {}).get("score", 80),
                 hallucination_detected=False,
-                status="published",
+                status="ready",
                 match_score=resource_data.get("match_score", 0),
             )
             db.add(resource)
             db.flush()
+            if resource_type == "exercise":
+                from app.services.tutoring_service import AdaptiveTutoringService
+
+                learner = db.query(LearnerProfile).filter(LearnerProfile.id == learner_id).first()
+                if not learner:
+                    raise ValueError("学习者不存在，无法发布导学题目")
+                AdaptiveTutoringService.publish_resource_questions(
+                    db=db,
+                    resource=resource,
+                    learner=learner,
+                    topic=target_topic,
+                )
             db.commit()
             return resource
     
@@ -312,7 +315,9 @@ class ResourceGenerationService(BaseService):
             }
     
     @classmethod
-    def get_resource_detail(cls, resource_id: int) -> Optional[Dict[str, Any]]:
+    def get_resource_detail(
+        cls, resource_id: int, include_answers: bool = True
+    ) -> Optional[Dict[str, Any]]:
         """获取资源详情"""
         with get_db_context() as db:
             resource = cls.get_by_id(db, LearningResource, resource_id)
@@ -323,12 +328,14 @@ class ResourceGenerationService(BaseService):
             resource.view_count = (resource.view_count or 0) + 1
             db.commit()
             
-            return ResourceServiceHelper.format_resource_detail(resource)
+            return ResourceServiceHelper.format_resource_detail(resource, include_answers=include_answers)
     
     @classmethod
-    def export_resource(cls, resource_id: int, fmt: str = "txt") -> str:
+    def export_resource(
+        cls, resource_id: int, fmt: str = "txt", include_answers: bool = True
+    ) -> str:
         """导出资源文件"""
-        resource = cls.get_resource_detail(resource_id)
+        resource = cls.get_resource_detail(resource_id, include_answers=include_answers)
         if not resource:
             return ""
         

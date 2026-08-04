@@ -183,7 +183,7 @@ export default function AdaptiveGuidance() {
     setError(null)
     try {
       const [questionsResp, historyResp] = await Promise.all([
-        coreApi.getTutoringQuestions().catch(() => [] as TutoringQuestion[]),
+        coreApi.getTutoringQuestions(learner.id).catch(() => [] as TutoringQuestion[]),
         coreApi.getInteractionHistory(learner.id, { page: 1, pageSize: 20 }).catch(() => null),
       ])
       setQuestions((questionsResp as TutoringQuestion[]) || [])
@@ -221,16 +221,7 @@ export default function AdaptiveGuidance() {
   const handleSubmit = async () => {
     if (!question || selectedAnswers.length === 0 || !learner?.id) return
 
-    const correctIndexes = isMultiSelect ? question.correctIndexes || [] : [question.correctIndex ?? 0]
-    const selectedSorted = [...selectedAnswers].sort()
-    const correctSorted = [...correctIndexes].sort()
-    const isCorrect =
-      isMultiSelect
-        ? JSON.stringify(selectedSorted) === JSON.stringify(correctSorted)
-        : selectedAnswers[0] === correctIndexes[0]
-    const score = isCorrect ? 100 : 0
     const userAnswer = selectedAnswers.map((i) => String.fromCharCode(65 + i)).join(',')
-    const correctAnswer = correctIndexes.map((i) => String.fromCharCode(65 + i)).join(',')
 
     setShowResult(true)
     setIsAdjusting(true)
@@ -268,18 +259,14 @@ export default function AdaptiveGuidance() {
       const result = await coreApi.submitAnswer({
         learnerId: learner.id,
         questionId: question.id,
-        questionType: question.type,
-        questionTopic: question.topic,
-        questionDifficulty: question.difficulty,
-        questionContent: question.question,
         userAnswer,
-        correctAnswer,
-        score,
         timeSpentMs: 0,
         hintsUsed: 0,
       }) as SubmitResultRaw
 
       const data: SubmitDataRaw = result?.data ?? result
+      const isCorrect = data?.isCorrect ?? data?.is_correct ?? false
+      const score = data?.score ?? 0
       const generated: GeneratedContent = (data?.generatedContent ?? data?.generated_content ?? {}) as GeneratedContent
       setSubmitResult({
         isCorrect: data?.isCorrect ?? data?.is_correct ?? isCorrect,
@@ -299,14 +286,8 @@ export default function AdaptiveGuidance() {
 
       if (isCorrect) setCorrectCount((c) => c + 1)
     } catch {
-      // 接口失败时仍展示本地判断结果
-      setSubmitResult({
-        isCorrect,
-        score,
-        generatedContent: {},
-      })
-      setActiveContentTab(isCorrect ? 'advanced' : 'simplified')
-      if (isCorrect) setCorrectCount((c) => c + 1)
+      setShowResult(false)
+      setError('答案提交失败，请重试')
     } finally {
       clearInterval(interval)
       intervalRef.current = null
@@ -345,7 +326,7 @@ export default function AdaptiveGuidance() {
       <EmptyState
         type="default"
         title="暂无导学题目"
-        description="请稍后重试或联系管理员配置题库"
+        description="请先在资源生成中完成审核通过的分阶测试题"
       />
     )
   }
@@ -460,8 +441,7 @@ export default function AdaptiveGuidance() {
             <div className="p-5 space-y-3">
               {question.options.map((option, idx) => {
                 const isSelected = selectedAnswers.includes(idx)
-                const correctIndexes = isMultiSelect ? question.correctIndexes || [] : [question.correctIndex ?? 0]
-                const isCorrectOption = showResult && correctIndexes.includes(idx)
+                const isCorrectOption = showResult && isSelected && isCorrect
                 const isWrongSelected = showResult && isSelected && !isCorrectOption
 
                 return (

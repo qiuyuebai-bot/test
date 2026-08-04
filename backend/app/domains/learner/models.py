@@ -2,7 +2,7 @@
 学习者域 ORM 模型
 合并 LearnerProfile、AnswerRecord、LearningPath 三个模型
 """
-from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, JSON, ForeignKey, Text, CheckConstraint, Enum as SQLEnum
+from sqlalchemy import Column, Integer, String, Float, Boolean, DateTime, JSON, ForeignKey, Text, CheckConstraint, UniqueConstraint, Enum as SQLEnum
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -209,16 +209,55 @@ class AdaptiveDecisionEnum(enum.Enum):
     REVIEW = "review"
 
 
+class IssuedTutoringQuestion(Base):
+    """Server-owned question payload and answer key for secure adaptive grading."""
+
+    __tablename__ = "issued_tutoring_questions"
+    __table_args__ = (
+        UniqueConstraint("source_resource_id", "source_question_index", name="uq_issued_question_source_index"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    learner_id = Column(Integer, ForeignKey("learner_profiles.id"), nullable=False, index=True)
+    question_type = Column(String(30), nullable=False, default="single")
+    topic = Column(String(100), nullable=False, index=True)
+    difficulty = Column(Integer, nullable=False, default=3)
+    content = Column(Text, nullable=False)
+    options = Column(JSON, default=list, nullable=False)
+    answer_key = Column(JSON, nullable=False)
+    explanation = Column(Text, nullable=True)
+    knowledge_points = Column(JSON, default=list)
+    source_slice_ids = Column(JSON, default=list)
+    source_doc_ids = Column(JSON, default=list)
+    source_resource_id = Column(Integer, ForeignKey("learning_resources.id"), nullable=True, index=True)
+    source_question_index = Column(Integer, nullable=True)
+    generation_method = Column(String(50), nullable=False)
+    status = Column(String(20), nullable=False, default="issued", index=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    answered_at = Column(DateTime, nullable=True)
+
+
 class AnswerRecord(Base):
     """用户答题交互记录表"""
 
     __tablename__ = "answer_records"
+    __table_args__ = (
+        UniqueConstraint("issued_question_id", name="uq_answer_record_issued_question"),
+    )
 
     id = Column(Integer, primary_key=True, autoincrement=True, comment="记录ID")
     user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True, comment="关联用户ID")
     learner_id = Column(Integer, ForeignKey("learner_profiles.id"), nullable=False, index=True, comment="关联学习者ID")
 
     question_id = Column(Integer, nullable=True, comment="题目ID")
+    issued_question_id = Column(
+        Integer,
+        ForeignKey("issued_tutoring_questions.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+        comment="服务端下发题目ID",
+    )
     question_type = Column(SQLEnum(QuestionTypeEnum, values_callable=lambda e: [m.value for m in e]), nullable=False, comment="题目类型")
     question_topic = Column(String(100), nullable=True, comment="题目主题")
     question_difficulty = Column(Integer, default=3, comment="题目难度(1-5)")
