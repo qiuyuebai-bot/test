@@ -141,3 +141,4 @@ celerybeat.pid
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
+.git-rewrite/
