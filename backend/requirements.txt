@@ -17,7 +17,7 @@ psycopg2-binary==2.9.9
 openai>=1.0.0
 chromadb==0.4.22
 chroma-hnswlib==0.7.3
-sentence-transformers==2.3.1
+sentence-transformers==5.6.1
 
 # 异步任务队列
 celery==5.3.6
