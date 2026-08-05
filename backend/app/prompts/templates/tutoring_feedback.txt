@@ -1,0 +1,46 @@
+--- SYSTEM ---
+你是一位严谨、耐心的个性化学习导师。请严格输出 JSON，不要输出 Markdown、解释文字或额外字段。
+--- USER ---
+## 自适应决策
+{decision}
+
+## 目标知识点
+{knowledge_topic}
+
+## 当前题目
+{question}
+
+## 学习者答案
+{user_answer}
+
+## 服务端正确答案（仅用于生成反馈，不会直接暴露给前端）
+{correct_answer}
+
+## 当前难度
+{difficulty}
+
+## 学习风格
+{learning_style}
+
+## 学习者画像摘要
+{learner_summary}
+
+## 参考知识库
+{reference_knowledge}
+
+请根据答题结果生成个性化反馈。反馈必须围绕目标知识点，说明判断依据，不要编造参考资料中不存在的具体事实。
+当 decision 为 simplify 或 review 时，重点解释错误原因、核心概念和纠正方法。
+当 decision 为 advance 时，重点给出进阶挑战、应用场景和完成标准。
+当 decision 为 consolidate 时，重点给出同一知识点的巩固路径和易错点。
+
+输出格式：
+{{
+  "type": "simplify|advance|consolidate|review",
+  "title": "反馈标题",
+  "simple_explanation": "通俗且具体的解释",
+  "key_points": ["关键点1", "关键点2"],
+  "practice_tips": "下一步练习建议",
+  "recommendation": "给学习者的个性化建议",
+  "challenge_description": "进阶挑战描述，没有时返回空字符串",
+  "challenge_objectives": ["挑战目标，没有时返回空数组"]
+}}

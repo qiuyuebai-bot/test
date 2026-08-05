@@ -2,7 +2,7 @@
 import json
 from typing import Any, Dict, List
 
-from app.utils.llm import LLMUtil
+from app.services.ai_content_service import AIContentService
 from app.utils.llm_response import (
     LLMResponseError,
     bounded_int,
@@ -60,10 +60,11 @@ class LLMGenerator:
         topic: str,
         question_count: int | None = None,
         variation_seed: str | int | None = None,
+        excluded_questions: List[str] | None = None,
     ) -> Dict[str, Any]:
         difficulty = cls._difficulty(diagnosis)
         question_count = max(1, min(10, question_count or 10))
-        response, _ = LLMUtil.call_with_prompt_template(
+        response, _ = AIContentService.call_with_prompt_template(
             "question_generation",
             {
                 "knowledge_topic": topic,
@@ -72,6 +73,9 @@ class LLMGenerator:
                 "reference_knowledge": cls._reference_text(knowledge),
                 "variation_seed": variation_seed or "",
                 "variation_hint": cls._variation_hint("exercise", variation_seed),
+                "excluded_questions": "\n".join(
+                    f"- {question[:300]}" for question in (excluded_questions or [])[:20]
+                ) or "无",
             },
             temperature=0.7,
             use_cache=False,
@@ -93,7 +97,7 @@ class LLMGenerator:
         variation_seed: str | int | None = None,
     ) -> Dict[str, Any]:
         difficulty = cls._difficulty(diagnosis)
-        response, _ = LLMUtil.call_with_prompt_template(
+        response, _ = AIContentService.call_with_prompt_template(
             "resource_generation",
             {
                 "learner_summary": cls._learner_summary(profile, diagnosis),

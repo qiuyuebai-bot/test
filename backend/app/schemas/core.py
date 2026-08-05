@@ -200,9 +200,10 @@ class SystemMetricsResponse(BaseModel):
 class GenerateTutoringQuestionsRequest(BaseModel):
     """Request an ungraded, dynamically generated practice set."""
     learner_id: int = Field(..., description="学习者ID", gt=0)
-    topic: str = Field(..., description="目标知识点", min_length=1, max_length=200)
-    difficulty: int = Field(..., description="题目难度", ge=1, le=5)
+    topic: Optional[str] = Field(None, description="目标知识点；为空时使用最近的分阶测试题主题", max_length=200)
+    difficulty: Optional[int] = Field(None, description="题目难度；为空时使用学习者推荐难度", ge=1, le=5)
     question_count: int = Field(10, description="question count", ge=1, le=10)
+    replace_pending: bool = Field(False, description="是否替换该主题下尚未作答的旧题")
 
 
 class SubmitAnswerRequest(BaseModel):

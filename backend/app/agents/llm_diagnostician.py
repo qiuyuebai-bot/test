@@ -2,7 +2,7 @@
 import json
 from typing import Any, Dict
 
-from app.utils.llm import LLMUtil
+from app.services.ai_content_service import AIContentService
 from app.utils.llm_response import bounded_list, bounded_text, parse_json_object
 
 
@@ -11,7 +11,7 @@ class LLMDiagnostician:
 
     @classmethod
     def enhance_result(cls, result: Dict[str, Any]) -> Dict[str, Any]:
-        response, _ = LLMUtil.call_with_prompt_template(
+        response, _ = AIContentService.call_with_prompt_template(
             "learner_diagnosis",
             {
                 "ability_summary": json.dumps(result.get("ability_levels", {}), ensure_ascii=False),

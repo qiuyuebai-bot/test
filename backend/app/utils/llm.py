@@ -1,6 +1,6 @@
 """
 大模型通用调用封装
-接入阿里百炼 DashScope API（OpenAI 兼容模式，使用 httpx 直连）
+接入 DeepSeek 等 OpenAI 兼容 API（使用 httpx 直连）
 使用单例 httpx 客户端复用连接，避免重复 TCP 握手开销
 
 P3-3 增强：
@@ -27,7 +27,7 @@ from app.utils.circuit_breaker import CircuitBreaker
 class LLMUtil:
     """
     大模型通用调用工具类
-    接入阿里百炼 DashScope API（兼容 OpenAI 协议）
+    接入统一的 OpenAI 兼容协议 API（默认 DeepSeek）
     使用 httpx 直连，避免 OpenAI SDK 在受限环境中的兼容问题
     复用 httpx 客户端连接池，提升并发性能
     """
@@ -162,7 +162,7 @@ class LLMUtil:
         """检查大模型是否可用"""
         if cls._available is not None:
             return cls._available
-        cls._available = bool(settings.OPENAI_API_KEY and settings.OPENAI_API_KEY != "")
+        cls._available = bool((settings.OPENAI_API_KEY or "").strip())
         return cls._available
 
     @classmethod
@@ -181,7 +181,7 @@ class LLMUtil:
     @classmethod
     def _chat_url(cls) -> str:
         """获取 Chat Completions API 地址"""
-        return f"{settings.OPENAI_API_BASE}/chat/completions"
+        return f"{settings.OPENAI_API_BASE.rstrip('/')}/chat/completions"
 
     @classmethod
     def _call_api(

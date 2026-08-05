@@ -9,6 +9,8 @@ import threading
 import logging
 from loguru import logger
 from app.config import settings
+from app.services.ai_content_service import AIContentService
+from app.utils.llm import LLMUtil
 
 
 class HallucinationUtil:
@@ -329,8 +331,6 @@ class HallucinationUtil:
         Returns:
             LLM核查结果或None（LLM不可用时）
         """
-        from app.utils.llm import LLMUtil
-        
         if not LLMUtil.is_available():
             return None
         
@@ -384,7 +384,7 @@ class HallucinationUtil:
                 f'"confidence": 0-1的置信度}}'
             )
             
-            response_text, _ = LLMUtil.sync_call(
+            response_text, _ = AIContentService.sync_call(
                 prompt=user_prompt,
                 system_prompt=system_prompt,
                 temperature=0.1,

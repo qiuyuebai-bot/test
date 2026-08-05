@@ -507,8 +507,8 @@ appConfig:
   RESOURCE_OUTPUT_DIR: "/app/data/resources"
   LOG_DIR: "/app/logs"
   # 大模型配置（敏感信息走 Secret）
-  OPENAI_API_BASE: "https://api.openai.com/v1"
-  OPENAI_MODEL_NAME: "gpt-4-turbo-preview"
+  OPENAI_API_BASE: "https://api.deepseek.com/v1"
+  OPENAI_MODEL_NAME: "deepseek-chat"
   OPENAI_TEMPERATURE: "0.7"
   OPENAI_MAX_TOKENS: "4096"
   # JWT 配置
@@ -534,7 +534,7 @@ secrets:
   # 内置 Secret 数据（base64 编码由 Helm 自动处理，这里写明文）
   data:
     SECRET_KEY: "change-me-in-production-please-use-a-long-random-string"
-    OPENAI_API_KEY: "sk-your-api-key-here"
+    OPENAI_API_KEY: ""
     DEFAULT_ADMIN_PASSWORD: "admin123"
     POSTGRES_PASSWORD: "ChangeMeInProduction"
     REDIS_PASSWORD: ""

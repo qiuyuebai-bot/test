@@ -155,7 +155,7 @@ def test_llm_question_generation_allows_ten_questions(monkeypatch):
     assert captured["template_name"] == "question_generation"
     assert captured["question_count"] == 10
     assert len(result) == 10
-    assert result[0]["generation_method"] == "llm"
+    assert result[0]["generation_method"] == "deepseek"
 
 
 def test_llm_exercise_generation_uses_variation_and_no_cache(monkeypatch):

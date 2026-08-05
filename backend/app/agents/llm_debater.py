@@ -2,7 +2,7 @@
 import json
 from typing import Any, Dict, List
 
-from app.utils.llm import LLMUtil
+from app.services.ai_content_service import AIContentService
 from app.utils.llm_response import bounded_list, bounded_text, parse_json_object
 
 
@@ -13,7 +13,7 @@ class LLMDebater:
     def run_debate_round(
         cls, generated_content: str, reference_knowledge: List[Dict[str, Any]], audit_result: Dict[str, Any], round_num: int
     ) -> Dict[str, Any]:
-        response, _ = LLMUtil.call_with_prompt_template(
+        response, _ = AIContentService.call_with_prompt_template(
             "debate_review",
             {
                 "round_num": round_num,

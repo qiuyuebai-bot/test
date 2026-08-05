@@ -140,7 +140,7 @@ class GenerationAgent(BaseAgent):
                     **LLMGenerator.generate_guide(
                         diagnosis, knowledge, profile, topic, variation_seed=variation_seed
                     ),
-                    "generation_method": "llm",
+                    "generation_method": "deepseek",
                 }
             except Exception as exc:
                 logger.warning(f"[知识生成Agent] LLM 实操指南生成失败，使用规则兜底: {exc}")
@@ -237,7 +237,7 @@ class GenerationAgent(BaseAgent):
                     **LLMGenerator.generate_exercises(
                         diagnosis, knowledge, profile, topic, variation_seed=variation_seed
                     ),
-                    "generation_method": "llm",
+                    "generation_method": "deepseek",
                 }
             except Exception as exc:
                 logger.warning(f"[知识生成Agent] LLM 测试题生成失败，使用规则兜底: {exc}")
@@ -312,7 +312,7 @@ class GenerationAgent(BaseAgent):
                     **LLMGenerator.generate_lecture(
                         diagnosis, knowledge, profile, topic, variation_seed=variation_seed
                     ),
-                    "generation_method": "llm",
+                    "generation_method": "deepseek",
                 }
             except Exception as exc:
                 logger.warning(f"[知识生成Agent] LLM 讲义生成失败，使用规则兜底: {exc}")

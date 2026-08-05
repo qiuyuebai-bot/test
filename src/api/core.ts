@@ -14,6 +14,21 @@ export interface TutoringQuestion {
   question: string
   options: string[]
   difficulty: number
+  knowledgePoints?: string[]
+  generationMethod?: string
+}
+
+export interface GenerateTutoringQuestionsRequest {
+  learnerId: number
+  topic?: string
+  difficulty?: number
+  questionCount?: number
+  replacePending?: boolean
+}
+
+export interface GenerateTutoringQuestionsResponse {
+  questions: TutoringQuestion[]
+  generationMethod?: string
 }
 
 export interface SubmitAnswerRequest {
@@ -110,5 +125,9 @@ export const coreApi = {
 
   getTutoringQuestions(learnerId: number): Promise<TutoringQuestion[]> {
     return http.get<TutoringQuestion[]>('/tutoring/questions', { learnerId })
+  },
+
+  generateTutoringQuestions(data: GenerateTutoringQuestionsRequest): Promise<GenerateTutoringQuestionsResponse> {
+    return http.post<GenerateTutoringQuestionsResponse>('/tutoring/questions/generate', data, { timeout: 120000 })
   },
 }

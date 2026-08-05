@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.services import tutoring_service as tutoring_service_module
 from app.services.tutoring_service import AdaptiveTutoringService
-from app.models import LearnerProfile, LearningResource, AnswerRecord
+from app.models import LearnerProfile, LearningResource, AnswerRecord, IssuedTutoringQuestion
 
 
 @pytest.fixture(autouse=True)
@@ -28,6 +28,14 @@ def patch_tutoring_db_context(db_session: Session, monkeypatch):
 
     monkeypatch.setattr(
         tutoring_service_module, "get_db_context", override_get_db_context
+    )
+    def disable_ai(cls, content_type, payload):
+        raise RuntimeError("AI disabled in unit tests")
+
+    monkeypatch.setattr(
+        tutoring_service_module.AIContentService,
+        "generate",
+        classmethod(disable_ai),
     )
 
 
@@ -56,6 +64,46 @@ class TestGetQuestions:
             assert "question" in q
             assert "options" in q
             assert "difficulty" in q
+
+
+class TestDynamicQuestionGeneration:
+    """动态出题使用主题别名并保持服务端答案隔离。"""
+
+    def test_topic_alias_is_normalized(self):
+        assert AdaptiveTutoringService._normalize_topic("BP算法") == "反向传播算法"
+        assert AdaptiveTutoringService._normalize_topic("python list") == "Python列表"
+
+    def test_generates_topic_specific_fallback_question(
+        self, db_session, sample_learner_profile, sample_user, monkeypatch
+    ):
+        monkeypatch.setattr(
+            tutoring_service_module,
+            "DiagnosisAgent",
+            lambda: type("FakeDiagnosis", (), {
+                "execute": lambda self, payload: {
+                    "recommended_difficulty": {"recommended_difficulty": 2}
+                }
+            })(),
+        )
+        monkeypatch.setattr(
+            tutoring_service_module.LLMUtil,
+            "is_available",
+            classmethod(lambda cls: False),
+        )
+
+        questions = AdaptiveTutoringService.generate_dynamic_questions(
+            user_id=sample_user.id,
+            learner_id=sample_learner_profile.id,
+            topic="BP算法",
+            difficulty=2,
+            question_count=1,
+        )
+
+        assert len(questions) == 1
+        assert questions[0]["topic"] == "反向传播算法"
+        assert "correctAnswer" not in questions[0]
+        issued = db_session.query(IssuedTutoringQuestion).one()
+        assert issued.answer_key
 
 
 class TestRunAgentDecision:

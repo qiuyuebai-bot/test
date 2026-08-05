@@ -76,15 +76,15 @@ appConfig:
   DEBUG_MODE: "true"
   CORS_ORIGINS: "*"
   # 开发环境使用 LLM Mock 模式（不消耗 API 配额）
-  OPENAI_API_BASE: "https://api.openai.com/v1"
-  OPENAI_MODEL_NAME: "gpt-4-turbo-preview"
+  OPENAI_API_BASE: "https://api.deepseek.com/v1"
+  OPENAI_MODEL_NAME: "deepseek-chat"
 
 # 开发环境使用简单的内置 Secret（仅本地）
 secrets:
   existingSecret: ""
   data:
     SECRET_KEY: "dev-only-secret-key-not-for-production-use-32-chars"
-    OPENAI_API_KEY: "sk-dev-placeholder-key-replace-with-real-key"
+    OPENAI_API_KEY: ""
     DEFAULT_ADMIN_PASSWORD: "admin123"
     POSTGRES_PASSWORD: "devPassword123"
     REDIS_PASSWORD: ""

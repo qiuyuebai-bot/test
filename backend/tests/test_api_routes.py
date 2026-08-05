@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
 from app.models import IssuedTutoringQuestion, User, LearnerProfile, KnowledgeDoc
+from app.services import tutoring_service as tutoring_service_module
 
 
 class TestBaseRoutes:
@@ -295,6 +296,45 @@ class TestCoreRoutes:
         """测试获取交互历史"""
         response = client.get(f"/api/v1/tutoring/history/{sample_learner_profile.id}?page=1&page_size=10", headers=auth_headers)
         assert response.status_code == 200
+
+    def test_generate_tutoring_questions_normalizes_topic_and_hides_answer(
+        self,
+        client: TestClient,
+        sample_learner_profile: LearnerProfile,
+        auth_headers: dict,
+        monkeypatch,
+    ):
+        monkeypatch.setattr(
+            tutoring_service_module.LLMUtil,
+            "is_available",
+            classmethod(lambda cls: False),
+        )
+        monkeypatch.setattr(
+            tutoring_service_module,
+            "DiagnosisAgent",
+            lambda: type(
+                "FakeDiagnosis",
+                (),
+                {"execute": lambda self, payload: {"recommended_difficulty": {"recommended_difficulty": 2}}},
+            )(),
+        )
+
+        response = client.post(
+            "/api/v1/tutoring/questions/generate",
+            json={
+                "learner_id": sample_learner_profile.id,
+                "topic": "BP算法",
+                "difficulty": 2,
+                "question_count": 1,
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        question = response.json()["data"]["questions"][0]
+        assert question["topic"] == "反向传播算法"
+        assert "answer_key" not in question
+        assert "correctAnswer" not in question
 
 
 class TestErrorHandling:

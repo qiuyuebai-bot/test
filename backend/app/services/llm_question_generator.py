@@ -11,7 +11,14 @@ class LLMQuestionGenerator:
 
     @classmethod
     def generate_question_set(
-        cls, topic: str, difficulty: int, count: int, knowledge: List[Dict[str, Any]] | None = None
+        cls,
+        topic: str,
+        difficulty: int,
+        count: int,
+        knowledge: List[Dict[str, Any]] | None = None,
+        *,
+        variation_seed: str | None = None,
+        excluded_questions: List[str] | None = None,
     ) -> List[Dict[str, Any]]:
         if not LLMUtil.is_available():
             raise RuntimeError("LLM is unavailable")
@@ -21,6 +28,8 @@ class LLMQuestionGenerator:
             {},
             topic,
             question_count=count,
+            variation_seed=variation_seed,
+            excluded_questions=excluded_questions or [],
         )
         questions = generated["content_json"].get("basic_questions", []) + generated["content_json"].get("advanced_questions", [])
         result = []
@@ -36,7 +45,7 @@ class LLMQuestionGenerator:
                 "difficulty": question["difficulty"],
                 "explanation": question["explanation"],
                 "knowledgePoints": question.get("knowledge_points", []),
-                "generation_method": "llm",
+                "generation_method": "deepseek",
             })
         return result
 

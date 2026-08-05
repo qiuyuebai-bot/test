@@ -316,6 +316,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/onboarding/name": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 注册后设置称呼
+         * @description 为当前登录用户创建或更新学习者画像名称。
+         */
+        post: operations["set_onboarding_name_api_v1_auth_onboarding_name_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/change-password": {
         parameters: {
             query?: never;
@@ -1469,11 +1489,31 @@ export interface paths {
         };
         /**
          * 获取导学题库
-         * @description 获取自适应导学题库
+         * @description 获取当前学习者尚未作答的导学题目。
          */
         get: operations["get_tutoring_questions_api_v1_tutoring_questions_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tutoring/questions/generate": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * 动态生成练习题
+         * @description 生成服务端保存的练习题；浏览器不会收到正确答案。
+         */
+        post: operations["generate_tutoring_questions_api_v1_tutoring_questions_generate_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -2067,7 +2107,9 @@ export interface components {
              * Input Data
              * @description 额外输入数据
              */
-            input_data?: Record<string, never> | null;
+            input_data?: {
+                [key: string]: unknown;
+            } | null;
         };
         /**
          * DiagnosisRequest
@@ -2100,6 +2142,39 @@ export interface components {
              * @description 行业领域
              */
             industry?: string | null;
+        };
+        /**
+         * GenerateTutoringQuestionsRequest
+         * @description Request an ungraded, dynamically generated practice set.
+         */
+        GenerateTutoringQuestionsRequest: {
+            /**
+             * Learner Id
+             * @description 学习者ID
+             */
+            learner_id: number;
+            /**
+             * Topic
+             * @description 目标知识点；为空时使用最近的分阶测试题主题
+             */
+            topic?: string | null;
+            /**
+             * Difficulty
+             * @description 题目难度；为空时使用学习者推荐难度
+             */
+            difficulty?: number | null;
+            /**
+             * Question Count
+             * @description question count
+             * @default 10
+             */
+            question_count: number;
+            /**
+             * Replace Pending
+             * @description 是否替换该主题下尚未作答的旧题
+             * @default false
+             */
+            replace_pending: boolean;
         };
         /**
          * GenerationRequest
@@ -2224,8 +2299,11 @@ export interface components {
          * @description 批量导入项
          */
         LearnerBatchImportItem: {
-            /** User Id */
-            user_id?: number | null;
+            /**
+             * User Id
+             * @description 关联用户ID
+             */
+            user_id: number;
             /** Real Name */
             real_name?: string | null;
             /** Education Level */
@@ -2297,17 +2375,17 @@ export interface components {
              * Real Name
              * @description 真实姓名
              */
-            real_name?: string | null;
+            real_name: string;
             /**
              * Education Level
              * @description 学历层次
              */
-            education_level?: string | null;
+            education_level: string;
             /**
              * Major
              * @description 专业方向
              */
-            major?: string | null;
+            major: string;
             /**
              * Graduation Year
              * @description 毕业年份
@@ -2351,11 +2429,6 @@ export interface components {
              * @description 学习目标描述
              */
             learning_goal?: string | null;
-            /**
-             * User Id
-             * @description 关联用户ID
-             */
-            user_id: number;
             /**
              * Theoretical Foundation
              * @description 理论基础
@@ -2459,6 +2532,18 @@ export interface components {
             password: string;
         };
         /**
+         * OnboardingNameRequest
+         * @description 注册后设置称呼
+         */
+        OnboardingNameRequest: {
+            /**
+             * Name
+             * @description 用户在系统内显示的称呼
+             * @example 秋月白
+             */
+            name: string;
+        };
+        /**
          * RefreshTokenRequest
          * @description 刷新Token请求
          */
@@ -2501,7 +2586,7 @@ export interface components {
         };
         /**
          * SubmitAnswerRequest
-         * @description 提交答题请求
+         * @description 提交答题请求。动态题由服务端根据 question_id 判分。
          */
         SubmitAnswerRequest: {
             /**
@@ -2510,55 +2595,15 @@ export interface components {
              */
             learner_id: number;
             /**
-             * User Id
-             * @description 用户ID
-             */
-            user_id?: number | null;
-            /**
              * Question Id
              * @description 题目ID
              */
             question_id?: string | null;
             /**
-             * Question Type
-             * @description 题目类型
-             */
-            question_type: string;
-            /**
-             * Question Topic
-             * @description 题目主题
-             */
-            question_topic: string;
-            /**
-             * Question Difficulty
-             * @description 题目难度
-             */
-            question_difficulty: number;
-            /**
-             * Question Content
-             * @description 题目内容
-             */
-            question_content: string;
-            /**
              * User Answer
              * @description 用户答案
              */
             user_answer: unknown;
-            /**
-             * Correct Answer
-             * @description 正确答案
-             */
-            correct_answer: unknown;
-            /**
-             * Result
-             * @description 答题结果
-             */
-            result?: string | null;
-            /**
-             * Score
-             * @description 得分
-             */
-            score: number;
             /**
              * Time Spent Ms
              * @description 答题耗时(毫秒)
@@ -2570,6 +2615,36 @@ export interface components {
              * @default 0
              */
             hints_used: number;
+            /**
+             * Question Type
+             * @description 题目类型
+             */
+            question_type?: string | null;
+            /**
+             * Question Topic
+             * @description 题目主题
+             */
+            question_topic?: string | null;
+            /**
+             * Question Difficulty
+             * @description 题目难度
+             */
+            question_difficulty?: number | null;
+            /**
+             * Question Content
+             * @description 题目内容
+             */
+            question_content?: string | null;
+            /**
+             * Correct Answer
+             * @description 旧题库答案
+             */
+            correct_answer?: unknown | null;
+            /**
+             * Score
+             * @description 旧题库得分
+             */
+            score?: number | null;
         };
         /**
          * TrainingBatchImportItem
@@ -2691,7 +2766,9 @@ export interface components {
              * Skill Gap Analysis
              * @description 技能差距分析
              */
-            skill_gap_analysis?: Record<string, never>;
+            skill_gap_analysis?: {
+                [key: string]: unknown;
+            };
         };
         /**
          * TrainingUpdate
@@ -2731,7 +2808,9 @@ export interface components {
             /** Transfer To Position */
             transfer_to_position?: string | null;
             /** Skill Gap Analysis */
-            skill_gap_analysis?: Record<string, never> | null;
+            skill_gap_analysis?: {
+                [key: string]: unknown;
+            } | null;
             /** Pass Rate */
             pass_rate?: number | null;
             /** Average Score */
@@ -3141,6 +3220,58 @@ export interface operations {
             cookie?: never;
         };
         requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+            /** @description 请求参数错误（用户名已占用、邮箱已注册等） */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 未授权（凭据无效或Token过期） */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 请求体验证失败（字段格式不符合要求） */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description 服务器内部错误 */
+            500: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    set_onboarding_name_api_v1_auth_onboarding_name_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OnboardingNameRequest"];
+            };
+        };
         responses: {
             /** @description Successful Response */
             200: {
@@ -4738,7 +4869,9 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": Record<string, never>;
+                "application/json": {
+                    [key: string]: unknown;
+                };
             };
         };
         responses: {
@@ -5192,7 +5325,10 @@ export interface operations {
     };
     get_tutoring_questions_api_v1_tutoring_questions_get: {
         parameters: {
-            query?: never;
+            query: {
+                /** @description 学习者ID */
+                learner_id: number;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -5206,6 +5342,48 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_tutoring_questions_api_v1_tutoring_questions_generate_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GenerateTutoringQuestionsRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };

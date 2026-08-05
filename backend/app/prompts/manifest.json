@@ -23,7 +23,12 @@
   "question_generation": {
     "version": "1.0.0",
     "description": "分阶测试题生成：按难度等级生成对应题目与解析",
-    "variables": ["knowledge_topic", "difficulty_level", "question_count", "reference_knowledge"]
+    "variables": ["knowledge_topic", "difficulty_level", "question_count", "reference_knowledge", "excluded_questions"]
+  },
+  "tutoring_feedback": {
+    "version": "1.0.0",
+    "description": "自适应导学反馈：根据答题结果生成解释、挑战和学习建议",
+    "variables": ["decision", "knowledge_topic", "question", "user_answer", "correct_answer", "difficulty", "learning_style", "learner_summary", "reference_knowledge"]
   },
   "debate_review": {
     "version": "1.0.0",

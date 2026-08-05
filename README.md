@@ -363,7 +363,7 @@ kubectl get pods -n knowledge-prod -w
 | `DATABASE_URL` | `sqlite:////app/data/app.db` | 数据库连接 URL |
 | `REDIS_URL` | `redis://redis:6379/0` | Redis 连接 |
 | `OPENAI_API_KEY` | 空 | OpenAI API 密钥 |
-| `OPENAI_API_BASE` | `https://api.openai.com/v1` | 兼容 OpenAI 接口的大模型地址 |
+| `OPENAI_API_BASE` | `https://api.deepseek.com/v1` | DeepSeek/OpenAI 兼容接口地址 |
 | `DEBUG_MODE` | `false` | 调试模式（输出详细错误） |
 | `FRONTEND_PORT` | `80` | 前端对外端口 |
 | `BACKEND_PORT` | `8000` | 后端对外端口 |

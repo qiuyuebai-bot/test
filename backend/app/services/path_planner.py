@@ -2,6 +2,7 @@
 import json
 from typing import Any, Dict, List
 
+from app.services.ai_content_service import AIContentService
 from app.utils.llm import LLMUtil
 from app.utils.llm_response import bounded_int, bounded_list, bounded_text, parse_json_object
 
@@ -23,7 +24,7 @@ class PathPlanner:
             "blind_areas": blind_areas[:5],
             "resources": resources[:12],
         }
-        response, _ = LLMUtil.call_with_prompt_template(
+        response, _ = AIContentService.call_with_prompt_template(
             "path_planning", {"learner_context": json.dumps(context, ensure_ascii=False)}, temperature=0.3
         )
         payload = parse_json_object(response)

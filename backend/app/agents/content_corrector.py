@@ -10,6 +10,7 @@ from typing import Any, Dict, List, Optional
 
 from loguru import logger
 
+from app.services.ai_content_service import AIContentService
 from app.utils.llm import LLMUtil
 
 
@@ -83,7 +84,7 @@ class ContentCorrector:
                 f"请根据以上审核意见修正内容，直接输出修正后的完整文本："
             )
 
-            revised, _ = LLMUtil.sync_call(
+            revised, _ = AIContentService.sync_call(
                 prompt=user_prompt,
                 system_prompt=system_prompt,
                 temperature=0.3,

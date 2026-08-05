@@ -133,14 +133,15 @@ appConfig:
   DEBUG_MODE: "false"
   CORS_ORIGINS: "https://staging.knowledge-system.example.com"
   CORS_ALLOW_CREDENTIALS: "true"
-  OPENAI_MODEL_NAME: "gpt-4-turbo-preview"
+  OPENAI_API_BASE: "https://api.deepseek.com/v1"
+  OPENAI_MODEL_NAME: "deepseek-chat"
 
 # ---- Secret（staging 用内置，prod 必须用 existingSecret） ----
 secrets:
   existingSecret: ""
   data:
     SECRET_KEY: "staging-secret-key-generate-a-random-32-char-string-here"
-    OPENAI_API_KEY: "sk-staging-api-key-replace-with-real"
+    OPENAI_API_KEY: ""
     DEFAULT_ADMIN_PASSWORD: "StagingAdmin2026"
     POSTGRES_PASSWORD: "StagingStrongPwd2026"
     REDIS_PASSWORD: ""

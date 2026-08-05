@@ -10,6 +10,7 @@ from app.database import get_db
 from app.schemas.response import (
     success,
     error,
+    bad_request,
     not_found,
     paged_success,
     unauthorized,
@@ -59,11 +60,14 @@ def generate_tutoring_questions(
             request.topic,
             request.difficulty,
             request.question_count,
+            request.replace_pending,
         )
         return success(data={"questions": questions, "generation_method": questions[0].get("generationMethod", "deterministic_fallback") if questions else "deterministic_fallback"})
+    except ValueError as e:
+        return bad_request(message=str(e))
     except Exception as e:
         LoggerUtil.log_error("动态生成题目失败", e)
-        return error(message=f"动态生成题目失败: {str(e)}")
+        return error(message="动态生成题目失败，请稍后重试")
 
 
 @router.post("/tutoring/answer", summary="提交答题结果")

@@ -127,9 +127,9 @@ class Settings(BaseSettings):
     CHROMA_COLLECTION_NAME: str = Field(default="knowledge_slices", description="Chroma集合名称")
     EMBEDDING_MODEL_PATH: str = Field(default="./models/embedding_model", description="Embedding模型路径")
 
-    OPENAI_API_KEY: str = Field(default="", description="OpenAI API密钥")
-    OPENAI_API_BASE: str = Field(default="https://api.openai.com/v1", description="OpenAI API地址")
-    OPENAI_MODEL_NAME: str = Field(default="gpt-4-turbo-preview", description="使用的模型名称")
+    OPENAI_API_KEY: str = Field(default="", description="OpenAI兼容API密钥（服务端环境变量）")
+    OPENAI_API_BASE: str = Field(default="https://api.deepseek.com/v1", description="DeepSeek OpenAI兼容API地址")
+    OPENAI_MODEL_NAME: str = Field(default="deepseek-chat", description="DeepSeek模型名称")
     OPENAI_TEMPERATURE: float = Field(default=0.7, description="模型温度参数")
     OPENAI_MAX_TOKENS: int = Field(default=4096, description="最大Token数")
 

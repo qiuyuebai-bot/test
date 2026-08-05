@@ -46,6 +46,7 @@ interface GeneratedContent {
   simpleExplanation?: string
   keyPoints?: string[]
   practiceTips?: string
+  recommendation?: string
   challengeDescription?: string
   challengeObjectives?: string[]
   estimatedTime?: string
@@ -98,6 +99,8 @@ type SubmitDataRaw = {
   agent_decision?: { decision?: string; reason?: string }
   nextAction?: { type?: string }
   next_action?: { type?: string }
+  nextQuestionDifficulty?: number
+  next_question_difficulty?: number
 }
 
 type SubmitResultRaw = {
@@ -136,6 +139,7 @@ export default function AdaptiveGuidance() {
   const [expandedHistory, setExpandedHistory] = useState<string | null>(null)
   const [correctCount, setCorrectCount] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [isGenerating, setIsGenerating] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   const [historyRecords, setHistoryRecords] = useState<HistoryRecord[]>([])
@@ -179,6 +183,51 @@ export default function AdaptiveGuidance() {
   useEffect(() => {
     loadData()
   }, [loadData])
+
+  const generateQuestions = useCallback(async (options?: {
+    topic?: string
+    difficulty?: number
+    questionCount?: number
+    replacePending?: boolean
+    silent?: boolean
+  }): Promise<TutoringQuestion[]> => {
+    if (!learner?.id) return []
+    setIsGenerating(true)
+    if (!options?.silent) setError(null)
+    try {
+      const response = await coreApi.generateTutoringQuestions({
+        learnerId: learner.id,
+        topic: options?.topic,
+        difficulty: options?.difficulty,
+        questionCount: options?.questionCount ?? 3,
+        replacePending: options?.replacePending ?? false,
+      })
+      const generatedQuestions = response.questions ?? []
+      if (generatedQuestions.length === 0) {
+        throw new Error('暂时没有生成可用题目，请先完成资源生成')
+      }
+      if (options?.replacePending) {
+        setQuestions((previous) => [
+          ...previous.slice(0, currentQuestion + 1),
+          ...generatedQuestions,
+        ])
+      } else {
+        setQuestions(generatedQuestions)
+        setCurrentQuestion(0)
+        setSelectedAnswers([])
+        setShowResult(false)
+        setSubmitResult(null)
+      }
+      return generatedQuestions
+    } catch (err) {
+      if (!options?.silent) {
+        setError(err instanceof Error ? err.message : '题目生成失败，请稍后重试')
+      }
+      return []
+    } finally {
+      setIsGenerating(false)
+    }
+  }, [currentQuestion, learner?.id])
 
   const question = questions[currentQuestion]
   const isMultiSelect = question?.type === 'multiple'
@@ -261,6 +310,17 @@ export default function AdaptiveGuidance() {
       }
 
       if (isCorrect) setCorrectCount((c) => c + 1)
+
+      const nextDifficulty = data?.nextQuestionDifficulty
+        ?? data?.next_question_difficulty
+        ?? Math.max(1, Math.min(5, question.difficulty + (isCorrect ? 1 : -1)))
+      await generateQuestions({
+        topic: question.topic,
+        difficulty: nextDifficulty,
+        questionCount: 1,
+        replacePending: true,
+        silent: true,
+      })
     } catch {
       setShowResult(false)
       setError('答案提交失败，请重试')
@@ -301,7 +361,16 @@ export default function AdaptiveGuidance() {
       <EmptyState
         type="default"
         title="暂无导学题目"
-        description="请先在资源生成中完成审核通过的分阶测试题"
+        description="可根据最近生成的学习资源和学习者画像动态生成导学题目"
+        action={(
+          <Button
+            variant="primary"
+            loading={isGenerating}
+            onClick={() => { void generateQuestions({ questionCount: 3 }) }}
+          >
+            生成导学题目
+          </Button>
+        )}
       />
     )
   }
@@ -326,6 +395,9 @@ export default function AdaptiveGuidance() {
             : []),
           ...(submitResult.generatedContent.practiceTips
             ? [{ heading: '🛠 实践建议', content: submitResult.generatedContent.practiceTips }]
+            : []),
+          ...(submitResult.generatedContent.recommendation
+            ? [{ heading: '📌 个性化建议', content: submitResult.generatedContent.recommendation }]
             : []),
         ],
       }

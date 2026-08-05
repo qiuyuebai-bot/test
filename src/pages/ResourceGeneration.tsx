@@ -382,7 +382,7 @@ export default function ResourceGeneration() {
             </div>
             <h3 className="text-base font-semibold text-text-primary mb-1">{selectedResource.title}</h3>
             <p className="text-xs text-text-tertiary">
-              v{selectedResource.versionNumber} · {selectedResource.generationMethod === 'llm' ? '🤖 LLM生成' : '📋 规则生成'} · {new Date(selectedResource.generationTime).toLocaleString('zh-CN')}
+              v{selectedResource.versionNumber} · {selectedResource.generationMethod === 'deepseek' || selectedResource.generationMethod === 'llm' ? '🤖 DeepSeek生成' : '📋 规则生成'} · {new Date(selectedResource.generationTime).toLocaleString('zh-CN')}
             </p>
           </div>
         </div>

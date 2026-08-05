@@ -24,6 +24,10 @@ vi.mock('@/api', () => ({
       score: 100,
       generatedContent: {},
     }),
+    generateTutoringQuestions: vi.fn().mockResolvedValue({
+      questions: [],
+      generationMethod: 'deterministic_fallback',
+    }),
     getInteractionHistory: vi.fn().mockResolvedValue({ learnerId: 1, history: [], total: 0, page: 1, pageSize: 20 }),
     generateResources: vi.fn(),
     getResourceList: vi.fn(),
@@ -55,6 +59,17 @@ beforeEach(() => {
   ])
   vi.mocked(coreApi.getInteractionHistory).mockResolvedValue({ learnerId: 1, history: [], total: 0, page: 1, pageSize: 20 })
   vi.mocked(coreApi.submitAnswer).mockResolvedValue({ isCorrect: true, score: 100, generatedContent: {} })
+  vi.mocked(coreApi.generateTutoringQuestions).mockResolvedValue({
+    questions: [{
+      id: 'q2',
+      type: 'single',
+      topic: 'CNN',
+      question: 'Generated next question',
+      options: ['Option A', 'Option B'],
+      difficulty: 3,
+    }],
+    generationMethod: 'deepseek',
+  })
   resetMockStore()
   setMockStore({ currentLearner: { id: 1, realName: '测试学习者', displayName: 'L001' } })
 })
@@ -81,6 +96,13 @@ describe('AdaptiveGuidance page', () => {
       userAnswer: 'B',
       timeSpentMs: 0,
       hintsUsed: 0,
+    }))
+    await waitFor(() => expect(coreApi.generateTutoringQuestions).toHaveBeenCalledWith({
+      learnerId: 1,
+      topic: 'CNN',
+      difficulty: 3,
+      questionCount: 1,
+      replacePending: true,
     }))
   })
 })

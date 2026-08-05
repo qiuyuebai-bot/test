@@ -16,6 +16,7 @@ from app.models import (
     IssuedTutoringQuestion,
 )
 from app.agents.diagnosis_agent import DiagnosisAgent
+from app.services.ai_content_service import AIContentService
 from app.services.common import BaseService
 from app.constants import ADAPTIVE_DECISION_THRESHOLD, MAX_DIFFICULTY
 from app.utils.seed_loader import load_seed_payload
@@ -36,11 +37,118 @@ class AdaptiveTutoringService(BaseService):
     """
 
     DECISION_THRESHOLD = ADAPTIVE_DECISION_THRESHOLD  # 正确率阈值
+    TOPIC_ALIASES = {
+        "bp算法": "反向传播算法",
+        "bp 算法": "反向传播算法",
+        "bp": "反向传播算法",
+        "反向传播": "反向传播算法",
+        "backpropagation": "反向传播算法",
+        "back propagation": "反向传播算法",
+        "python列表": "Python列表",
+        "python 列表": "Python列表",
+        "python list": "Python列表",
+        "python lists": "Python列表",
+        "list": "Python列表",
+    }
 
     @classmethod
     def get_questions(cls) -> List[Dict[str, Any]]:
         """获取旧版静态题库，供兼容接口使用。"""
         return _QUESTION_BANK
+
+    @classmethod
+    def _normalize_topic(cls, topic: str) -> str:
+        normalized = " ".join(str(topic or "").strip().split())
+        if not normalized:
+            return ""
+        return cls.TOPIC_ALIASES.get(normalized.lower(), normalized)
+
+    @classmethod
+    def _resolve_topic(cls, learner_id: int, topic: str) -> str:
+        normalized = cls._normalize_topic(topic)
+        if normalized:
+            return normalized
+
+        with get_db_context() as db:
+            resource = (
+                db.query(LearningResource)
+                .filter(
+                    LearningResource.learner_id == learner_id,
+                    LearningResource.resource_type == "exercise",
+                    LearningResource.validation_passed.is_(True),
+                    LearningResource.status == "ready",
+                    LearningResource.knowledge_topic.is_not(None),
+                )
+                .order_by(LearningResource.created_at.desc(), LearningResource.id.desc())
+                .first()
+            )
+            if resource and resource.knowledge_topic:
+                return cls._normalize_topic(resource.knowledge_topic)
+        return ""
+
+    @classmethod
+    def _topic_matches(cls, requested_topic: str, candidate_topic: str) -> bool:
+        requested = cls._normalize_topic(requested_topic).casefold()
+        candidate = cls._normalize_topic(candidate_topic).casefold()
+        return bool(requested and candidate and (requested == candidate or requested in candidate or candidate in requested))
+
+    @staticmethod
+    def _question_signature(question: Any) -> str:
+        """Create a stable comparison key for generated and historical questions."""
+        content = question.get("question", "") if isinstance(question, dict) else question
+        return " ".join(str(content or "").strip().casefold().split())
+
+    @classmethod
+    def _generic_fallback_question(cls, topic: str, difficulty: int, index: int) -> Dict[str, Any]:
+        """Return a topic-labelled question when neither the provider nor seed bank can help."""
+        variants = [
+            (
+                f"学习“{topic}”时，首先应该明确什么？",
+                [
+                    f"{topic}的核心概念、边界和典型应用",
+                    "只记住零散术语，不理解它们的关系",
+                    "先跳过基础概念，直接背诵结论",
+                    "只关注题目数量，不检查理解程度",
+                ],
+                "先建立核心概念、边界和应用场景，再学习具体细节。",
+            ),
+            (
+                f"针对“{topic}”进行练习时，哪种做法更有助于形成可迁移的理解？",
+                [
+                    "结合概念、步骤和实际场景进行验证",
+                    "只重复阅读定义，不动手检验",
+                    "只记住一个固定例子的答案",
+                    "遇到错误时直接跳过原因分析",
+                ],
+                "把概念放入不同场景中验证，并记录错误原因，才能形成可迁移的理解。",
+            ),
+            (
+                f"复习“{topic}”后，哪项结果最能说明已经掌握？",
+                [
+                    "能够解释原理，并在新场景中完成应用",
+                    "能够逐字复述一段定义",
+                    "能够记住某一道题的选项位置",
+                    "能够快速跳过不会的步骤",
+                ],
+                "掌握不仅是记忆定义，还应能解释原理并在新场景中正确应用。",
+            ),
+        ]
+        question, options, explanation = variants[index % len(variants)]
+        if index >= len(variants):
+            question = f"{question}（练习{index + 1}）"
+        return {
+            "id": f"fallback-{uuid.uuid4().hex}",
+            "type": "single",
+            "topic": topic,
+            "question": question,
+            "options": options,
+            "correctAnswer": 0,
+            "correctIndex": 0,
+            "difficulty": difficulty,
+            "explanation": explanation,
+            "knowledgePoints": [topic],
+            "generation_method": "deterministic_fallback",
+        }
 
     @staticmethod
     def _normalize_answer_key(answer: Any) -> List[str]:
@@ -148,61 +256,135 @@ class AdaptiveTutoringService(BaseService):
     
     @classmethod
     def generate_dynamic_questions(
-        cls, user_id: int, learner_id: int, topic: str, difficulty: int, question_count: int
+        cls,
+        user_id: int,
+        learner_id: int,
+        topic: str,
+        difficulty: Optional[int],
+        question_count: int,
+        replace_pending: bool = False,
     ) -> List[Dict[str, Any]]:
         """Issue server-owned questions; answer keys never leave this service."""
         learner = cls.get_learner(learner_id)
         if not learner:
             raise ValueError("学习者不存在")
 
+        question_count = max(1, min(10, int(question_count)))
+
+        normalized_topic = cls._resolve_topic(learner_id, topic)
+        if not normalized_topic:
+            raise ValueError("请先指定学习主题或生成分阶测试题资源")
+
         learner_profile = cls.model_to_dict(learner)
         diagnosis = DiagnosisAgent().execute({"learner_id": learner_id, "learner_profile": learner_profile})
-        effective_difficulty = diagnosis.get("recommended_difficulty", {}).get("recommended_difficulty", difficulty)
-        effective_difficulty = max(1, min(5, round((effective_difficulty + difficulty) / 2)))
+        recommended_difficulty = diagnosis.get("recommended_difficulty", {}).get("recommended_difficulty", 3)
+        requested_difficulty = difficulty if difficulty is not None else recommended_difficulty
+        effective_difficulty = max(
+            1,
+            min(5, int((int(recommended_difficulty) + int(requested_difficulty) + 1) / 2)),
+        )
         with get_db_context() as db:
             knowledge = KnowledgeService.search(
                 db=db,
-                query=topic,
+                query=normalized_topic,
                 industry=learner.target_industry,
                 top_k=6,
             )
+            previous_questions = (
+                db.query(IssuedTutoringQuestion.content)
+                .filter(
+                    IssuedTutoringQuestion.learner_id == learner_id,
+                    IssuedTutoringQuestion.topic == normalized_topic,
+                )
+                .order_by(IssuedTutoringQuestion.created_at.desc())
+                .limit(20)
+                .all()
+            )
+        excluded_questions = [row[0] for row in previous_questions if row[0]]
 
         generated: List[Dict[str, Any]] = []
-        if knowledge and LLMUtil.is_available():
+        if LLMUtil.is_available():
             try:
                 generated = LLMQuestionGenerator.generate_question_set(
-                    topic, effective_difficulty, question_count, knowledge
+                    normalized_topic,
+                    effective_difficulty,
+                    question_count,
+                    knowledge,
+                    variation_seed=f"{learner_id}-{normalized_topic}-{uuid.uuid4().hex}",
+                    excluded_questions=excluded_questions,
                 )
             except Exception as exc:
                 logger.warning(f"[自适应导学] LLM 动态出题失败，使用题库兜底: {exc}")
 
-        if not generated:
-            fallback = [
-                question for question in _QUESTION_BANK
-                if question.get("topic") == topic and question.get("difficulty") == effective_difficulty
-            ] or list(_QUESTION_BANK)
-            generated = [
-                {
-                    "id": str(question.get("id", uuid.uuid4().hex)),
-                    "type": question.get("type", "single"),
-                    "topic": question.get("topic", topic),
-                    "question": question["question"],
-                    "options": question["options"],
-                    "correctAnswer": question.get("correctAnswer", question.get("correct_answer")),
-                    "correctIndex": question.get("correctIndex", question.get("correct_answer")),
-                    "difficulty": question.get("difficulty", effective_difficulty),
-                    "explanation": question.get("explanation", _QUESTION_EXPLANATIONS.get(topic, "")),
-                    "knowledgePoints": _QUESTION_KEY_POINTS.get(topic, []),
-                    "generation_method": "deterministic_fallback",
-                }
-                for question in fallback[:question_count]
-            ]
+        excluded_signatures = {
+            cls._question_signature(question)
+            for question in excluded_questions
+            if cls._question_signature(question)
+        }
+        unique_generated: List[Dict[str, Any]] = []
+        seen_signatures = set(excluded_signatures)
+        for question in generated:
+            signature = cls._question_signature(question)
+            if signature and signature not in seen_signatures:
+                seen_signatures.add(signature)
+                unique_generated.append(question)
+        generated = unique_generated[:question_count]
 
-        return cls._persist_issued_questions(user_id, learner_id, generated, knowledge)
+        fallback = sorted(
+            (
+                question for question in _QUESTION_BANK
+                if cls._topic_matches(normalized_topic, question.get("topic", ""))
+            ),
+            key=lambda question: abs(int(question.get("difficulty", 3)) - effective_difficulty),
+        )
+        for question in fallback:
+            if len(generated) >= question_count:
+                break
+            candidate = {
+                "id": str(question.get("id", uuid.uuid4().hex)),
+                "type": question.get("type", "single"),
+                "topic": normalized_topic,
+                "question": question["question"],
+                "options": question["options"],
+                "correctAnswer": question.get("correctAnswer", question.get("correct_answer")),
+                "correctIndex": question.get("correctIndex", question.get("correct_answer")),
+                "difficulty": question.get("difficulty", effective_difficulty),
+                "explanation": question.get("explanation") or _QUESTION_EXPLANATIONS.get(normalized_topic, ""),
+                "knowledgePoints": question.get("knowledgePoints") or _QUESTION_KEY_POINTS.get(normalized_topic, [normalized_topic]),
+                "generation_method": "deterministic_fallback",
+            }
+            signature = cls._question_signature(candidate)
+            if signature and signature not in seen_signatures:
+                seen_signatures.add(signature)
+                generated.append(candidate)
+
+        generic_index = 0
+        while len(generated) < question_count:
+            candidate = cls._generic_fallback_question(normalized_topic, effective_difficulty, generic_index)
+            generic_index += 1
+            signature = cls._question_signature(candidate)
+            if signature not in seen_signatures:
+                seen_signatures.add(signature)
+                generated.append(candidate)
+
+        return cls._persist_issued_questions(
+            user_id,
+            learner_id,
+            generated,
+            knowledge,
+            topic=normalized_topic,
+            replace_pending=replace_pending,
+        )
 
     @classmethod
     def _persist_issued_questions(
-        cls, user_id: int, learner_id: int, questions: List[Dict[str, Any]], knowledge: List[Dict[str, Any]]
+        cls,
+        user_id: int,
+        learner_id: int,
+        questions: List[Dict[str, Any]],
+        knowledge: List[Dict[str, Any]],
+        topic: str = "",
+        replace_pending: bool = False,
     ) -> List[Dict[str, Any]]:
         """Persist server-only keys and return only the public question payload."""
         public_questions = []
@@ -212,16 +394,30 @@ class AdaptiveTutoringService(BaseService):
             learner = db.query(LearnerProfile).filter(LearnerProfile.id == learner_id).first()
             if not learner:
                 raise ValueError("学习者不存在")
+            normalized_topic = cls._normalize_topic(topic)
+            if replace_pending and normalized_topic:
+                db.query(IssuedTutoringQuestion).filter(
+                    IssuedTutoringQuestion.learner_id == learner_id,
+                    IssuedTutoringQuestion.topic == normalized_topic,
+                    IssuedTutoringQuestion.status == "issued",
+                ).update({"status": "superseded"}, synchronize_session=False)
             for question in questions:
+                content = str(question.get("question", "")).strip()
+                options = question.get("options") or []
+                if not content or not isinstance(options, list) or len(options) < 2:
+                    raise ValueError("动态题目格式不完整")
                 answer = question.get("correctAnswer", question.get("correct_answer", question.get("correctIndex")))
+                question_topic = normalized_topic or cls._normalize_topic(question.get("topic", ""))
+                if not question_topic:
+                    raise ValueError("动态题目缺少知识主题")
                 issued = IssuedTutoringQuestion(
                     user_id=learner.user_id,
                     learner_id=learner_id,
                     question_type=question.get("type", "single"),
-                    topic=question.get("topic", ""),
-                    difficulty=question.get("difficulty", 3),
-                    content=question["question"],
-                    options=question["options"],
+                    topic=question_topic,
+                    difficulty=max(1, min(5, int(question.get("difficulty", 3)))),
+                    content=content,
+                    options=options,
                     answer_key=cls._normalize_answer_key(answer),
                     explanation=question.get("explanation", ""),
                     knowledge_points=question.get("knowledgePoints", question.get("knowledge_points", [])),
@@ -300,9 +496,9 @@ class AdaptiveTutoringService(BaseService):
                 generated_content = cls._generate_simplified_explanation(
                     learner, question_topic, question_content, user_answer, correct_answer
                 )
-            elif next_action == "advance":
+            elif next_action in {"advance", "consolidate"}:
                 generated_content = cls._generate_advanced_challenge(
-                    learner, question_topic, question_difficulty
+                    learner, question_topic, question_difficulty, decision=next_action
                 )
 
             # Save the record, learner update, and issued-question status atomically.
@@ -360,6 +556,13 @@ class AdaptiveTutoringService(BaseService):
                     "type": next_action,
                     "description": cls._get_action_description(next_action),
                 },
+                "next_question_difficulty": max(
+                    1,
+                    min(
+                        MAX_DIFFICULTY,
+                        question_difficulty + (1 if next_action == "advance" else -1 if next_action == "simplify" else 0),
+                    ),
+                ),
                 "generated_content": generated_content,
             }
             
@@ -441,6 +644,7 @@ class AdaptiveTutoringService(BaseService):
 
         # 1. 尝试从知识库检索相关内容
         knowledge_explanation = ""
+        kb_results = []
         knowledge_key_points: List[str] = []
         with get_db_context() as db:
             kb_results = KnowledgeService.search(
@@ -498,12 +702,37 @@ class AdaptiveTutoringService(BaseService):
                     "match_score": r.match_score,
                 })
 
+        try:
+            ai_content = AIContentService.generate(
+                "tutoring_feedback",
+                {
+                    "decision": "simplify",
+                    "topic": question_topic,
+                    "question": question_content,
+                    "user_answer": user_answer,
+                    "correct_answer": correct_answer,
+                    "difficulty": 3,
+                    "learning_style": learning_style,
+                    "learner_summary": {
+                        "target_industry": learner.target_industry,
+                        "preferred_difficulty": learner.preferred_difficulty,
+                    },
+                    "reference_knowledge": knowledge_explanation or "无可用参考资料",
+                },
+            )
+            ai_content["simple_explanation"] = f"{style_prefix}{ai_content['simple_explanation']}"
+            ai_content["suggested_resources"] = suggested_resources
+            return ai_content
+        except Exception as exc:
+            logger.warning(f"[自适应导学] AI 简化反馈失败，使用本地兜底: {exc}")
+
         return {
             "type": "simplify",
             "title": f"{question_topic} - 简化理解",
             "simple_explanation": simple_text,
             "key_points": key_points,
             "practice_tips": f"建议从简单的{question_topic}基础问题开始练习，结合实际案例加深理解。",
+            "recommendation": f"先复习{question_topic}的核心概念，再完成一道基础练习并记录错误原因。",
             "suggested_resources": suggested_resources,
             "knowledge_source": "knowledge_base" if knowledge_explanation else "seed_data",
         }
@@ -514,6 +743,7 @@ class AdaptiveTutoringService(BaseService):
         learner: LearnerProfile,
         question_topic: str,
         current_difficulty: int,
+        decision: str = "advance",
     ) -> Dict[str, Any]:
         """生成高阶进阶挑战任务（接入知识库检索）"""
         advanced_difficulty = min(MAX_DIFFICULTY, current_difficulty + 1)
@@ -560,7 +790,7 @@ class AdaptiveTutoringService(BaseService):
                         )
 
         challenge = {
-            "type": "advance",
+            "type": decision,
             "title": f"{question_topic} - 进阶挑战",
             "current_difficulty": current_difficulty,
             "advanced_difficulty": advanced_difficulty,
@@ -568,6 +798,7 @@ class AdaptiveTutoringService(BaseService):
             "challenge_objectives": challenge_objectives,
             "estimated_time": times[advanced_difficulty - 1],
             "bonus_points": advanced_difficulty * 20,
+            "recommendation": f"建议围绕{question_topic}完成一次综合实践，并用验收标准检查结果。",
             "suggested_resources": [],
             "knowledge_source": "knowledge_base" if kb_results else "template",
         }
@@ -591,6 +822,37 @@ class AdaptiveTutoringService(BaseService):
                     "type": r.resource_type,
                     "difficulty_level": r.difficulty_level,
                 })
+
+        try:
+            ai_content = AIContentService.generate(
+                "tutoring_feedback",
+                {
+                    "decision": decision,
+                    "topic": question_topic,
+                    "question": f"围绕{question_topic}的当前练习",
+                    "user_answer": "已完成当前题目",
+                    "correct_answer": "当前题目答案已由服务端校验",
+                    "difficulty": current_difficulty,
+                    "learning_style": learner.learning_style or "visual",
+                    "learner_summary": {
+                        "target_industry": learner.target_industry,
+                        "preferred_difficulty": learner.preferred_difficulty,
+                    },
+                    "reference_knowledge": "\n".join(
+                        str(item.get("content", ""))[:500] for item in kb_results[:3]
+                    ) or "无可用参考资料",
+                },
+            )
+            challenge.update({
+                "title": ai_content.get("title", challenge["title"]),
+                "challenge_description": ai_content.get("challenge_description") or challenge["challenge_description"],
+                "challenge_objectives": ai_content.get("challenge_objectives") or challenge["challenge_objectives"],
+                "recommendation": ai_content.get("recommendation", ""),
+                "practice_tips": ai_content.get("practice_tips", ""),
+                "generation_method": "deepseek",
+            })
+        except Exception as exc:
+            logger.warning(f"[自适应导学] AI 进阶反馈失败，使用本地兜底: {exc}")
 
         return challenge
     
