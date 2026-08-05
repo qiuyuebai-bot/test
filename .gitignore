@@ -142,3 +142,8 @@ ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
 .git-rewrite/
+
+# ===========================================
+# WorkBuddy 工作区数据
+# ===========================================
+.workbuddy/
