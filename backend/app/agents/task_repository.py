@@ -236,7 +236,7 @@ class TaskRepository:
                     default=str,
                 ),
                 is_hallucination=any(
-                    p.get("type") == "hallucination_keyword"
+                    p.get("type") == "hallucination_evidence"
                     for p in debate_data.get("conflict_points", [])
                 ),
                 resolution_status="resolved" if debate_data.get(
@@ -487,7 +487,7 @@ class TaskRepository:
         hallucination_count = sum(
             1 for d in debate_results
             for c in d.get("corrections", [])
-            if c.get("type") == "hallucination_keyword"
+            if c.get("type") == "hallucination_evidence"
         )
         total_corrections = sum(len(d.get("corrections", [])) for d in debate_results)
         metrics = {

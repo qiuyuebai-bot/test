@@ -184,6 +184,8 @@ class Settings(BaseSettings):
     ANONYMIZE_ADDRESS: bool = Field(default=True, description="地址脱敏")
 
     HALLUCINATION_THRESHOLD: float = Field(default=5.0, description="幻觉率阈值")
+    EVIDENCE_STRONG_THRESHOLD: float = Field(default=0.70, description="强相关知识证据阈值")
+    EVIDENCE_WEAK_THRESHOLD: float = Field(default=0.50, description="弱相关知识证据阈值")
     MATCH_ACCURACY_THRESHOLD: float = Field(default=90.0, description="匹配准确率阈值")
     KNOWLEDGE_COVERAGE_THRESHOLD: float = Field(default=95.0, description="知识点覆盖率阈值")
 
@@ -266,6 +268,13 @@ class Settings(BaseSettings):
         """校验幻觉阈值范围"""
         if v < 0 or v > 100:
             raise ValueError(f"HALLUCINATION_THRESHOLD 必须在 0~100 之间，当前值: {v}")
+        return v
+
+    @field_validator("EVIDENCE_STRONG_THRESHOLD", "EVIDENCE_WEAK_THRESHOLD")
+    @classmethod
+    def validate_evidence_threshold(cls, v: float) -> float:
+        if v < 0 or v > 1:
+            raise ValueError(f"证据相关度阈值必须在 0~1 之间，当前值: {v}")
         return v
 
     @field_validator("MATCH_ACCURACY_THRESHOLD", "KNOWLEDGE_COVERAGE_THRESHOLD")

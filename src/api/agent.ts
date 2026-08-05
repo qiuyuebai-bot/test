@@ -22,6 +22,19 @@ export interface FullPipelineRequest {
   industry?: string
 }
 
+export interface HallucinationMetrics {
+  totalChecks: number
+  evaluatedChecks: number
+  pendingChecks: number
+  confirmedHallucinations: number
+  evidenceGaps: number
+  hallucinationRate: number | null
+  passRate: number | null
+  hasSufficientSample: boolean
+  minimumSampleSize: number
+  unit: string
+}
+
 export const agentApi = {
   getAllStatus(options?: { silent?: boolean }): Promise<{ agents: AgentStatus[]; total: number }> {
     return http.get<{ agents: AgentStatus[]; total: number }>('/agent/status', undefined, options)
@@ -63,8 +76,8 @@ export const agentApi = {
     return http.get(`/agent/debate/${taskId}`)
   },
 
-  getHallucinationMetrics(options?: { silent?: boolean }): Promise<{ totalChecks: number; hallucinationCount: number; hallucinationRate: number; passRate: number; unit: string }> {
-    return http.get('/agent/metrics/hallucination', undefined, options)
+  getHallucinationMetrics(options?: { silent?: boolean }): Promise<HallucinationMetrics> {
+    return http.get<HallucinationMetrics>('/agent/metrics/hallucination', undefined, options)
   },
 
   getPerformanceMetrics(options?: { silent?: boolean }): Promise<{ totalTasks: number; successCount: number; failedCount: number; runningCount: number; successRate: number; avgDurationMs: number }> {

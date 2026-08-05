@@ -103,7 +103,9 @@ export default function Dashboard() {
     },
     {
       label: '幻觉率',
-      value: `${systemMetrics?.hallucinationRate?.toFixed(1) ?? 0}%`,
+      value: systemMetrics?.hasSufficientSample && systemMetrics.hallucinationRate !== null
+        ? `${systemMetrics.hallucinationRate.toFixed(1)}%`
+        : '样本不足/待审核',
       icon: Brain,
       color: 'bg-info',
     },

@@ -2,6 +2,7 @@
 指标自动计算工具
 计算幻觉率、资源匹配准确率、知识点覆盖率等核心量化指标
 """
+import json
 from typing import Dict, Any, Optional
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
@@ -13,6 +14,114 @@ from app.utils.datetime import utcnow_naive
 class MetricsUtil:
     """指标自动计算工具类"""
     
+    MIN_HALLUCINATION_SAMPLE = 5
+    EVIDENCE_GAP_MARKERS = {
+        "knowledge_gap",
+        "no_reference",
+        "evidence_gap",
+        "insufficient_evidence",
+    }
+
+    @classmethod
+    def _contains_evidence_gap(cls, value: Any) -> bool:
+        """Recognize evidence-gap markers in old and new JSON payloads."""
+        if value is None:
+            return False
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return False
+            try:
+                return cls._contains_evidence_gap(json.loads(raw))
+            except (TypeError, ValueError, json.JSONDecodeError):
+                normalized = raw.lower().replace("-", "_").replace(" ", "_")
+                return any(marker in normalized for marker in cls.EVIDENCE_GAP_MARKERS)
+        if isinstance(value, dict):
+            return any(cls._contains_evidence_gap(item) for item in value.values())
+        if isinstance(value, (list, tuple, set)):
+            return any(cls._contains_evidence_gap(item) for item in value)
+        return False
+
+    @classmethod
+    def _is_reviewed_record(cls, record: Any) -> bool:
+        status = str(getattr(record, "resolution_status", "") or "").lower()
+        decision = str(getattr(record, "judge_decision", "") or "").lower()
+        return status in {"resolved", "reviewed", "verified"} or decision in {
+            "approved", "rejected", "confirmed", "resolved"
+        }
+
+    @classmethod
+    def _is_evidence_gap_record(cls, record: Any) -> bool:
+        fields = (
+            getattr(record, "hallucination_type", None),
+            getattr(record, "hallucination_keywords", None),
+            getattr(record, "comparison_summary", None),
+            getattr(record, "conflict_description", None),
+            getattr(record, "judge_notes", None),
+        )
+        return any(cls._contains_evidence_gap(field) for field in fields)
+
+    @classmethod
+    def calculate_hallucination_metrics(
+        cls,
+        db: Session,
+        start_date: Optional[datetime] = None,
+        end_date: Optional[datetime] = None,
+    ) -> Dict[str, Any]:
+        """Calculate a rate from reviewed, evidence-backed records only."""
+        from app.models import DebateRecord
+
+        query = db.query(DebateRecord)
+        if start_date:
+            query = query.filter(DebateRecord.created_at >= start_date)
+        if end_date:
+            query = query.filter(DebateRecord.created_at <= end_date)
+
+        records = query.all()
+        total_checks = len(records)
+        evidence_gap_records = [
+            record for record in records if cls._is_evidence_gap_record(record)
+        ]
+        reviewed_records = [
+            record
+            for record in records
+            if cls._is_reviewed_record(record)
+            and record not in evidence_gap_records
+        ]
+        pending_checks = sum(
+            1 for record in records if not cls._is_reviewed_record(record)
+        )
+        evaluated_checks = len(reviewed_records)
+        confirmed_hallucinations = sum(
+            1 for record in reviewed_records if bool(record.is_hallucination)
+        )
+        has_sufficient_sample = evaluated_checks >= cls.MIN_HALLUCINATION_SAMPLE
+        hallucination_rate = (
+            round(confirmed_hallucinations / evaluated_checks * 100, 2)
+            if has_sufficient_sample
+            else None
+        )
+        pass_rate = (
+            round((evaluated_checks - confirmed_hallucinations) / evaluated_checks * 100, 2)
+            if has_sufficient_sample
+            else None
+        )
+
+        return {
+            "total_checks": total_checks,
+            "total_count": total_checks,
+            "evaluated_checks": evaluated_checks,
+            "pending_checks": pending_checks,
+            "confirmed_hallucinations": confirmed_hallucinations,
+            "hallucination_count": confirmed_hallucinations,
+            "evidence_gaps": len(evidence_gap_records),
+            "hallucination_rate": hallucination_rate,
+            "pass_rate": pass_rate,
+            "has_sufficient_sample": has_sufficient_sample,
+            "minimum_sample_size": cls.MIN_HALLUCINATION_SAMPLE,
+            "unit": "%",
+        }
+
     @staticmethod
     def calculate_hallucination_rate(
         db: Session,
@@ -30,28 +139,8 @@ class MetricsUtil:
         Returns:
             幻觉率（百分比）
         """
-        from app.models import DebateRecord
-        
-        # 查询辩论记录表
-        query = db.query(DebateRecord)
-        
-        if start_date:
-            query = query.filter(DebateRecord.created_at >= start_date)
-        if end_date:
-            query = query.filter(DebateRecord.created_at <= end_date)
-        
-        # 统计总数和幻觉数
-        total_records = query.count()
-        hallucination_records = query.filter(DebateRecord.is_hallucination == True).count()
-        
-        if total_records == 0:
-            return 0.0
-        
-        rate = (hallucination_records / total_records) * 100
-        
-        logger.debug(f"幻觉率计算: 总数={total_records}, 幻觉数={hallucination_records}, rate={rate}%")
-        
-        return round(rate, 2)
+        metrics = MetricsUtil.calculate_hallucination_metrics(db, start_date, end_date)
+        return float(metrics["hallucination_rate"] or 0.0)
     
     @staticmethod
     def calculate_resource_match_accuracy(

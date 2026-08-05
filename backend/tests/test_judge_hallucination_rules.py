@@ -21,7 +21,7 @@ def test_question_explanation_cautious_words_are_not_hallucination():
     assert all(issue["type"] != "hallucination_keyword" for issue in result["issues"])
 
 
-def test_unverified_and_absolute_claims_still_trigger_hallucination():
+def test_unverified_and_absolute_claims_without_evidence_are_reported_as_gap():
     content = "据说这个算法绝对百分百提升准确率。"
 
     result = JudgeAgent().execute({
@@ -29,8 +29,10 @@ def test_unverified_and_absolute_claims_still_trigger_hallucination():
         "reference_knowledge": [],
     })
 
-    assert result["hallucination_detected"] is True
-    assert any(issue["type"] == "hallucination_keyword" for issue in result["issues"])
+    assert result["hallucination_detected"] is False
+    assert result["credibility"] == "no_evidence"
+    assert result["knowledge_gap"]["present"] is True
+    assert all(issue["type"] != "hallucination_keyword" for issue in result["issues"])
 
 
 def test_negated_absolute_words_do_not_trigger_hallucination():

@@ -157,10 +157,12 @@ async def system_info():
 async def get_core_metrics():
     """获取核心量化指标（从数据库真实统计）"""
     from app.models import LearningResource, AgentTask, DebateRecord, KnowledgeSlice
+    from app.utils.metrics import MetricsUtil
     from sqlalchemy import func, case
 
     db = SessionLocal()
     try:
+        hallucination_metrics = MetricsUtil.calculate_hallucination_metrics(db)
         total_resources, active_learners, avg_match = db.query(
             func.count(LearningResource.id),
             func.count(func.distinct(LearningResource.learner_id)),
@@ -189,6 +191,7 @@ async def get_core_metrics():
         hallucination_rate = (
             round(hallucination_count / total_debates * 100, 1) if total_debates > 0 else 0
         )
+        hallucination_rate = hallucination_metrics["hallucination_rate"]
 
         total_slices, indexed_slices = db.query(
             func.count(KnowledgeSlice.id),
@@ -202,6 +205,12 @@ async def get_core_metrics():
 
         return success({
             "hallucination_rate": hallucination_rate,
+            "total_checks": hallucination_metrics["total_checks"],
+            "evaluated_checks": hallucination_metrics["evaluated_checks"],
+            "pending_checks": hallucination_metrics["pending_checks"],
+            "confirmed_hallucinations": hallucination_metrics["confirmed_hallucinations"],
+            "evidence_gaps": hallucination_metrics["evidence_gaps"],
+            "has_sufficient_sample": hallucination_metrics["has_sufficient_sample"],
             "resource_match_accuracy": resource_match_accuracy,
             "knowledge_coverage_rate": knowledge_coverage_rate,
             "agent_success_rate": agent_success_rate,

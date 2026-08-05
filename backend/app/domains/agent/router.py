@@ -33,6 +33,7 @@ from app.agents.orchestrator import orchestrator
 from app.models import AgentTask, DebateRecord, LearnerProfile
 from app.utils.logger import LoggerUtil
 from app.utils.auth import get_current_user, CurrentUser
+from app.utils.metrics import MetricsUtil
 
 router = APIRouter(prefix="/agent", tags=["Agent协同调度"])
 
@@ -703,24 +704,9 @@ def get_hallucination_metrics(
     - 返回: 总数量、幻觉数量、幻觉率、平均得分、通过率
     """
     try:
-        from sqlalchemy import func, case
-        
-        total, hallucination_count, passed_count = db.query(
-            func.count(DebateRecord.id),
-            func.coalesce(func.sum(case((DebateRecord.is_hallucination == True, 1), else_=0)), 0),
-            func.coalesce(func.sum(case((DebateRecord.resolution_status == "resolved", 1), else_=0)), 0),
-        ).one()
-        
-        hallucination_rate = (hallucination_count / total * 100) if total > 0 else 0
-        pass_rate = (passed_count / total * 100) if total > 0 else 100
-        
-        return success(data={
-            "total_checks": total,
-            "hallucination_count": hallucination_count,
-            "hallucination_rate": round(hallucination_rate, 2),
-            "pass_rate": round(pass_rate, 2),
-            "unit": "%",
-        })
+        metrics = MetricsUtil.calculate_hallucination_metrics(db)
+        return success(data=metrics)
+
     except Exception as e:
         LoggerUtil.log_error("获取幻觉率统计失败", e)
         return error(message=f"获取统计失败: {str(e)}")

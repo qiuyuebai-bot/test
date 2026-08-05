@@ -82,11 +82,16 @@ def submit_answer(
     完整留存交互记录，支持历史回溯
     """
     learner = db.query(LearnerProfile).filter(LearnerProfile.id == request.learner_id).first()
-    if not learner or learner.user_id != current_user.user_id:
+    if not learner:
+        return not_found("学习者不存在")
+    # 管理员可代任意学习者作答；普通用户仅能操作本人名下的学习者
+    if not current_user.is_admin and learner.user_id != current_user.user_id:
         return unauthorized("导学题目必须由对应学习者本人作答")
     try:
         result = AdaptiveTutoringService.process_answer(
-            user_id=current_user.user_id,
+            # 传学习者的归属 user_id（题目下发时存的就是 learner.user_id），
+            # 而非操作者 ID——管理员代答时两者不同，否则题目归属查询会匹配不到
+            user_id=learner.user_id,
             learner_id=request.learner_id,
             question_id=request.question_id,
             user_answer=request.user_answer,

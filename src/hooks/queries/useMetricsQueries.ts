@@ -3,14 +3,14 @@ import { coreApi } from '../../api'
 import type { SystemMetrics } from '../../types'
 
 type SystemMetricsRaw = Partial<SystemMetrics> & {
-  hallucinationRate?: number
+  hallucinationRate?: number | null
   resourceMatchAccuracy?: number
 }
 
 function normalizeMetrics(m: SystemMetricsRaw): SystemMetrics {
   return {
     ...m,
-    hallucinationRate: m.hallucinationRate ?? 0,
+    hallucinationRate: m.hallucinationRate ?? null,
     resourceMatchAccuracy: m.resourceMatchAccuracy ?? 0,
   } as SystemMetrics
 }

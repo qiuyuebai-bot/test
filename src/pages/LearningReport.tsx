@@ -28,6 +28,8 @@ import EmptyState from '@/components/EmptyState'
 import ErrorState from '@/components/ErrorState'
 import { PageSkeleton } from '@/components/Skeleton'
 import { coreApi } from '@/api'
+import type { InteractionHistoryRecord, LearnerReport } from '@/types'
+import { normalizeHallucinationReport } from '@/lib/hallucinationEvidence'
 import { useNavigate } from 'react-router-dom'
 import {
   RadarChart as RechartsRadar,
@@ -70,96 +72,6 @@ const difficultyTypeConfig: Record<number, { label: string; color: string }> = {
   5: { label: '高阶', color: 'bg-warning-light border-warning/30 text-warning-dark' },
 }
 
-interface AbilityRadarPoint {
-  dimension: string
-  score: number
-  fullMark: number
-}
-
-interface HeatmapItem {
-  dimension: string
-  dimension_key: string
-  severity: string
-  severity_label: string
-  value: number
-  score: number
-  is_blind: boolean
-  description: string
-}
-
-interface LearningPathNode {
-  id: string
-  name: string
-  difficulty: number
-  status: string
-  estimated_time: string
-  resources: Array<string | { title?: string; name?: string }>
-  description: string
-}
-
-interface MatchCurvePoint {
-  difficulty: number
-  match_score: number
-  learner_ability: number
-}
-
-interface TestHistoryItem {
-  record_id: number
-  question_topic: string | null
-  question_type: string
-  question_difficulty: number
-  result: string
-  score: number
-  time_spent_ms: number
-  agent_decision: string | null
-  created_at: string | null
-}
-
-// 后端 /report/learner/{id} 聚合接口实际响应结构
-interface LearnerReportData {
-  success: boolean
-  learner_info?: {
-    id: number
-    name: string
-    education: string
-    major: string
-    learning_style: string
-    target_industry: string
-    target_position: string
-  }
-  blind_area_heatmap?: {
-    labels: string[]
-    data: HeatmapItem[]
-  }
-  difficulty_match_curve?: {
-    data: MatchCurvePoint[]
-    learner_ability_raw: number
-  }
-  learning_path_topology?: {
-    total_steps: number
-    current_step: number
-    progress: number
-    estimated_total_time: string
-    nodes: LearningPathNode[]
-  }
-  ability_radar?: {
-    dimensions: string[]
-    data: AbilityRadarPoint[]
-    average_score: number
-  }
-  core_metrics?: {
-    resource_match_accuracy: number
-    knowledge_coverage_rate: number
-    answer_accuracy: number
-  }
-  statistics?: {
-    total_resources: number
-    total_answers: number
-    avg_answer_score: number
-    knowledge_blind_count: number
-  }
-}
-
 // 测试结果 → 评估文案
 function getScoreStatus(score: number): { label: string; variant: 'success' | 'warning' | 'error' } {
   if (score >= SCORE_EXCELLENT_THRESHOLD) return { label: '优秀', variant: 'success' }
@@ -191,9 +103,10 @@ export default function LearningReport() {
   const [selectedNode, setSelectedNode] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [report, setReport] = useState<LearnerReportData | null>(null)
-  const [testHistory, setTestHistory] = useState<TestHistoryItem[]>([])
-  const [systemHallucinationRate, setSystemHallucinationRate] = useState(0)
+  const [report, setReport] = useState<LearnerReport | null>(null)
+  const [testHistory, setTestHistory] = useState<InteractionHistoryRecord[]>([])
+  const [systemHallucinationRate, setSystemHallucinationRate] = useState<number | null>(null)
+  const [hasSufficientHallucinationSample, setHasSufficientHallucinationSample] = useState(false)
   const [abilityTrendData, setAbilityTrendData] = useState<{ week: string; score: number }[]>([])
   const [pdfExporting, setPdfExporting] = useState(false)
   const [pdfError, setPdfError] = useState<string | null>(null)
@@ -209,16 +122,23 @@ export default function LearningReport() {
     try {
       const [reportData, historyData, sysMetrics, abilityTrend] = await Promise.all([
         coreApi.getLearnerReport(learner.id).catch(() => null),
-        coreApi.getInteractionHistory(learner.id).catch(() => ({ items: [] as TestHistoryItem[] })),
+        coreApi.getInteractionHistory(learner.id).catch(() => ({
+          learnerId: learner.id,
+          history: [],
+          total: 0,
+          page: 1,
+          pageSize: 20,
+        })),
         coreApi.getSystemMetrics().catch(() => null),
         coreApi.getAbilityTrend(learner.id).catch(() => []),
       ])
       if (cancelledRef.current) return
-      setReport((reportData as LearnerReportData | null) ?? null)
-      setTestHistory((historyData?.items as TestHistoryItem[]) ?? [])
-      setAbilityTrendData((abilityTrend as { week: string; score: number }[]) ?? [])
+      setReport(reportData)
+      setTestHistory(historyData.history)
+      setAbilityTrendData(abilityTrend)
       if (sysMetrics?.hallucinationRate !== undefined) {
         setSystemHallucinationRate(sysMetrics.hallucinationRate)
+        setHasSufficientHallucinationSample(sysMetrics.hasSufficientSample === true)
       }
     } catch (err) {
       if (cancelledRef.current) return
@@ -241,21 +161,34 @@ export default function LearningReport() {
   if (!learner) return <EmptyState type="default" title="暂无报告数据" description="请先选择学习者以生成报告" />
 
   // 衍生数据
-  const heatmapData = report?.blind_area_heatmap?.data ?? []
-  const matchCurveData = report?.difficulty_match_curve?.data ?? []
-  const learningPathNodes = report?.learning_path_topology?.nodes ?? []
-  const abilityRadarData = report?.ability_radar?.data ?? []
-  const learnerInfo = report?.learner_info
-  const coreMetrics = report?.core_metrics
+  const heatmapData = report?.blindAreaHeatmap.data ?? []
+  const matchCurveData = report?.difficultyMatchCurve.data ?? []
+  const learningPathNodes = report?.learningPathTopology.nodes ?? []
+  const abilityRadarData = report?.abilityRadar.data ?? []
+  const learnerInfo = report?.learnerInfo
+  const coreMetrics = report?.coreMetrics
   const statistics = report?.statistics
+  const hallucinationReport = normalizeHallucinationReport(report?.hallucinationReport)
+  const credibilityLabels = {
+    high: 'High credibility',
+    medium: 'Medium credibility',
+    low: 'Low credibility',
+    noEvidence: 'No evidence',
+  } as const
+  const credibilityColors = {
+    high: 'text-success bg-success/10',
+    medium: 'text-warning bg-warning-light',
+    low: 'text-error bg-error/10',
+    noEvidence: 'text-text-secondary bg-bg-secondary',
+  } as const
 
   const stats = {
-    knowledgeCoverage: coreMetrics?.knowledge_coverage_rate ?? 0,
-    resourceMatch: coreMetrics?.resource_match_accuracy ?? 0,
-    hallucinationRate: systemHallucinationRate ?? 0,
-    totalResources: statistics?.total_resources ?? 0,
-    completedTasks: Math.max(0, (report?.learning_path_topology?.current_step ?? 0)),
-    pendingTasks: Math.max(0, (report?.learning_path_topology?.total_steps ?? 0) - (report?.learning_path_topology?.current_step ?? 0)),
+    knowledgeCoverage: coreMetrics?.knowledgeCoverageRate ?? 0,
+    resourceMatch: coreMetrics?.resourceMatchAccuracy ?? 0,
+    hallucinationRate: systemHallucinationRate,
+    totalResources: statistics?.totalResources ?? 0,
+    completedTasks: Math.max(0, report?.learningPathTopology.currentStep ?? 0),
+    pendingTasks: Math.max(0, (report?.learningPathTopology.totalSteps ?? 0) - (report?.learningPathTopology.currentStep ?? 0)),
   }
 
   const radarChartData = abilityRadarData.map((item) => ({
@@ -325,7 +258,11 @@ export default function LearningReport() {
               <Crosshair className="w-5 h-5 text-warning" />
             </div>
             <div>
-              <p className="metric-number text-xl font-semibold text-text-primary">{stats.hallucinationRate.toFixed(1)}%</p>
+              <p className="metric-number text-xl font-semibold text-text-primary">
+                {hasSufficientHallucinationSample && stats.hallucinationRate !== null
+                  ? `${stats.hallucinationRate.toFixed(1)}%`
+                  : '样本不足/待审核'}
+              </p>
               <p className="text-xs text-text-tertiary">知识幻觉错误率</p>
             </div>
           </div>
@@ -342,6 +279,38 @@ export default function LearningReport() {
           </div>
         </Card>
       </div>
+
+      <Card padding="md">
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <p className="text-xs uppercase tracking-wide text-text-tertiary">Evidence credibility</p>
+            <p className={`mt-1 inline-flex rounded-full px-3 py-1 text-sm font-medium ${credibilityColors[hallucinationReport.credibility]}`}>
+              {credibilityLabels[hallucinationReport.credibility]}
+            </p>
+          </div>
+          <div className="text-sm text-text-secondary">
+            Evidence coverage: {(hallucinationReport.evidenceCoverage * 100).toFixed(0)}%
+          </div>
+          {hallucinationReport.credibility === 'noEvidence' && (
+            <button
+              type="button"
+              onClick={() => navigate('/knowledge-base')}
+              className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
+            >
+              Upload relevant materials
+            </button>
+          )}
+        </div>
+        {hallucinationReport.citations.length > 0 && (
+          <div className="mt-3 text-xs text-text-secondary">
+            <span className="font-medium">Sources: </span>
+            {hallucinationReport.citations.map((citation) => citation.label).join(' · ')}
+          </div>
+        )}
+        {hallucinationReport.knowledgeGap.present && (
+          <p className="mt-2 text-sm text-text-secondary">{hallucinationReport.knowledgeGap.uploadPrompt}</p>
+        )}
+      </Card>
 
       {/* 学习者信息与操作栏 */}
       <Card padding="md">
@@ -450,7 +419,7 @@ export default function LearningReport() {
                 <div
                   className="h-full bg-success rounded-full transition-all"
                   style={{
-                    width: `${report?.learning_path_topology?.progress ?? 0}%`,
+                    width: `${report?.learningPathTopology.progress ?? 0}%`,
                   }}
                 />
               </div>
@@ -462,13 +431,13 @@ export default function LearningReport() {
                 <div
                   className="h-full bg-primary rounded-full transition-all"
                   style={{
-                    width: `${100 - (report?.learning_path_topology?.progress ?? 0)}%`,
+                    width: `${100 - (report?.learningPathTopology.progress ?? 0)}%`,
                   }}
                 />
               </div>
               <div className="flex items-center justify-between pt-1 text-xs text-text-tertiary">
                 <span>总进度</span>
-                <span>{report?.learning_path_topology?.progress?.toFixed(1) ?? 0}% · 预计 {report?.learning_path_topology?.estimated_total_time ?? '-'}</span>
+                <span>{report?.learningPathTopology.progress.toFixed(1) ?? 0}% · 预计 {report?.learningPathTopology.estimatedTotalTime ?? '-'}</span>
               </div>
             </div>
           </Card>
@@ -492,8 +461,8 @@ export default function LearningReport() {
                     <XAxis dataKey="difficulty" tick={{ fontSize: 10, fill: CHART_COLORS.text }} axisLine={false} tickLine={false} label={{ value: '难度等级', position: 'bottom', fontSize: 10, fill: CHART_COLORS.text }} />
                     <YAxis tick={{ fontSize: 10, fill: CHART_COLORS.text }} axisLine={false} tickLine={false} domain={[30, 100]} />
                     <Tooltip {...CHART_TOOLTIP_PROPS} />
-                    <Line type="monotone" dataKey="learner_ability" stroke={CHART_COLORS.text} strokeWidth={2} strokeDasharray="6 4" dot={false} name="学习者能力" />
-                    <Line type="monotone" dataKey="match_score" stroke={CHART_COLORS.primary} strokeWidth={2.5} dot={{ fill: CHART_COLORS.primary, strokeWidth: 2, r: 4 }} name="实际匹配度" />
+                    <Line type="monotone" dataKey="learnerAbility" stroke={CHART_COLORS.text} strokeWidth={2} strokeDasharray="6 4" dot={false} name="学习者能力" />
+                    <Line type="monotone" dataKey="matchScore" stroke={CHART_COLORS.primary} strokeWidth={2.5} dot={{ fill: CHART_COLORS.primary, strokeWidth: 2, r: 4 }} name="实际匹配度" />
                   </LineChart>
                 </ResponsiveContainer>
               ) : (
@@ -539,7 +508,7 @@ export default function LearningReport() {
                         <div className="flex flex-col items-center gap-1">
                           <span className="text-xs font-medium" style={{ color }}>{item.score.toFixed(0)}</span>
                           <span className="text-xs text-text-secondary text-center leading-tight">{item.dimension}</span>
-                          {item.is_blind && (
+                          {item.isBlind && (
                             <span className="text-[9px] text-error">盲区</span>
                           )}
                         </div>
@@ -582,7 +551,7 @@ export default function LearningReport() {
             {testHistory.length > 0 ? (
               <div className="flex items-end justify-between gap-2">
                 {testHistory.slice(0, 5).map((test, idx) => (
-                  <div key={test.record_id} className="flex-1 flex flex-col items-center gap-1">
+                  <div key={test.recordId} className="flex-1 flex flex-col items-center gap-1">
                     <div className="w-full flex flex-col items-center">
                       <span className="text-xs font-semibold text-text-primary">{test.score.toFixed(0)}</span>
                       <div className="w-full h-12 flex items-end">
@@ -672,7 +641,7 @@ export default function LearningReport() {
                               </span>
                               <span className="flex items-center gap-1">
                                 <Users className="w-3 h-3" />
-                                {node.estimated_time}
+                                {node.estimatedTime}
                               </span>
                             </div>
                           </div>
@@ -690,7 +659,7 @@ export default function LearningReport() {
                                   <div className="flex flex-wrap gap-1">
                                     {node.resources.map((r, ridx) => (
                                       <span key={ridx} className="px-2 py-0.5 rounded bg-primary/5 text-xs text-primary border border-primary/20">
-                                        {typeof r === 'string' ? r : (r.title || r.name || `资源 ${ridx + 1}`)}
+                                        {r.title || r.name || `资源 ${ridx + 1}`}
                                       </span>
                                     ))}
                                   </div>
@@ -744,10 +713,10 @@ export default function LearningReport() {
                 {testHistory.map((test, idx) => {
                   const status = getScoreStatus(test.score)
                   return (
-                    <tr key={test.record_id ?? idx} className={`border-b border-border/30 transition-colors hover:bg-bg-secondary/30 ${idx % 2 === 1 ? 'bg-bg-secondary/10' : ''}`}>
-                      <td className="px-4 py-3 text-sm text-text-secondary">{formatTestDate(test.created_at)}</td>
-                      <td className="px-4 py-3 text-sm font-medium text-text-primary">{test.question_topic || test.question_type}</td>
-                      <td className="px-4 py-3 text-sm text-text-secondary">{test.question_difficulty}</td>
+                    <tr key={test.recordId ?? idx} className={`border-b border-border/30 transition-colors hover:bg-bg-secondary/30 ${idx % 2 === 1 ? 'bg-bg-secondary/10' : ''}`}>
+                      <td className="px-4 py-3 text-sm text-text-secondary">{formatTestDate(test.createdAt)}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-text-primary">{test.questionTopic || test.questionType}</td>
+                      <td className="px-4 py-3 text-sm text-text-secondary">{test.questionDifficulty}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <span className={`text-lg font-semibold ${status.variant === 'success' ? 'text-success' : status.variant === 'warning' ? 'text-primary' : 'text-warning'}`}>
@@ -763,9 +732,9 @@ export default function LearningReport() {
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-xs text-text-secondary">
-                          {test.agent_decision ? (
+                          {test.agentDecision ? (
                             <span className="px-2 py-0.5 rounded bg-primary/5 text-primary border border-primary/20">
-                              {test.agent_decision}
+                              {test.agentDecision}
                             </span>
                           ) : '-'}
                         </span>

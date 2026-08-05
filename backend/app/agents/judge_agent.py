@@ -53,6 +53,7 @@ class JudgeAgent(BaseAgent):
         keyword_result = HallucinationUtil.detect_hallucination(
             generated_content,
             reference_content=self._extract_reference_text(reference_knowledge),
+            reference_knowledge=reference_knowledge,
         )
         is_hallucination, hallucination_info = keyword_result
         
@@ -70,6 +71,27 @@ class JudgeAgent(BaseAgent):
         
         # 4. 综合评估
         issues = []
+        for claim in hallucination_info.get("claims", []):
+            if claim.get("status") == "contradicted":
+                issues.append({
+                    "type": "hallucination_evidence",
+                    "severity": "high",
+                    "description": claim.get("reason", "Claim contradicts knowledge-base evidence."),
+                    "details": {
+                        "claim": claim.get("text", ""),
+                        "citations": claim.get("citations", []),
+                    },
+                })
+
+        knowledge_gap = hallucination_info.get("knowledge_gap", {})
+        if knowledge_gap.get("present"):
+            issues.append({
+                "type": "knowledge_gap",
+                "severity": "medium",
+                "description": "Insufficient knowledge-base evidence; supplementary materials are required.",
+                "details": knowledge_gap,
+            })
+
         if is_hallucination and hallucination_info.get("detected_keywords"):
             issues.append({
                 "type": "hallucination_keyword",
@@ -96,23 +118,34 @@ class JudgeAgent(BaseAgent):
         )
         
         # 7. 辩论结果记录
+        has_knowledge_gap = bool(knowledge_gap.get("present"))
+        decision = (
+            "needs_revision" if has_knowledge_gap
+            else "approved" if total_score >= 85
+            else "needs_revision" if total_score >= 60
+            else "rejected"
+        )
         debate_record = {
             "round": debate_round,
             "judge_view": {
                 "has_issue": len(issues) > 0,
                 "issues": issues,
                 "score": total_score,
-                "decision": "approved" if total_score >= 85 else "needs_revision" if total_score >= 60 else "rejected",
+                "decision": decision,
             },
             "corrections": correction_suggestions,
         }
         
         result = {
-            "passed": total_score >= 85,
+            "passed": total_score >= 85 and not has_knowledge_gap,
             "overall_score": total_score,
             "issue_count": len(issues),
             "hallucination_detected": is_hallucination,
             "hallucination_score": hallucination_info.get("score", 0),
+            "credibility": hallucination_info.get("credibility", "no_evidence"),
+            "evidence_coverage": hallucination_info.get("evidence_coverage", 0.0),
+            "citations": hallucination_info.get("citations", []),
+            "knowledge_gap": hallucination_info.get("knowledge_gap", {"present": False}),
             "consistency_score": consistency_result.get("score", 100),
             "standard_score": standard_result.get("score", 100),
             "issues": issues,
@@ -388,7 +421,7 @@ class JudgeAgent(BaseAgent):
         if issue_type == "hallucination_keyword":
             return f"建议删除或替换疑似幻觉表述：{issue.get('description', '')}"
         
-        elif issue_type == "no_reference":
+        elif issue_type in {"no_reference", "knowledge_gap"}:
             return "建议补充对应的知识库文档，或人工审核确认内容准确性"
         
         elif issue_type == "standard_issue":

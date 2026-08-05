@@ -60,7 +60,7 @@ export default function SystemTest() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  const [hallucinationRate, setHallucinationRate] = useState(0)
+  const [hallucinationRate, setHallucinationRate] = useState<number | null>(null)
   const [performance, setPerformance] = useState<{ totalTasks: number; successCount: number; failedCount: number } | null>(null)
   const [agents, setAgents] = useState<AgentStatus[]>([])
   const [testSuites, setTestSuites] = useState<TestSuite[]>([])
@@ -82,7 +82,7 @@ export default function SystemTest() {
     setLoading(true)
     setError(null)
     try {
-      const [sysMetrics, hallucMetrics, perfMetrics, agentStatus, taskListResp, knowledgeResp] = await Promise.all([
+      const [, hallucMetrics, perfMetrics, agentStatus, taskListResp, knowledgeResp] = await Promise.all([
         fetchSystemMetrics().catch(() => null),
         agentApi.getHallucinationMetrics().catch(() => null),
         agentApi.getPerformanceMetrics().catch(() => null),
@@ -94,8 +94,6 @@ export default function SystemTest() {
       // 幻觉率
       if (hallucMetrics?.hallucinationRate !== undefined) {
         setHallucinationRate(hallucMetrics.hallucinationRate)
-      } else if (sysMetrics && (sysMetrics as { hallucinationRate?: number }).hallucinationRate !== undefined) {
-        setHallucinationRate((sysMetrics as { hallucinationRate: number }).hallucinationRate)
       }
 
       // 性能指标
@@ -183,7 +181,8 @@ export default function SystemTest() {
   }
 
   // 三大核心量化指标（来自真实系统指标）
-  const hallucinationRateValue = hallucinationRate || systemMetrics?.hallucinationRate || 0
+  const hallucinationSampleSufficient = systemMetrics?.hasSufficientSample === true
+  const hallucinationRateValue = hallucinationRate ?? systemMetrics?.hallucinationRate ?? null
   const resourceMatchAccuracy = systemMetrics?.resourceMatchAccuracy || 0
   const knowledgeCoverageRate = systemMetrics?.knowledgeCoverageRate || 0
 
@@ -197,7 +196,11 @@ export default function SystemTest() {
               <Crosshair className="w-5 h-5 text-warning" />
             </div>
             <div>
-              <p className="text-xl font-semibold metric-number text-warning">{hallucinationRateValue.toFixed(1)}%</p>
+              <p className="text-xl font-semibold metric-number text-warning">
+                {hallucinationSampleSufficient && hallucinationRateValue !== null
+                  ? `${hallucinationRateValue.toFixed(1)}%`
+                  : '样本不足/待审核'}
+              </p>
               <p className="text-xs text-text-tertiary">知识幻觉错误率</p>
             </div>
           </div>

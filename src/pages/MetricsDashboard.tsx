@@ -59,7 +59,14 @@ export default function MetricsDashboard() {
     loadMetrics()
   }, [loadMetrics])
 
-  const hallucinationRate = systemMetrics?.hallucinationRate ?? 0
+  const rawHallucinationRate = systemMetrics?.hallucinationRate
+  const hasSufficientHallucinationSample = systemMetrics?.hasSufficientSample === true && typeof rawHallucinationRate === 'number'
+  const hallucinationRate = systemMetrics?.hasSufficientSample === true && typeof rawHallucinationRate === 'number'
+    ? rawHallucinationRate
+    : 0
+  const hallucinationRateLabel = hasSufficientHallucinationSample
+    ? `${hallucinationRate.toFixed(1)}%`
+    : '样本不足/待审核'
   const resourceMatchAccuracy = systemMetrics?.resourceMatchAccuracy ?? 0
   const knowledgeCoverageRate = systemMetrics?.knowledgeCoverageRate ?? 0
   const trendData = systemMetrics?.trends ?? []
@@ -67,9 +74,10 @@ export default function MetricsDashboard() {
   const metricCards = [
     {
       label: '幻觉率',
-      value: `${hallucinationRate.toFixed(1)}%`,
+      value: hallucinationRateLabel,
+      isPending: !hasSufficientHallucinationSample,
       target: '< 5%',
-      isOnTarget: hallucinationRate < 5,
+      isOnTarget: hasSufficientHallucinationSample && hallucinationRate < 5,
       icon: AlertTriangle,
       color: 'text-success',
       bgColor: 'bg-success/10',
@@ -133,7 +141,7 @@ export default function MetricsDashboard() {
               </div>
               <Badge variant={metric.isOnTarget ? 'success' : 'warning'} size="sm">
                 <CheckCircle className="w-3 h-3 mr-1" />
-                {metric.isOnTarget ? '达标' : '待优化'}
+                {'isPending' in metric && metric.isPending ? '待审核' : metric.isOnTarget ? '达标' : '待优化'}
               </Badge>
             </div>
             <p className="metric-number text-3xl font-semibold text-text-primary mb-1">{metric.value}</p>

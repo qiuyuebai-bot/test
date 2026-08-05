@@ -6,6 +6,7 @@ Layer 2: LLM深度事实核查（语义一致性校验）— 仅在Layer 1检测
 from typing import List, Dict, Any, Tuple, Optional
 import re
 import threading
+import logging
 from loguru import logger
 from app.config import settings
 
@@ -27,6 +28,9 @@ class HallucinationUtil:
     _deep_check_cache: Dict[str, Dict] = {}
     _CACHE_MAX_SIZE = 200
     _cache_lock = threading.Lock()
+
+    STRONG_RELEVANCE_THRESHOLD = settings.EVIDENCE_STRONG_THRESHOLD
+    WEAK_RELEVANCE_THRESHOLD = settings.EVIDENCE_WEAK_THRESHOLD
 
     @staticmethod
     def detect_hallucination(
@@ -50,8 +54,27 @@ class HallucinationUtil:
             Tuple[是否幻觉, 检测详情]
         """
         if not content:
-            return False, {"score": 0, "keywords": [], "reason": "内容为空", "layer": "none"}
+            return False, {
+                "score": 0,
+                "keywords": [],
+                "reason": "内容为空",
+                "layer": "none",
+                "is_hallucination": False,
+                "confidence": 0.0,
+                "credibility": "no_evidence",
+                "evidence_coverage": 0.0,
+                "method": "knowledge_gap",
+                "claims": [],
+                "citations": [],
+                "knowledge_gap": HallucinationUtil._knowledge_gap([], []),
+            }
         
+        # Knowledge-grounded detection is authoritative whenever the caller
+        # supplies a knowledge result list. Rule and keyword checks remain
+        # diagnostic compatibility signals only.
+        if reference_knowledge is not None:
+            return HallucinationUtil._detect_against_knowledge(content, reference_knowledge)
+
         threshold = threshold or settings.HALLUCINATION_THRESHOLD
         
         # ========== Layer 1: 规则快速预检 ==========
@@ -110,6 +133,177 @@ class HallucinationUtil:
             )
         
         return is_hallucination, layer1_result
+
+    @staticmethod
+    def _split_claims(content: str) -> List[str]:
+        fragments = re.split(r"(?:\r?\n+|(?<=[。！？；;])|(?<=[.!?])\s+)", content)
+        claims = []
+        for fragment in fragments:
+            claim = re.sub(r"^\s*(?:[-*•]|\d+[.)])\s*", "", fragment).strip()
+            if claim and len(re.sub(r"[^\w\u4e00-\u9fff]", "", claim)) >= 4:
+                claims.append(claim)
+        return claims or [content.strip()]
+
+    @staticmethod
+    def _extract_entities(claim: str) -> List[str]:
+        matches = re.finditer(
+            r"\b[A-Z][A-Za-z0-9_-]{2,}\b|\b\d+(?:\.\d+)?%?\b|[《“「\"][^》”」\"]{2,30}[》”」\"]|[\u4e00-\u9fff]{2,12}",
+            claim,
+        )
+        entities = [match.group(0).strip('《》“”「」\"') for match in matches]
+        seen = set()
+        result = []
+        for entity in entities:
+            key = entity.lower()
+            if key not in seen:
+                seen.add(key)
+                result.append(entity)
+        return result
+
+    @staticmethod
+    def _similarity(candidate: Dict[str, Any]) -> float:
+        try:
+            value = float(candidate.get("similarity", 0.0))
+        except (TypeError, ValueError):
+            return 0.0
+        return max(0.0, min(1.0, value))
+
+    @staticmethod
+    def _entity_overlap(entities: List[str], candidate: Dict[str, Any]) -> List[str]:
+        haystack = str(candidate.get("content", "")).lower()
+        return [entity for entity in entities if entity.lower() in haystack]
+
+    @staticmethod
+    def _claim_conflict(claim: str, candidate: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        reference = str(candidate.get("content", ""))
+        claim_versions = set(re.findall(r"v?\d+\.\d+(?:\.\d+)?", claim, flags=re.I))
+        reference_versions = set(re.findall(r"v?\d+\.\d+(?:\.\d+)?", reference, flags=re.I))
+        if claim_versions and reference_versions and claim_versions != reference_versions:
+            return {"type": "version_conflict", "claim_value": sorted(claim_versions)[0], "reference_value": sorted(reference_versions)[0]}
+
+        claim_years = set(re.findall(r"\b(?:19|20)\d{2}\b", claim))
+        reference_years = set(re.findall(r"\b(?:19|20)\d{2}\b", reference))
+        if claim_years and reference_years and claim_years.isdisjoint(reference_years):
+            return {"type": "numeric_conflict", "claim_value": sorted(claim_years)[0], "reference_value": sorted(reference_years)[0]}
+        return None
+
+    @staticmethod
+    def _citation(candidate: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        title = str(candidate.get("title", "")).strip()
+        paragraph = candidate.get("paragraph", candidate.get("slice_index"))
+        if not title or paragraph is None:
+            return None
+        try:
+            paragraph = int(paragraph) + (0 if candidate.get("paragraph") is not None else 1)
+        except (TypeError, ValueError):
+            return None
+        return {
+            "label": f"[{title}-Paragraph {paragraph}]",
+            "title": title,
+            "paragraph": paragraph,
+            "doc_id": candidate.get("doc_id"),
+            "slice_id": candidate.get("slice_id"),
+        }
+
+    @staticmethod
+    def _knowledge_gap(claims: List[str], entities: List[str]) -> Dict[str, Any]:
+        attributes = []
+        for claim in claims:
+            attributes.extend(re.findall(r"\b(?:supports?|has|contains?|uses?|adds?|released?)\s+([\w-]+)", claim, flags=re.I))
+            attributes.extend(re.findall(r"(?:支持|包含|使用|新增|发布)([\u4e00-\u9fffA-Za-z0-9_-]{1,12})", claim))
+        return {
+            "present": bool(claims),
+            "claims": claims,
+            "entities": list(dict.fromkeys(entities)),
+            "attributes": list(dict.fromkeys(attributes)),
+            "upload_prompt": "Upload relevant materials to improve evidence coverage.",
+        }
+
+    @staticmethod
+    def _detect_against_knowledge(content: str, reference_knowledge: List[Dict]) -> Tuple[bool, Dict[str, Any]]:
+        claims = HallucinationUtil._split_claims(content)
+        candidates = [item for item in (reference_knowledge or []) if isinstance(item, dict)]
+        claim_results = []
+        citations = []
+        contradictions = []
+
+        for claim in claims:
+            entities = HallucinationUtil._extract_entities(claim)
+            ranked = sorted(
+                candidates,
+                key=lambda item: (HallucinationUtil._similarity(item), len(HallucinationUtil._entity_overlap(entities, item))),
+                reverse=True,
+            )
+            candidate = ranked[0] if ranked else None
+            similarity = HallucinationUtil._similarity(candidate) if candidate else 0.0
+            overlap = HallucinationUtil._entity_overlap(entities, candidate) if candidate else []
+            conflict = HallucinationUtil._claim_conflict(claim, candidate) if candidate else None
+            citation = HallucinationUtil._citation(candidate) if candidate and similarity >= HallucinationUtil.WEAK_RELEVANCE_THRESHOLD else None
+
+            if conflict:
+                status = "contradicted"
+                reason = "The claim conflicts with a retrieved knowledge-base value."
+                contradictions.append({**conflict, "claim": claim})
+            elif similarity >= HallucinationUtil.STRONG_RELEVANCE_THRESHOLD:
+                status = "supported"
+                reason = "A strongly relevant knowledge-base slice supports this claim."
+            elif similarity >= HallucinationUtil.WEAK_RELEVANCE_THRESHOLD or overlap:
+                status = "weak_support"
+                reason = "Only background evidence or an entity match was found."
+            else:
+                status = "insufficient_evidence"
+                reason = "No sufficiently relevant knowledge-base evidence was found."
+
+            claim_citations = [citation["label"]] if citation and status == "supported" else []
+            if citation and status == "supported" and citation not in citations:
+                citations.append(citation)
+            claim_results.append({
+                "text": claim,
+                "status": status,
+                "similarity": similarity if candidate else None,
+                "entities": entities,
+                "citations": claim_citations,
+                "reason": reason,
+            })
+
+        gaps = [item["text"] for item in claim_results if item["status"] == "insufficient_evidence"]
+        gap_entities = [entity for item in claim_results if item["status"] == "insufficient_evidence" for entity in item["entities"]]
+        if gaps:
+            message = "[EVIDENCE_GAP] No sufficiently relevant knowledge-base evidence for claims: " + " | ".join(gaps[:3])
+            logger.warning(message)
+            logging.getLogger(__name__).warning(message)
+
+        supported = sum(item["status"] in {"supported", "weak_support"} for item in claim_results)
+        strong = bool(claim_results) and all(item["status"] == "supported" for item in claim_results)
+        has_weak = any(item["status"] == "weak_support" for item in claim_results)
+        has_evidence = supported > 0
+        if not has_evidence:
+            credibility = "no_evidence"
+        elif strong:
+            credibility = "high"
+        elif has_weak and not gaps:
+            credibility = "medium"
+        else:
+            credibility = "low"
+
+        evidence_coverage = supported / len(claim_results) if claim_results else 0.0
+        detected = bool(contradictions)
+        info = {
+            "is_hallucination": detected,
+            "score": round(min(100.0, len(contradictions) * 80.0 + len(gaps) * 10.0), 2),
+            "threshold": settings.HALLUCINATION_THRESHOLD,
+            "confidence": round(evidence_coverage if not contradictions else 0.9, 3),
+            "credibility": credibility,
+            "evidence_coverage": round(evidence_coverage, 3),
+            "method": "knowledge_grounded" if candidates else "knowledge_gap",
+            "claims": claim_results,
+            "citations": citations,
+            "knowledge_gap": HallucinationUtil._knowledge_gap(gaps, gap_entities),
+            "detected_keywords": [],
+            "contradictions": contradictions,
+            "layer": "knowledge",
+        }
+        return detected, info
 
     @staticmethod
     def _llm_deep_check(
@@ -434,7 +628,7 @@ class HallucinationUtil:
         for i, content in enumerate(contents):
             ref = reference_contents[i] if reference_contents and i < len(reference_contents) else None
             is_hallucination, info = HallucinationUtil.detect_hallucination(
-                content, ref, use_deep_check=use_deep_check,
+                content, ref, reference_knowledge=[], use_deep_check=use_deep_check,
             )
             results.append({
                 "index": i,

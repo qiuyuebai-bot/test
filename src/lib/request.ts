@@ -1,4 +1,4 @@
-import { keysToCamel, keysToSnake } from './utils'
+import { keysToCamel, keysToSnake, toSnakeCase } from './utils'
 import { toast } from '../components/toastStore'
 import { reportError } from './sentry'
 
@@ -111,7 +111,8 @@ function buildUrl(path: string, params?: Record<string, string | number | boolea
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
       if (value !== undefined && value !== null) {
-        url.searchParams.append(key, String(value))
+        // query 参数 key 统一转 snake_case，与后端 FastAPI 参数命名及 POST body 的 keysToSnake 行为一致
+        url.searchParams.append(toSnakeCase(key), String(value))
       }
     })
   }

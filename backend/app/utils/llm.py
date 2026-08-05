@@ -91,6 +91,10 @@ class LLMUtil:
                     keepalive_expiry=30.0,
                 ),
                 headers=cls._default_headers(),
+                # 不使用系统代理环境变量（HTTP_PROXY/HTTPS_PROXY）：
+                # 本机配置了失效代理（127.0.0.1:7892 未运行），trust_env=True 会走代理导致
+                # WinError 10061 连接被拒；LLM API（DeepSeek）实测可直连，故绕过系统代理。
+                trust_env=False,
             )
             logger.debug("[LLM] 创建同步 httpx 客户端（连接池模式）")
         return cls._sync_client
@@ -115,6 +119,7 @@ class LLMUtil:
                     keepalive_expiry=30.0,
                 ),
                 headers=cls._default_headers(),
+                trust_env=False,  # 同同步客户端：绕过失效的系统代理
             )
             logger.debug("[LLM] 创建异步 httpx 客户端（连接池模式）")
         return cls._async_client

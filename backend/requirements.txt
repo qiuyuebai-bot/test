@@ -16,6 +16,7 @@ psycopg2-binary==2.9.9
 # 大模型与向量库
 openai>=1.0.0
 chromadb==0.4.22
+chroma-hnswlib==0.7.3
 sentence-transformers==2.3.1
 
 # 异步任务队列

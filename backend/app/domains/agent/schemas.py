@@ -146,8 +146,13 @@ class DebateRecordItem(BaseModel):
 
 class MetricsResponse(BaseModel):
     """指标统计响应"""
-    total_count: int
-    hallucination_count: int
-    hallucination_rate: float
-    avg_score: float
-    pass_rate: float
+    total_checks: int
+    evaluated_checks: int
+    pending_checks: int
+    confirmed_hallucinations: int
+    evidence_gaps: int
+    hallucination_rate: Optional[float] = None
+    pass_rate: Optional[float] = None
+    has_sufficient_sample: bool = False
+    minimum_sample_size: int = 5
+    unit: str = "%"

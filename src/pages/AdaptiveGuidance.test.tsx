@@ -24,7 +24,7 @@ vi.mock('@/api', () => ({
       score: 100,
       generatedContent: {},
     }),
-    getInteractionHistory: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20, totalPages: 0 }),
+    getInteractionHistory: vi.fn().mockResolvedValue({ learnerId: 1, history: [], total: 0, page: 1, pageSize: 20 }),
     generateResources: vi.fn(),
     getResourceList: vi.fn(),
     getSystemMetrics: vi.fn(),
@@ -53,7 +53,7 @@ beforeEach(() => {
       difficulty: 2,
     },
   ])
-  vi.mocked(coreApi.getInteractionHistory).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20, totalPages: 0 })
+  vi.mocked(coreApi.getInteractionHistory).mockResolvedValue({ learnerId: 1, history: [], total: 0, page: 1, pageSize: 20 })
   vi.mocked(coreApi.submitAnswer).mockResolvedValue({ isCorrect: true, score: 100, generatedContent: {} })
   resetMockStore()
   setMockStore({ currentLearner: { id: 1, realName: '测试学习者', displayName: 'L001' } })

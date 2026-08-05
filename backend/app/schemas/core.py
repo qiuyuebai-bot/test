@@ -175,7 +175,15 @@ class LearnerReportResponse(BaseModel):
 
 class SystemMetricsResponse(BaseModel):
     """系统指标响应"""
-    hallucination_rate: float
+    hallucination_rate: Optional[float] = None
+    total_checks: int = 0
+    evaluated_checks: int = 0
+    pending_checks: int = 0
+    confirmed_hallucinations: int = 0
+    evidence_gaps: int = 0
+    pass_rate: Optional[float] = None
+    has_sufficient_sample: bool = False
+    minimum_sample_size: int = 5
     resource_match_accuracy: float
     knowledge_coverage_rate: float
     total_learners: int

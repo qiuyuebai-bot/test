@@ -1,5 +1,5 @@
 import { http, PagedData } from '../lib/request'
-import type { LearnerReport, LearningResource, SystemMetrics, PaginationParams } from '../types'
+import type { InteractionHistoryRecord, InteractionHistoryResponse, LearnerReport, LearningResource, SystemMetrics, PaginationParams } from '../types'
 
 export interface GenerateResourcesRequest {
   learnerId: number
@@ -50,11 +50,13 @@ export const coreApi = {
   },
 
   getLearnerReport(learnerId: number): Promise<LearnerReport> {
-    return http.get<LearnerReport>(`/report/learner/${learnerId}`)
+    // 报告生成涉及 LLM 路径规划（推理模型首次调用需 30-60s），使用长超时
+    return http.get<LearnerReport>(`/report/learner/${learnerId}`, undefined, { timeout: 120000 })
   },
 
   downloadLearnerReportPdf(learnerId: number): Promise<Blob> {
-    return http.get<Blob>(`/report/learner/${learnerId}/pdf`)
+    // PDF 导出内部同样会生成报告（含 LLM 调用），使用长超时
+    return http.get<Blob>(`/report/learner/${learnerId}/pdf`, undefined, { timeout: 120000 })
   },
 
   getHeatmap(learnerId: number): Promise<unknown> {
@@ -85,8 +87,21 @@ export const coreApi = {
     return http.post('/tutoring/answer', data)
   },
 
-  getInteractionHistory(learnerId: number, params?: PaginationParams & { sessionId?: string }): Promise<PagedData<unknown>> {
-    return http.get<PagedData<unknown>>(`/tutoring/history/${learnerId}`, params as Record<string, string | number | boolean | undefined>)
+  async getInteractionHistory(learnerId: number, params?: PaginationParams & { sessionId?: string }): Promise<InteractionHistoryResponse> {
+    const response = await http.get<{
+      items?: InteractionHistoryRecord[]
+      history?: InteractionHistoryRecord[]
+      total?: number
+      page?: number
+      pageSize?: number
+    }>(`/tutoring/history/${learnerId}`, params as Record<string, string | number | boolean | undefined>)
+    return {
+      learnerId,
+      history: response.history ?? response.items ?? [],
+      total: response.total ?? 0,
+      page: response.page ?? 1,
+      pageSize: response.pageSize ?? params?.pageSize ?? 20,
+    }
   },
 
   getDecisionLogic(): Promise<unknown> {

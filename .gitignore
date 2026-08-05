@@ -23,6 +23,9 @@ build/
 *.egg-info/
 backend/dist/
 backend/build/
+launcher/bin/
+launcher/obj/
+launcher/publish/
 
 # ===========================================
 # 环境变量与密钥

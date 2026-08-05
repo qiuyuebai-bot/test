@@ -16,7 +16,7 @@ type AgentTaskRaw = Partial<AgentTask> & {
 }
 
 type SystemMetricsRaw = Partial<SystemMetrics> & {
-  hallucinationRate?: number
+  hallucinationRate?: number | null
   resourceMatchAccuracy?: number
 }
 
@@ -178,7 +178,17 @@ export const createMetricsSlice: StateCreator<AppState, [], [], MetricsSlice> = 
       ])
       const sysAny = sysMetrics as SystemMetricsRaw | null
       const metrics: SystemMetrics = {
-        hallucinationRate: hallucMetrics?.hallucinationRate ?? sysAny?.hallucinationRate ?? 0,
+        hallucinationRate: hallucMetrics
+          ? hallucMetrics.hallucinationRate
+          : sysAny?.hallucinationRate ?? null,
+        totalChecks: hallucMetrics?.totalChecks ?? sysAny?.totalChecks ?? 0,
+        evaluatedChecks: hallucMetrics?.evaluatedChecks ?? sysAny?.evaluatedChecks ?? 0,
+        pendingChecks: hallucMetrics?.pendingChecks ?? sysAny?.pendingChecks ?? 0,
+        confirmedHallucinations: hallucMetrics?.confirmedHallucinations ?? sysAny?.confirmedHallucinations ?? 0,
+        evidenceGaps: hallucMetrics?.evidenceGaps ?? sysAny?.evidenceGaps ?? 0,
+        passRate: hallucMetrics?.passRate ?? sysAny?.passRate ?? null,
+        hasSufficientSample: hallucMetrics?.hasSufficientSample ?? sysAny?.hasSufficientSample ?? false,
+        minimumSampleSize: hallucMetrics?.minimumSampleSize ?? sysAny?.minimumSampleSize ?? 5,
         resourceMatchAccuracy: sysAny?.resourceMatchAccuracy ?? 0,
         knowledgeCoverageRate: sysAny?.knowledgeCoverageRate ?? 0,
         totalLearners: sysAny?.totalLearners ?? 0,

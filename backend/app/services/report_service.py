@@ -21,6 +21,7 @@ from app.services.common import (
 )
 from app.services.path_planner import PathPlanner
 from app.utils.llm import LLMUtil
+from app.utils.metrics import MetricsUtil
 
 
 class ReportService(BaseService):
@@ -475,6 +476,7 @@ class ReportService(BaseService):
     def get_system_metrics(cls) -> Dict[str, Any]:
         """获取系统级指标"""
         with get_db_context() as db:
+            hallucination_metrics = MetricsUtil.calculate_hallucination_metrics(db)
             # 获取最近7天指标趋势
             metrics = (
                 db.query(TestMetrics)
@@ -506,7 +508,15 @@ class ReportService(BaseService):
             ]
             
             return {
-                "hallucination_rate": latest.hallucination_rate if latest else 0,
+                "hallucination_rate": hallucination_metrics["hallucination_rate"],
+                "total_checks": hallucination_metrics["total_checks"],
+                "evaluated_checks": hallucination_metrics["evaluated_checks"],
+                "pending_checks": hallucination_metrics["pending_checks"],
+                "confirmed_hallucinations": hallucination_metrics["confirmed_hallucinations"],
+                "evidence_gaps": hallucination_metrics["evidence_gaps"],
+                "pass_rate": hallucination_metrics["pass_rate"],
+                "has_sufficient_sample": hallucination_metrics["has_sufficient_sample"],
+                "minimum_sample_size": hallucination_metrics["minimum_sample_size"],
                 "resource_match_accuracy": latest.resource_match_accuracy if latest else 0,
                 "knowledge_coverage_rate": latest.knowledge_coverage_rate if latest else 0,
                 "total_learners": learner_count,

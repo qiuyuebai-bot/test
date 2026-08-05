@@ -3,6 +3,7 @@ import { useStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import { coreApi } from '@/api'
 import type { TutoringQuestion } from '@/api/core'
+import type { InteractionHistoryRecord } from '@/types'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
@@ -76,30 +77,6 @@ const INITIAL_AGENT_STEPS: AgentStep[] = [
   { agent: 'judge', name: '审核裁判Agent', icon: Shield, action: '校验内容并给出决策', status: 'pending' },
 ]
 
-type HistoryRecordRaw = {
-  recordId?: string
-  record_id?: string
-  id?: string
-  questionTopic?: string
-  question_topic?: string
-  topic?: string
-  result?: string
-  agentDecision?: string
-  agent_decision?: string
-  nextAction?: string
-  next_action?: string
-  decisionReason?: string
-  decision_reason?: string
-  createdAt?: string
-  created_at?: string
-  score?: number
-}
-
-type HistoryRespRaw = {
-  items?: HistoryRecordRaw[]
-  history?: HistoryRecordRaw[]
-}
-
 type GeneratedSection = {
   heading?: string
   content?: string
@@ -127,15 +104,15 @@ type SubmitResultRaw = {
   data?: SubmitDataRaw
 } & SubmitDataRaw
 
-function mapHistoryRecord(r: HistoryRecordRaw): HistoryRecord {
+function mapHistoryRecord(r: InteractionHistoryRecord): HistoryRecord {
   return {
-    recordId: r.recordId ?? r.record_id ?? r.id ?? '',
-    questionTopic: r.questionTopic ?? r.question_topic ?? r.topic ?? '',
+    recordId: String(r.recordId),
+    questionTopic: r.questionTopic ?? '',
     result: (r.result === 'correct' ? 'correct' : r.result === 'wrong' ? 'wrong' : 'partial'),
-    agentDecision: r.agentDecision ?? r.agent_decision ?? r.nextAction ?? r.next_action ?? '',
-    decisionReason: r.decisionReason ?? r.decision_reason ?? '',
-    createdAt: r.createdAt ?? r.created_at ?? '',
-    score: r.score ?? 0,
+    agentDecision: r.agentDecision ?? r.nextAction ?? '',
+    decisionReason: r.decisionReason ?? '',
+    createdAt: r.createdAt ?? '',
+    score: r.score,
   }
 }
 
@@ -183,14 +160,13 @@ export default function AdaptiveGuidance() {
     setError(null)
     try {
       const [questionsResp, historyResp] = await Promise.all([
-        coreApi.getTutoringQuestions(learner.id).catch(() => [] as TutoringQuestion[]),
+        coreApi.getTutoringQuestions(learner.id).catch(() => []),
         coreApi.getInteractionHistory(learner.id, { page: 1, pageSize: 20 }).catch(() => null),
       ])
-      setQuestions((questionsResp as TutoringQuestion[]) || [])
+      setQuestions(questionsResp)
 
       // 转换历史记录字段
-      const historyAny = historyResp as HistoryRespRaw | null
-      const historyItems: HistoryRecordRaw[] = historyAny?.items || historyAny?.history || []
+      const historyItems = historyResp?.history ?? []
       const mapped: HistoryRecord[] = historyItems.map(mapHistoryRecord)
       setHistoryRecords(mapped)
     } catch (err) {
@@ -295,9 +271,8 @@ export default function AdaptiveGuidance() {
       setAgentSteps(INITIAL_AGENT_STEPS.map((s) => ({ ...s, status: 'complete' })))
       setAdjustmentProgress(100)
       // 刷新历史记录
-      coreApi.getInteractionHistory(learner.id, { page: 1, pageSize: 20 }).then((resp: unknown) => {
-        const items: HistoryRecordRaw[] = (resp as HistoryRespRaw)?.items || (resp as HistoryRespRaw)?.history || []
-        const mapped: HistoryRecord[] = items.map(mapHistoryRecord)
+      coreApi.getInteractionHistory(learner.id, { page: 1, pageSize: 20 }).then((resp) => {
+        const mapped: HistoryRecord[] = resp.history.map(mapHistoryRecord)
         setHistoryRecords(mapped)
       }).catch(() => {})
     }

@@ -233,66 +233,158 @@ export interface BlindArea {
 export interface LearnerReport {
   success: boolean
   learnerId: number
-  learnerName: string
-  generatedAt: string
-  abilityScores: Record<string, number>
-  blindAreas: BlindArea[]
-  learningPath: LearningPath
-  heatmapData: HeatmapItem[]
-  matchCurveData: MatchCurveItem[]
-  radarData: RadarItem[]
-  metrics: ReportMetrics
+  learnerInfo: LearnerReportInfo
+  blindAreaHeatmap: BlindAreaHeatmap
+  difficultyMatchCurve: DifficultyMatchCurve
+  learningPathTopology: LearningPathTopology
+  abilityRadar: AbilityRadar
+  coreMetrics: LearnerReportCoreMetrics
+  statistics: LearnerReportStatistics
+  hallucinationReport?: import('../lib/hallucinationEvidence').HallucinationReport
 }
 
-export interface LearningPath {
-  nodes: PathNode[]
-  edges: PathEdge[]
+export interface LearnerReportInfo {
+  id: number
+  name: string
+  education: string
+  major: string
+  learningStyle: string
+  targetIndustry: string
+  targetPosition: string
 }
 
-export interface PathNode {
+export interface BlindAreaHeatmap {
+  labels: string[]
+  severityLevels: string[]
+  severityLabels: string[]
+  data: LearnerReportHeatmapItem[]
+}
+
+export interface LearnerReportHeatmapItem {
+  dimension: string
+  dimensionKey: string
+  severity: string
+  severityLabel: string
+  value: number
+  score: number
+  isBlind: boolean
+  description: string
+}
+
+export interface DifficultyMatchCurve {
+  labels: string[]
+  difficulty: number[]
+  matchScore: number[]
+  learnerAbility: number[]
+  data: LearnerReportMatchCurveItem[]
+  learnerAbilityRaw: number
+}
+
+export interface LearnerReportMatchCurveItem {
+  name: string
+  difficulty: number
+  matchScore: number
+  learnerAbility: number
+  resourceId: number
+  title: string
+}
+
+export interface LearningPathTopology {
+  totalSteps: number
+  currentStep: number
+  progress: number
+  estimatedTotalTime: string
+  nodes: LearnerReportPathNode[]
+  edges: LearnerReportPathEdge[]
+}
+
+export interface LearnerReportPathNode {
   id: string
   name: string
-  level: number
-  type: string
+  difficulty: number
   status: string
-  description?: string
+  estimatedTime: string
+  resources: LearnerReportPathResource[]
+  description: string
 }
 
-export interface PathEdge {
-  from: string
-  to: string
-  label?: string
+export interface LearnerReportPathResource {
+  resourceId?: number
+  title?: string
+  name?: string
+  type?: string
+  matchScore?: number | null
 }
 
-export interface HeatmapItem {
-  dimension: string
-  topic: string
-  mastery: number
-  blindLevel: number
+export interface LearnerReportPathEdge {
+  source: string
+  target: string
 }
 
-export interface MatchCurveItem {
-  resourceIndex: number
-  learnerAbility: number
-  resourceDifficulty: number
-  matchScore: number
+export interface AbilityRadar {
+  dimensions: string[]
+  data: LearnerReportRadarItem[]
+  averageScore: number
 }
 
-export interface RadarItem {
+export interface LearnerReportRadarItem {
   dimension: string
   score: number
   fullMark: number
 }
 
-export interface ReportMetrics {
-  overallScore: number
-  weakDimensions: number
-  recommendedResources: number
-  estimatedStudyDays: number
+export interface LearnerReportCoreMetrics {
+  resourceMatchAccuracy: number
+  knowledgeCoverageRate: number
+  answerAccuracy: number
+}
+
+export interface LearnerReportStatistics {
+  totalResources: number
+  totalAnswers: number
+  avgAnswerScore: number
+  knowledgeBlindCount: number
+}
+
+export interface InteractionHistoryRecord {
+  recordId: number
+  sessionId: string | null
+  sequenceIndex: number | null
+  questionId: number | null
+  questionType: string
+  questionTopic: string | null
+  questionDifficulty: number
+  userAnswer: unknown
+  result: string
+  score: number
+  timeSpentMs: number
+  agentDecision: string | null
+  decisionReason: string | null
+  decisionConfidence: number | null
+  nextAction: string | null
+  nextResourceId: number | null
+  feedbackGiven: boolean | null
+  createdAt: string | null
+}
+
+export interface InteractionHistoryResponse {
+  learnerId: number
+  history: InteractionHistoryRecord[]
+  total: number
+  page: number
+  pageSize: number
 }
 
 export interface SystemMetrics {
-  hallucinationRate: number
+  hallucinationRate: number | null
+  totalChecks?: number
+  evaluatedChecks?: number
+  pendingChecks?: number
+  confirmedHallucinations?: number
+  evidenceGaps?: number
+  passRate?: number | null
+  hasSufficientSample?: boolean
+  minimumSampleSize?: number
   resourceMatchAccuracy: number
   knowledgeCoverageRate: number
   totalLearners: number
@@ -461,3 +553,10 @@ export interface AnonymizationTestResult {
   anonymized: string
   method: string
 }
+export type {
+  Credibility,
+  HallucinationClaim,
+  HallucinationClaimStatus,
+  HallucinationCitation,
+  HallucinationReport,
+} from '../lib/hallucinationEvidence'

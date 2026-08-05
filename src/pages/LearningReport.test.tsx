@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen } from '@testing-library/react'
 import { renderWithRouter } from '../test/renderPage'
+import type { LearnerReport } from '@/types'
 
 vi.mock('@/store', async () => {
   const { useStoreMock } = await import('../test/mockStore')
@@ -12,6 +13,14 @@ vi.mock('@/hooks', () => ({
     isCompleted: false, isFailed: false, error: null, lastEvent: null,
   }),
 }))
+const apiMocks = vi.hoisted(() => ({
+  getLearnerReport: vi.fn(),
+  getInteractionHistory: vi.fn(),
+  getSystemMetrics: vi.fn(),
+  getAbilityTrend: vi.fn(),
+  downloadLearnerReportPdf: vi.fn(),
+}))
+vi.mock('@/api', () => ({ coreApi: apiMocks }))
 vi.mock('recharts', () => ({
   ResponsiveContainer: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   RadarChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
@@ -25,6 +34,8 @@ vi.mock('recharts', () => ({
   YAxis: () => <div />,
   Tooltip: () => <div />,
   CartesianGrid: () => <div />,
+  LineChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
+  Line: ({ dataKey }: { dataKey: string }) => <div data-testid={`line-${dataKey}`} />,
   BarChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Bar: () => <div />,
 }))
@@ -49,9 +60,95 @@ const sampleLearner = {
   engineeringPractice: 72,
 }
 
+const sampleReport = {
+  success: true,
+  learnerId: 1,
+  learnerInfo: {
+    id: 1,
+    name: '后端学习者',
+    education: '硕士',
+    major: '人工智能',
+    learningStyle: 'visual',
+    targetIndustry: '人工智能',
+    targetPosition: '算法工程师',
+  },
+  blindAreaHeatmap: {
+    labels: ['理论基础'],
+    severityLevels: ['high', 'medium', 'low'],
+    severityLabels: ['高', '中', '低'],
+    data: [{
+      dimension: '理论基础',
+      dimensionKey: 'theoretical_foundation',
+      severity: 'medium',
+      severityLabel: '中',
+      value: 30,
+      score: 58,
+      isBlind: true,
+      description: '建议加强理论基础',
+    }],
+  },
+  difficultyMatchCurve: {
+    labels: ['资源1'],
+    difficulty: [4],
+    matchScore: [75.5],
+    learnerAbility: [68],
+    data: [{
+      name: '资源1',
+      difficulty: 4,
+      matchScore: 75.5,
+      learnerAbility: 68,
+      resourceId: 10,
+      title: '测试资源',
+    }],
+    learnerAbilityRaw: 68,
+  },
+  learningPathTopology: {
+    totalSteps: 2,
+    currentStep: 1,
+    progress: 50,
+    estimatedTotalTime: '6小时',
+    nodes: [{
+      id: 'step-1',
+      name: '路径第一步',
+      difficulty: 2,
+      status: 'current',
+      estimatedTime: '2小时',
+      resources: [{ resourceId: 10, title: '测试资源' }],
+      description: '建立基础知识',
+    }],
+    edges: [],
+  },
+  abilityRadar: {
+    dimensions: ['理论基础'],
+    data: [{ dimension: '理论基础', score: 58, fullMark: 100 }],
+    averageScore: 58,
+  },
+  coreMetrics: {
+    resourceMatchAccuracy: 75.5,
+    knowledgeCoverageRate: 82.5,
+    answerAccuracy: 68,
+  },
+  statistics: {
+    totalResources: 1,
+    totalAnswers: 2,
+    avgAnswerScore: 68,
+    knowledgeBlindCount: 1,
+  },
+} satisfies LearnerReport
+
 beforeEach(() => {
   resetMockStore()
   setMockStore({ currentLearner: sampleLearner })
+  apiMocks.getLearnerReport.mockReset().mockResolvedValue(sampleReport)
+  apiMocks.getInteractionHistory.mockReset().mockResolvedValue({
+    learnerId: 1,
+    history: [],
+    total: 0,
+    page: 1,
+    pageSize: 20,
+  })
+  apiMocks.getSystemMetrics.mockReset().mockResolvedValue({ hallucinationRate: 2 })
+  apiMocks.getAbilityTrend.mockReset().mockResolvedValue([])
 })
 
 describe('LearningReport page', () => {
@@ -70,6 +167,26 @@ describe('LearningReport page', () => {
   it('renders the learner name heading', async () => {
     const { default: Page } = await import('./LearningReport')
     renderWithRouter(<Page />)
-    expect(await screen.findByText('测试学习者')).toBeInTheDocument()
+    expect(await screen.findByText('后端学习者')).toBeInTheDocument()
+  })
+
+  it('renders the camelCase report payload instead of empty chart states', async () => {
+    const { default: Page } = await import('./LearningReport')
+    renderWithRouter(<Page />)
+
+    expect(await screen.findByText('路径第一步')).toBeInTheDocument()
+    expect(screen.getByText('82.5%')).toBeInTheDocument()
+    expect(screen.getByText('理论基础')).toBeInTheDocument()
+    expect(screen.queryByText('暂无热力图数据')).not.toBeInTheDocument()
+    expect(screen.getByTestId('line-learnerAbility')).toBeInTheDocument()
+    expect(screen.getByTestId('line-matchScore')).toBeInTheDocument()
+  })
+
+  it('offers the knowledge upload action when there is no evidence', async () => {
+    const { default: Page } = await import('./LearningReport')
+    renderWithRouter(<Page />)
+
+    expect(await screen.findByText('No evidence')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Upload relevant materials' })).toBeInTheDocument()
   })
 })
