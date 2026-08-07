@@ -9,6 +9,18 @@ from app.utils.llm import LLMUtil
 class LLMQuestionGenerator:
     """Generate practice content while keeping answer data server controlled."""
 
+    DIFFICULTY_STANDARDS = {
+        1: "入门识别：只考查术语、基本事实和直接定义，初学者可凭基础常识或单步回忆作答。",
+        2: "基础理解：考查概念关系、典型流程和直接应用，需要理解而非只靠常识排除。",
+        3: "综合应用：给出真实场景或条件组合，要求运用多个相关概念完成分析与判断。",
+        4: "高级分析：考查边界条件、失效模式、方案权衡和跨知识点推理，干扰项必须专业且合理。",
+        5: "专家前沿：面向资深从业者或研究者，考查复杂约束下的机制推导、前沿方法、反例和系统级权衡；不得仅凭常识或关键词排除作答。",
+    }
+
+    @classmethod
+    def difficulty_standard(cls, difficulty: int) -> str:
+        return cls.DIFFICULTY_STANDARDS[max(1, min(5, int(difficulty)))]
+
     @classmethod
     def generate_question_set(
         cls,
@@ -30,18 +42,26 @@ class LLMQuestionGenerator:
             question_count=count,
             variation_seed=variation_seed,
             excluded_questions=excluded_questions or [],
+            difficulty_standard=cls.difficulty_standard(difficulty),
+            multiple_choice_count=count // 3,
         )
         questions = generated["content_json"].get("basic_questions", []) + generated["content_json"].get("advanced_questions", [])
+        expected_multiple = count // 3
+        actual_multiple = sum(question.get("type") == "multiple" for question in questions[:count])
+        if len(questions) < count or actual_multiple != expected_multiple:
+            raise ValueError("LLM question set does not match the requested count or type distribution")
         result = []
         for question in questions[:count]:
+            answer_indexes = question.get("correct_answers") or [question["correct_answer"]]
+            is_multiple = question.get("type") == "multiple"
             result.append({
                 "id": f"llm-{uuid.uuid4().hex}",
-                "type": "single",
+                "type": "multiple" if is_multiple else "single",
                 "topic": topic,
                 "question": question["question"],
                 "options": question["options"],
-                "correctAnswer": chr(65 + question["correct_answer"]),
-                "correctIndex": question["correct_answer"],
+                "correctAnswer": answer_indexes if is_multiple else answer_indexes[0],
+                "correctIndex": answer_indexes if is_multiple else answer_indexes[0],
                 "difficulty": question["difficulty"],
                 "explanation": question["explanation"],
                 "knowledgePoints": question.get("knowledge_points", []),

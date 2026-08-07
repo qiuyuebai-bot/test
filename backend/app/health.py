@@ -129,6 +129,15 @@ async def health_readiness(request: Request):
     )
 
 
+@router.get("/health/llm")
+@router.get("/api/v1/health/llm")
+async def health_llm():
+    """Return a redacted DeepSeek connectivity check."""
+    from app.utils.llm import LLMUtil
+
+    return success(LLMUtil.health_check())
+
+
 @router.get("/metrics", tags=["运维"])
 @router.get("/api/v1/metrics/prometheus", tags=["运维"])
 async def get_prometheus_metrics(request: Request):

@@ -37,6 +37,8 @@ export interface SubmitAnswerRequest {
   userAnswer: string
   timeSpentMs: number
   hintsUsed: number
+  sessionId?: string
+  sequenceIndex?: number
 }
 
 export const coreApi = {
@@ -119,6 +121,13 @@ export const coreApi = {
     }
   },
 
+  deleteInteractionHistory(
+    learnerId: number,
+    params?: { recordId?: number; sessionId?: string },
+  ): Promise<{ deletedCount: number }> {
+    return http.delete<{ deletedCount: number }>(`/tutoring/history/${learnerId}`, params, { silent: true })
+  },
+
   getDecisionLogic(): Promise<unknown> {
     return http.get('/tutoring/decision-logic')
   },
@@ -128,6 +137,9 @@ export const coreApi = {
   },
 
   generateTutoringQuestions(data: GenerateTutoringQuestionsRequest): Promise<GenerateTutoringQuestionsResponse> {
-    return http.post<GenerateTutoringQuestionsResponse>('/tutoring/questions/generate', data, { timeout: 120000 })
+    return http.post<GenerateTutoringQuestionsResponse>('/tutoring/questions/generate', data, {
+      timeout: 120000,
+      silent: true,
+    })
   },
 }

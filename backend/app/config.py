@@ -15,7 +15,8 @@ import secrets
 from pathlib import Path
 
 
-BASE_DIR = Path(__file__).resolve().parent.parent.parent
+BACKEND_DIR = Path(__file__).resolve().parents[1]
+BASE_DIR = BACKEND_DIR.parent
 DATA_DIR = BASE_DIR / "data"
 
 _APP_ENV = os.environ.get("APP_ENV", "development").lower()
@@ -128,10 +129,15 @@ class Settings(BaseSettings):
     EMBEDDING_MODEL_PATH: str = Field(default="./models/embedding_model", description="Embedding模型路径")
 
     OPENAI_API_KEY: str = Field(default="", description="OpenAI兼容API密钥（服务端环境变量）")
-    OPENAI_API_BASE: str = Field(default="https://api.deepseek.com/v1", description="DeepSeek OpenAI兼容API地址")
-    OPENAI_MODEL_NAME: str = Field(default="deepseek-chat", description="DeepSeek模型名称")
+    OPENAI_API_BASE: str = Field(default="https://api.deepseek.com", description="DeepSeek OpenAI兼容API地址")
+    OPENAI_MODEL_NAME: str = Field(default="deepseek-chat", description="DeepSeek model name")
     OPENAI_TEMPERATURE: float = Field(default=0.7, description="模型温度参数")
     OPENAI_MAX_TOKENS: int = Field(default=4096, description="最大Token数")
+    REQUIRE_RESOURCE_LLM: bool = Field(default=False)
+    OPENAI_THINKING_ENABLED: bool = Field(
+        default=False,
+        description="是否启用 DeepSeek 思考模式；资源生成默认关闭以保证返回正式 content",
+    )
 
     # LLM 熔断器（Phase 7：防止 LLM 服务故障导致雪崩）
     LLM_CIRCUIT_BREAKER_ENABLED: bool = Field(default=True, description="是否启用 LLM 熔断器")
@@ -334,7 +340,7 @@ class Settings(BaseSettings):
         return v
 
     model_config = SettingsConfigDict(
-        env_file=[".env", f".env.{_APP_ENV}"],
+        env_file=[BACKEND_DIR / ".env", BACKEND_DIR / f".env.{_APP_ENV}"],
         env_file_encoding="utf-8",
         case_sensitive=True,
         extra="ignore",

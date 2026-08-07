@@ -24,6 +24,14 @@ from app.config import settings
 from app.utils.circuit_breaker import CircuitBreaker
 
 
+class LLMUnavailableError(RuntimeError):
+    """Raised when a strict model call cannot reach a usable provider."""
+
+    def __init__(self, reason: str = "provider_unavailable") -> None:
+        self.reason = reason
+        super().__init__(f"DeepSeek 当前不可用（{reason}）")
+
+
 class LLMUtil:
     """
     大模型通用调用工具类
@@ -166,6 +174,35 @@ class LLMUtil:
         return cls._available
 
     @classmethod
+    def health_check(cls) -> Dict[str, Any]:
+        """Check provider reachability without exposing credentials or payloads."""
+        started = time.perf_counter()
+        if not cls.is_available():
+            return {"available": False, "reason": "unauthorized"}
+        try:
+            response = cls._get_sync_client(timeout=10.0).get(
+                f"{settings.OPENAI_API_BASE.rstrip('/')}/models"
+            )
+            latency_ms = round((time.perf_counter() - started) * 1000)
+            if response.status_code in (401, 403):
+                reason = "unauthorized"
+            elif response.status_code == 404:
+                reason = "invalid_model"
+            elif response.status_code == 429:
+                reason = "rate_limited"
+            elif response.status_code >= 400:
+                reason = "provider_error"
+            else:
+                return {"available": True, "provider": "deepseek", "model": settings.OPENAI_MODEL_NAME, "latency_ms": latency_ms}
+            return {"available": False, "reason": reason, "latency_ms": latency_ms}
+        except httpx.TimeoutException:
+            return {"available": False, "reason": "timeout"}
+        except (httpx.ConnectError, httpx.NetworkError, OSError):
+            return {"available": False, "reason": "network_error"}
+        except Exception:
+            return {"available": False, "reason": "provider_error"}
+
+    @classmethod
     def _build_messages(
         cls,
         prompt: str,
@@ -208,6 +245,9 @@ class LLMUtil:
             "messages": messages,
             "temperature": temperature if temperature is not None else settings.OPENAI_TEMPERATURE,
             "max_tokens": settings.OPENAI_MAX_TOKENS,
+            "thinking": {
+                "type": "enabled" if settings.OPENAI_THINKING_ENABLED else "disabled"
+            },
         }
         if stream:
             payload["stream"] = True
@@ -235,6 +275,8 @@ class LLMUtil:
 
         data = response.json()
         content = data["choices"][0]["message"]["content"] or ""
+        if not content.strip():
+            raise ValueError("LLM response did not contain final content")
         usage_data = data.get("usage", {})
         usage = {
             "prompt_tokens": usage_data.get("prompt_tokens", 0),
@@ -368,6 +410,7 @@ class LLMUtil:
         temperature: Optional[float] = None,
         model: Optional[str] = None,
         use_cache: bool = True,
+        allow_mock: bool = True,
     ) -> Tuple[str, Dict[str, int]]:
         """
         同步调用大模型
@@ -383,6 +426,8 @@ class LLMUtil:
             (响应文本, Token用量字典)
         """
         if not cls.is_available():
+            if not allow_mock:
+                raise LLMUnavailableError("unauthorized")
             return cls._generate_mock_response(prompt, system_prompt), {
                 "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0
             }
@@ -400,6 +445,8 @@ class LLMUtil:
 
         # Phase 7: 熔断器检查（开启时直接返回 mock，避免雪崩）
         if settings.LLM_CIRCUIT_BREAKER_ENABLED and not cls._circuit_breaker.allow_request():
+            if not allow_mock:
+                raise LLMUnavailableError("circuit_open")
             logger.warning("[LLM] 熔断器开启中，跳过 LLM 调用，返回 mock 响应")
             return cls._generate_mock_response(prompt, system_prompt), {
                 "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0
@@ -419,6 +466,20 @@ class LLMUtil:
                 cls._circuit_breaker._on_failure()
             logger.error(f"LLM sync_call 失败: {e}")
             cls._record_error()
+            if not allow_mock:
+                reason = "timeout" if isinstance(e, httpx.TimeoutException) else "provider_error"
+                if isinstance(e, (httpx.ConnectError, httpx.NetworkError, OSError)):
+                    reason = "network_error"
+                error_text = str(e)
+                if error_text.startswith("API error: 401"):
+                    reason = "unauthorized"
+                elif error_text.startswith("API error: 403"):
+                    reason = "unauthorized"
+                elif error_text.startswith("API error: 404"):
+                    reason = "invalid_model"
+                elif error_text.startswith("API error: 429"):
+                    reason = "rate_limited"
+                raise LLMUnavailableError(reason) from e
             return cls._generate_mock_response(prompt, system_prompt), {
                 "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0
             }
@@ -452,6 +513,7 @@ class LLMUtil:
         temperature: Optional[float] = None,
         model: Optional[str] = None,
         use_cache: bool = True,
+        allow_mock: bool = True,
     ) -> Tuple[str, Dict[str, int]]:
         """
         使用 Prompt 工程化模板调用大模型（P3-4）
@@ -482,6 +544,7 @@ class LLMUtil:
             temperature=temperature,
             model=model,
             use_cache=use_cache,
+            allow_mock=allow_mock,
         )
 
     @classmethod
@@ -575,6 +638,9 @@ class LLMUtil:
             "messages": messages,
             "temperature": temperature if temperature is not None else settings.OPENAI_TEMPERATURE,
             "max_tokens": settings.OPENAI_MAX_TOKENS,
+            "thinking": {
+                "type": "enabled" if settings.OPENAI_THINKING_ENABLED else "disabled"
+            },
         }
 
         # Phase 7: 熔断器检查
@@ -638,6 +704,9 @@ class LLMUtil:
             "temperature": temperature if temperature is not None else settings.OPENAI_TEMPERATURE,
             "max_tokens": settings.OPENAI_MAX_TOKENS,
             "stream": True,
+            "thinking": {
+                "type": "enabled" if settings.OPENAI_THINKING_ENABLED else "disabled"
+            },
         }
 
         try:

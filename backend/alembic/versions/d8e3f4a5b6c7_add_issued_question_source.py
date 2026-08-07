@@ -17,36 +17,63 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    with op.batch_alter_table("issued_tutoring_questions") as batch_op:
-        batch_op.add_column(
-            sa.Column(
-                "source_resource_id",
-                sa.Integer(),
-                sa.ForeignKey("learning_resources.id", name="fk_issued_question_source_resource"),
-                nullable=True,
-            ),
-        )
-        batch_op.add_column(sa.Column("source_question_index", sa.Integer(), nullable=True))
-        batch_op.create_index("ix_issued_tutoring_questions_source_resource_id", ["source_resource_id"])
-        batch_op.create_unique_constraint(
-            "uq_issued_question_source_index",
-            ["source_resource_id", "source_question_index"],
-        )
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
 
-    with op.batch_alter_table("answer_records") as batch_op:
-        batch_op.add_column(
-            sa.Column(
-                "issued_question_id",
-                sa.Integer(),
-                sa.ForeignKey("issued_tutoring_questions.id", name="fk_answer_record_issued_question"),
-                nullable=True,
-            ),
-        )
-        batch_op.create_index("ix_answer_records_issued_question_id", ["issued_question_id"])
-        batch_op.create_unique_constraint(
-            "uq_answer_record_issued_question",
-            ["issued_question_id"],
-        )
+    issued_columns = {column["name"] for column in inspector.get_columns("issued_tutoring_questions")}
+    issued_indexes = {index["name"] for index in inspector.get_indexes("issued_tutoring_questions")}
+    issued_uniques = {constraint["name"] for constraint in inspector.get_unique_constraints("issued_tutoring_questions")}
+    if (
+        "source_resource_id" not in issued_columns
+        or "source_question_index" not in issued_columns
+        or "ix_issued_tutoring_questions_source_resource_id" not in issued_indexes
+        or "uq_issued_question_source_index" not in issued_uniques
+    ):
+        with op.batch_alter_table("issued_tutoring_questions") as batch_op:
+            if "source_resource_id" not in issued_columns:
+                batch_op.add_column(
+                    sa.Column(
+                        "source_resource_id",
+                        sa.Integer(),
+                        sa.ForeignKey("learning_resources.id", name="fk_issued_question_source_resource"),
+                        nullable=True,
+                    ),
+                )
+            if "source_question_index" not in issued_columns:
+                batch_op.add_column(sa.Column("source_question_index", sa.Integer(), nullable=True))
+            if "ix_issued_tutoring_questions_source_resource_id" not in issued_indexes:
+                batch_op.create_index("ix_issued_tutoring_questions_source_resource_id", ["source_resource_id"])
+            if "uq_issued_question_source_index" not in issued_uniques:
+                batch_op.create_unique_constraint(
+                    "uq_issued_question_source_index",
+                    ["source_resource_id", "source_question_index"],
+                )
+
+    answer_columns = {column["name"] for column in inspector.get_columns("answer_records")}
+    answer_indexes = {index["name"] for index in inspector.get_indexes("answer_records")}
+    answer_uniques = {constraint["name"] for constraint in inspector.get_unique_constraints("answer_records")}
+    if (
+        "issued_question_id" not in answer_columns
+        or "ix_answer_records_issued_question_id" not in answer_indexes
+        or "uq_answer_record_issued_question" not in answer_uniques
+    ):
+        with op.batch_alter_table("answer_records") as batch_op:
+            if "issued_question_id" not in answer_columns:
+                batch_op.add_column(
+                    sa.Column(
+                        "issued_question_id",
+                        sa.Integer(),
+                        sa.ForeignKey("issued_tutoring_questions.id", name="fk_answer_record_issued_question"),
+                        nullable=True,
+                    ),
+                )
+            if "ix_answer_records_issued_question_id" not in answer_indexes:
+                batch_op.create_index("ix_answer_records_issued_question_id", ["issued_question_id"])
+            if "uq_answer_record_issued_question" not in answer_uniques:
+                batch_op.create_unique_constraint(
+                    "uq_answer_record_issued_question",
+                    ["issued_question_id"],
+                )
 
     # Keep the canonical first result for historical retry duplicates so the
     # new uniqueness guarantee does not block upgrades on existing data.
@@ -63,11 +90,13 @@ def upgrade() -> None:
           )
         """
     )
-    with op.batch_alter_table("learning_resources") as batch_op:
-        batch_op.create_unique_constraint(
-            "uq_learning_resource_generation_task",
-            ["generation_task_id"],
-        )
+    resource_uniques = {constraint["name"] for constraint in inspector.get_unique_constraints("learning_resources")}
+    if "uq_learning_resource_generation_task" not in resource_uniques:
+        with op.batch_alter_table("learning_resources") as batch_op:
+            batch_op.create_unique_constraint(
+                "uq_learning_resource_generation_task",
+                ["generation_task_id"],
+            )
 
 
 def downgrade() -> None:

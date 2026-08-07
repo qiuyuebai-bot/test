@@ -1,7 +1,4 @@
-"""
-交互式自适应导学动态迭代服务
-双分支逻辑：正确率偏低→简化解释；正确率达标→进阶挑战
-"""
+"""交互式自适应导学服务：单题二元判定，并同时提供通俗讲解与知识点扩展。"""
 import json
 import uuid
 from datetime import datetime
@@ -101,49 +98,87 @@ class AdaptiveTutoringService(BaseService):
     @classmethod
     def _generic_fallback_question(cls, topic: str, difficulty: int, index: int) -> Dict[str, Any]:
         """Return a topic-labelled question when neither the provider nor seed bank can help."""
-        variants = [
-            (
-                f"学习“{topic}”时，首先应该明确什么？",
+        focus = ["基础概念与前提", "核心机制", "场景应用", "边界条件", "专业权衡"][index % 5]
+        templates = {
+            1: (
+                f"入门学习“{topic}”时，关于其{focus}首先需要识别哪项基础信息？",
                 [
-                    f"{topic}的核心概念、边界和典型应用",
-                    "只记住零散术语，不理解它们的关系",
-                    "先跳过基础概念，直接背诵结论",
-                    "只关注题目数量，不检查理解程度",
+                    f"{topic}的基本定义、主要对象和直接用途",
+                    f"{topic}在所有场景中的最终性能上限",
+                    f"{topic}尚未解决的全部前沿争议",
+                    f"{topic}在复杂系统中的完整形式化证明",
                 ],
-                "先建立核心概念、边界和应用场景，再学习具体细节。",
+                "难度 1 只要求识别基本定义、对象与直接用途。",
             ),
-            (
-                f"针对“{topic}”进行练习时，哪种做法更有助于形成可迁移的理解？",
+            2: (
+                f"理解“{topic}”的{focus}时，哪种说明达到了基础理解要求？",
                 [
-                    "结合概念、步骤和实际场景进行验证",
-                    "只重复阅读定义，不动手检验",
-                    "只记住一个固定例子的答案",
-                    "遇到错误时直接跳过原因分析",
+                    "能说明关键概念之间的关系、典型流程以及直接适用场景",
+                    "能背出若干术语，但无法解释它们如何关联",
+                    "能复述一个结论，但无法说明结论成立的前提",
+                    "能记住一个示例答案，并把它直接套用到所有场景",
                 ],
-                "把概念放入不同场景中验证，并记录错误原因，才能形成可迁移的理解。",
+                "难度 2 要求理解概念关系、典型流程和直接应用，不能只靠术语记忆。",
             ),
-            (
-                f"复习“{topic}”后，哪项结果最能说明已经掌握？",
+            3: (
+                f"把“{topic}”用于条件发生变化的真实场景时，针对{focus}哪种分析最合理？",
                 [
-                    "能够解释原理，并在新场景中完成应用",
-                    "能够逐字复述一段定义",
-                    "能够记住某一道题的选项位置",
-                    "能够快速跳过不会的步骤",
+                    "先识别输入、约束与目标，再组合相关概念推导并验证结果",
+                    "沿用原场景结论，只调整结论中的个别关键词",
+                    "只比较最终输出，不检查中间假设是否仍然成立",
+                    "只选择最熟悉的方法，不分析它与新约束的匹配程度",
                 ],
-                "掌握不仅是记忆定义，还应能解释原理并在新场景中正确应用。",
+                "难度 3 要求在新场景中组合多个概念，并根据输入、约束和目标完成推理。",
             ),
-        ]
-        question, options, explanation = variants[index % len(variants)]
-        if index >= len(variants):
-            question = f"{question}（练习{index + 1}）"
+            4: (
+                f"在“{topic}”的工程评审中，系统约束与数据条件同时变化。对{focus}采用哪种方案最严谨？",
+                [
+                    "比较候选方案的机制、复杂度与失效边界，并用针对性实验验证关键权衡",
+                    "只优化单一指标，其他约束在上线后再根据结果调整",
+                    "直接复用公开基线，因为同类方案通常具有相同的边界条件",
+                    "先扩大数据或算力规模，以此替代对机制和错误模式的分析",
+                ],
+                "难度 4 需要分析边界条件、失效模式和多目标权衡，不能依赖单一指标。",
+            ),
+            5: (
+                f"对“{topic}”的{focus}进行专家级审查时，某方案声称在复杂约束下取得突破。哪组证据最足以支持该结论？",
+                [
+                    "明确形式化假设，给出机制推导与反例，完成消融、稳健性和可复现实验，并说明适用边界",
+                    "在单一公开基准上提高平均指标，同时省略失败样本和超参数敏感性分析",
+                    "引用多篇相关工作并增加模型规模，以行业常用做法作为主要正确性依据",
+                    "展示若干成功案例和可视化结果，用整体趋势代替误差来源与边界条件分析",
+                ],
+                "难度 5 要求机制推导、反例、系统级权衡与可复现证据共同成立。",
+            ),
+        }
+        question, options, explanation = templates[max(1, min(5, int(difficulty)))]
+        is_multiple = (index + 1) % 3 == 0
+        correct_indexes = [0]
+        if is_multiple:
+            second_correct = {
+                1: f"能够指出{topic}与相近概念的一个基本区别",
+                2: f"能够用典型例子说明{topic}的关键流程与适用条件",
+                3: f"能够检查{topic}分析中的关键假设并用结果反证",
+                4: f"能够比较{topic}方案对约束变化的敏感性与失效模式",
+                5: f"能够报告{topic}实验的负结果、复现条件与结论边界",
+            }[max(1, min(5, int(difficulty)))]
+            options = [options[0], second_correct, options[1], options[2]]
+            correct_indexes = [0, 1]
+            question = f"{question.rstrip('？')}（多选）？"
+        rotation = index % len(options)
+        options = options[rotation:] + options[:rotation]
+        rotated_correct_indexes = sorted((answer_index - rotation) % len(options) for answer_index in correct_indexes)
+        correct_answer: Any = rotated_correct_indexes if is_multiple else rotated_correct_indexes[0]
+        if index >= 3:
+            question = f"{question}（变体 {index + 1}）"
         return {
             "id": f"fallback-{uuid.uuid4().hex}",
-            "type": "single",
+            "type": "multiple" if is_multiple else "single",
             "topic": topic,
             "question": question,
             "options": options,
-            "correctAnswer": 0,
-            "correctIndex": 0,
+            "correctAnswer": correct_answer,
+            "correctIndex": correct_answer,
             "difficulty": difficulty,
             "explanation": explanation,
             "knowledgePoints": [topic],
@@ -279,10 +314,8 @@ class AdaptiveTutoringService(BaseService):
         diagnosis = DiagnosisAgent().execute({"learner_id": learner_id, "learner_profile": learner_profile})
         recommended_difficulty = diagnosis.get("recommended_difficulty", {}).get("recommended_difficulty", 3)
         requested_difficulty = difficulty if difficulty is not None else recommended_difficulty
-        effective_difficulty = max(
-            1,
-            min(5, int((int(recommended_difficulty) + int(requested_difficulty) + 1) / 2)),
-        )
+        # 用户明确选择难度时必须严格遵守；只有留空时才使用画像推荐难度。
+        effective_difficulty = max(1, min(5, int(requested_difficulty)))
         with get_db_context() as db:
             knowledge = KnowledgeService.search(
                 db=db,
@@ -324,16 +357,21 @@ class AdaptiveTutoringService(BaseService):
         unique_generated: List[Dict[str, Any]] = []
         seen_signatures = set(excluded_signatures)
         for question in generated:
+            if int(question.get("difficulty", effective_difficulty)) != effective_difficulty:
+                continue
             signature = cls._question_signature(question)
             if signature and signature not in seen_signatures:
                 seen_signatures.add(signature)
                 unique_generated.append(question)
         generated = unique_generated[:question_count]
+        for question in generated:
+            question["difficulty"] = effective_difficulty
 
         fallback = sorted(
             (
                 question for question in _QUESTION_BANK
                 if cls._topic_matches(normalized_topic, question.get("topic", ""))
+                and int(question.get("difficulty", 3)) == effective_difficulty
             ),
             key=lambda question: abs(int(question.get("difficulty", 3)) - effective_difficulty),
         )
@@ -348,24 +386,30 @@ class AdaptiveTutoringService(BaseService):
                 "options": question["options"],
                 "correctAnswer": question.get("correctAnswer", question.get("correct_answer")),
                 "correctIndex": question.get("correctIndex", question.get("correct_answer")),
-                "difficulty": question.get("difficulty", effective_difficulty),
+                "difficulty": effective_difficulty,
                 "explanation": question.get("explanation") or _QUESTION_EXPLANATIONS.get(normalized_topic, ""),
                 "knowledgePoints": question.get("knowledgePoints") or _QUESTION_KEY_POINTS.get(normalized_topic, [normalized_topic]),
                 "generation_method": "deterministic_fallback",
             }
+            expected_multiple = (len(generated) + 1) % 3 == 0
+            if (candidate["type"] == "multiple") != expected_multiple:
+                continue
             signature = cls._question_signature(candidate)
             if signature and signature not in seen_signatures:
                 seen_signatures.add(signature)
                 generated.append(candidate)
 
-        generic_index = 0
+        fallback_variant = 0
         while len(generated) < question_count:
-            candidate = cls._generic_fallback_question(normalized_topic, effective_difficulty, generic_index)
-            generic_index += 1
+            candidate_index = len(generated) + fallback_variant * 3
+            candidate = cls._generic_fallback_question(normalized_topic, effective_difficulty, candidate_index)
             signature = cls._question_signature(candidate)
             if signature not in seen_signatures:
                 seen_signatures.add(signature)
                 generated.append(candidate)
+                fallback_variant = 0
+            else:
+                fallback_variant += 1
 
         return cls._persist_issued_questions(
             user_id,
@@ -439,6 +483,8 @@ class AdaptiveTutoringService(BaseService):
         user_answer: str,
         time_spent_ms: int,
         hints_used: int = 0,
+        session_id: Optional[str] = None,
+        sequence_index: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Server-grade an answer to an issued learner-owned question."""
         if not str(question_id).isdigit():
@@ -490,16 +536,21 @@ class AdaptiveTutoringService(BaseService):
 
             next_action = agent_decision.get("next_action", "none")
 
-            # 根据决策生成后续内容
-            generated_content = {}
-            if next_action == "simplify":
-                generated_content = cls._generate_simplified_explanation(
-                    learner, question_topic, question_content, user_answer, correct_answer
-                )
-            elif next_action in {"advance", "consolidate"}:
-                generated_content = cls._generate_advanced_challenge(
-                    learner, question_topic, question_difficulty, decision=next_action
-                )
+            # 无论答对或答错都提供通俗讲解和知识点扩展；决策只影响讲解侧重点与后续难度。
+            generated_content = cls._generate_simplified_explanation(
+                learner,
+                question_topic,
+                question_content,
+                user_answer,
+                correct_answer,
+                decision="review" if is_correct else "simplify",
+            )
+            generated_content["knowledge_expansion"] = cls._generate_knowledge_expansion(
+                learner,
+                question_topic,
+                question_content,
+                question_difficulty,
+            )
 
             # Save the record, learner update, and issued-question status atomically.
             with get_db_context() as db:
@@ -533,6 +584,8 @@ class AdaptiveTutoringService(BaseService):
                     agent_decision=agent_decision,
                     next_action=next_action,
                     generated_content=generated_content,
+                    session_id=session_id,
+                    sequence_index=sequence_index,
                     db=db,
                 )
                 cls._update_learner_profile(learner, question_topic, score, is_correct, db=db)
@@ -591,15 +644,15 @@ class AdaptiveTutoringService(BaseService):
         """运行Agent协同决策"""
         learner_dict = cls.model_to_dict(learner)
         
-        # 基础决策
-        if accuracy_rate >= cls.DECISION_THRESHOLD:
+        # 当前题型按单题二元判定：答对为 100，答错为 0，不展示容易误解的单题“正确率”。
+        if is_correct:
             decision, reason, confidence = "advance", \
-                f"答题正确率{accuracy_rate*100:.1f}%≥70%，已掌握当前知识点", \
-                min(0.95, accuracy_rate)
+                "本题判定为正确，已掌握当前题目涉及的核心知识点", \
+                min(0.95, max(0.8, accuracy_rate))
         else:
             decision, reason, confidence = "simplify", \
-                f"答题正确率{accuracy_rate*100:.1f}%<70%，需要简化解释", \
-                min(0.95, (1 - accuracy_rate) * 1.2)
+                "本题判定为错误，需要复核关键条件并查看通俗讲解", \
+                min(0.95, max(0.8, 1 - accuracy_rate))
         
         # 诊断Agent验证
         agent = DiagnosisAgent()
@@ -613,7 +666,7 @@ class AdaptiveTutoringService(BaseService):
         
         if decision == "advance" and has_blind:
             decision, reason, confidence = "consolidate", \
-                "虽然答题正确率达标，但检测到该主题存在知识盲区", 0.8
+                "虽然本题判定正确，但检测到该主题仍存在知识盲区", 0.8
         
         return {
             "next_action": decision,
@@ -629,6 +682,7 @@ class AdaptiveTutoringService(BaseService):
         question_content: str,
         user_answer: str,
         correct_answer: str,
+        decision: str = "simplify",
     ) -> Dict[str, Any]:
         """生成简化通俗知识点解释（接入知识库检索）"""
         learning_style = learner.learning_style or "visual"
@@ -706,7 +760,7 @@ class AdaptiveTutoringService(BaseService):
             ai_content = AIContentService.generate(
                 "tutoring_feedback",
                 {
-                    "decision": "simplify",
+                    "decision": decision,
                     "topic": question_topic,
                     "question": question_content,
                     "user_answer": user_answer,
@@ -735,6 +789,79 @@ class AdaptiveTutoringService(BaseService):
             "recommendation": f"先复习{question_topic}的核心概念，再完成一道基础练习并记录错误原因。",
             "suggested_resources": suggested_resources,
             "knowledge_source": "knowledge_base" if knowledge_explanation else "seed_data",
+        }
+
+    @classmethod
+    def _generate_knowledge_expansion(
+        cls,
+        learner: LearnerProfile,
+        question_topic: str,
+        question_content: str,
+        current_difficulty: int,
+    ) -> Dict[str, Any]:
+        """Generate question-specific knowledge expansion instead of an unrelated challenge task."""
+        key_points = cls._extract_key_points(question_topic)
+        overview = (
+            f"本题围绕“{question_topic}”展开。理解时应同时关注核心机制、成立条件、"
+            "典型应用和失效边界，而不只记住选项结论。"
+        )
+        knowledge_source = "seed_data"
+
+        with get_db_context() as db:
+            kb_results = KnowledgeService.search(
+                db=db,
+                query=f"{question_topic} {question_content}",
+                industry=learner.target_industry,
+                top_k=5,
+            )
+            if kb_results:
+                contents = [str(item.get("content", "")).strip() for item in kb_results if item.get("content")]
+                titles = [
+                    str(item.get("title") or item.get("doc_title") or "").strip()
+                    for item in kb_results
+                    if item.get("title") or item.get("doc_title")
+                ]
+                if contents:
+                    overview = " ".join(contents[:2])[:800]
+                if titles:
+                    key_points = list(dict.fromkeys([*key_points, *titles]))[:5]
+                knowledge_source = "knowledge_base"
+
+            resources = (
+                db.query(LearningResource)
+                .filter(
+                    LearningResource.learner_id == learner.id,
+                    LearningResource.difficulty_level >= max(1, current_difficulty - 1),
+                )
+                .order_by(LearningResource.match_score.desc())
+                .limit(3)
+                .all()
+            )
+
+        return {
+            "type": "knowledge_expansion",
+            "title": f"{question_topic} - 知识点扩展",
+            "overview": overview,
+            "key_points": key_points,
+            "application": (
+                f"回到本题时，可以把“{question_topic}”拆成输入与前提、核心机制、输出结果和边界条件，"
+                "再检查选项是否同时满足这些约束。"
+            ),
+            "pitfalls": [
+                "不要用生活常识代替领域内的定义、机制和约束条件。",
+                "不要只看结论是否熟悉，还要核对结论成立的前提和适用边界。",
+                "面对相近选项时，应比较关键条件，而不是依赖关键词或选项位置。",
+            ],
+            "suggested_resources": [
+                {
+                    "resource_id": resource.id,
+                    "title": resource.title,
+                    "type": resource.resource_type,
+                    "difficulty_level": resource.difficulty_level,
+                }
+                for resource in resources
+            ],
+            "knowledge_source": knowledge_source,
         }
     
     @classmethod
@@ -876,6 +1003,8 @@ class AdaptiveTutoringService(BaseService):
         agent_decision: Dict[str, Any],
         next_action: str,
         generated_content: Dict[str, Any],
+        session_id: Optional[str] = None,
+        sequence_index: Optional[int] = None,
         db=None,
     ) -> AnswerRecord:
         """保存答题记录"""
@@ -899,6 +1028,8 @@ class AdaptiveTutoringService(BaseService):
                     agent_decision=agent_decision,
                     next_action=next_action,
                     generated_content=generated_content,
+                    session_id=session_id,
+                    sequence_index=sequence_index,
                     db=managed_db,
                 )
 
@@ -932,8 +1063,8 @@ class AdaptiveTutoringService(BaseService):
             feedback_content=generated_content.get("simple_explanation", "") or
             generated_content.get("challenge_description", ""),
             decision_log=json.dumps(agent_decision, ensure_ascii=False),
-            session_id=f"session_{uuid.uuid4().hex}",
-            sequence_index=1,
+            session_id=session_id or f"session_{uuid.uuid4().hex}",
+            sequence_index=sequence_index or 1,
         )
         db.add(record)
         db.flush()
@@ -985,9 +1116,9 @@ class AdaptiveTutoringService(BaseService):
     def _get_action_description(cls, action: str) -> str:
         """获取动作描述"""
         descriptions = {
-            "simplify": "生成简化通俗的知识点解释",
-            "advance": "生成高阶进阶挑战任务",
-            "consolidate": "巩固当前知识点，建议复习基础",
+            "simplify": "提供纠错通俗讲解和知识点扩展",
+            "advance": "提供知识点扩展学习，继续深化理解",
+            "consolidate": "提供巩固讲解和知识点扩展",
             "none": "暂无后续动作",
         }
         return descriptions.get(action, "未知动作")
@@ -1026,6 +1157,7 @@ class AdaptiveTutoringService(BaseService):
                     "question_id": r.question_id,
                     "question_type": r.question_type,
                     "question_topic": r.question_topic,
+                    "question_content": r.question_content,
                     "question_difficulty": r.question_difficulty,
                     "user_answer": r.user_answer,
                     "result": r.result,
@@ -1037,6 +1169,7 @@ class AdaptiveTutoringService(BaseService):
                     "next_action": r.next_action,
                     "next_resource_id": r.next_resource_id,
                     "feedback_given": r.feedback_given,
+                    "feedback_content": r.feedback_content,
                     "created_at": r.created_at.isoformat() if r.created_at else None,
                 }
                 for r in records

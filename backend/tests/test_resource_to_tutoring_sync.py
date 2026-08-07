@@ -384,3 +384,10 @@ def test_learner_resource_view_hides_exercise_answers(
     questions = detail["content_json"]["basic_questions"] + detail["content_json"]["advanced_questions"]
     assert all("correct_answer" not in question for question in questions)
     assert all("explanation" not in question for question in questions)
+
+
+def test_resource_detail_exposes_markdown_format_and_summary(sample_learning_resource):
+    detail = ResourceServiceHelper.format_resource_detail(sample_learning_resource)
+
+    assert detail["format_type"] == "md"
+    assert detail["summary"] == sample_learning_resource.summary

@@ -26,15 +26,29 @@ class AIContentService:
         temperature: Optional[float] = None,
         model: Optional[str] = None,
         use_cache: bool = True,
+        allow_mock: bool = True,
     ):
         """Single outbound prompt entry point used by content generators."""
-        return LLMUtil.call_with_prompt_template(
-            template_name,
-            variables,
-            temperature=temperature,
-            model=model,
-            use_cache=use_cache,
-        )
+        try:
+            return LLMUtil.call_with_prompt_template(
+                template_name,
+                variables,
+                temperature=temperature,
+                model=model,
+                use_cache=use_cache,
+                allow_mock=allow_mock,
+            )
+        except TypeError as exc:
+            # Keep test doubles and legacy adapters that predate allow_mock usable.
+            if "allow_mock" not in str(exc):
+                raise
+            return LLMUtil.call_with_prompt_template(
+                template_name,
+                variables,
+                temperature=temperature,
+                model=model,
+                use_cache=use_cache,
+            )
 
     @classmethod
     def sync_call(cls, **kwargs: Any):

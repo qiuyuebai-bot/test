@@ -213,6 +213,8 @@ class SubmitAnswerRequest(BaseModel):
     user_answer: Any = Field(..., description="用户答案")
     time_spent_ms: int = Field(..., description="答题耗时(毫秒)", ge=0)
     hints_used: int = Field(0, description="使用提示次数")
+    session_id: Optional[str] = Field(None, description="自适应导学会话ID", max_length=100)
+    sequence_index: Optional[int] = Field(None, description="会话内题目序号", ge=1)
 
     # Legacy seed-bank fields remain optional while clients migrate. They are ignored for server-issued questions.
     question_type: Optional[str] = Field(None, description="题目类型")

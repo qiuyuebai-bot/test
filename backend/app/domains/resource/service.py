@@ -16,6 +16,7 @@ from app.agents.diagnosis_agent import DiagnosisAgent
 from app.agents.generation_agent import GenerationAgent
 from app.domains.knowledge.service import KnowledgeService
 from app.services.common import BaseService, ResourceServiceHelper, MetricsServiceHelper
+from app.utils.resource_content import normalize_resource_content
 
 
 class ResourceGenerationService(BaseService):
@@ -221,6 +222,7 @@ class ResourceGenerationService(BaseService):
         target_topic: str = "",
     ) -> LearningResource:
         """保存资源到数据库"""
+        content = normalize_resource_content(resource_data.get("content"))
         with get_db_context() as db:
             resource = LearningResource(
                 learner_id=learner_id,
@@ -229,9 +231,9 @@ class ResourceGenerationService(BaseService):
                 knowledge_topic=target_topic,
                 difficulty_level=resource_data.get("difficulty_level", 3),
                 version="1.0",
-                content=resource_data.get("content", ""),
+                content=content,
                 content_json=resource_data.get("content_json", {}),
-                word_count=resource_data.get("word_count", 0),
+                word_count=len(content),
                 source_slice_ids=resource_data.get("source_slice_ids", []),
                 source_doc_ids=resource_data.get("source_doc_ids", []),
                 generated_by_agent="generation_agent",

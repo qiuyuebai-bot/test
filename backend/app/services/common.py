@@ -437,6 +437,8 @@ class ResourceServiceHelper(BaseService):
             "learner_id": resource.learner_id,
             "title": resource.title,
             "resource_type": resource.resource_type,
+            "format_type": resource.format_type or "md",
+            "summary": resource.summary,
             "resource_type_name": cls.RESOURCE_TYPE_NAMES.get(
                 resource.resource_type, resource.resource_type
             ),

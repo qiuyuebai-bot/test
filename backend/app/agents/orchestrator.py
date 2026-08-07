@@ -25,6 +25,7 @@ from app.agents.content_corrector import ContentCorrector
 from app.domains.knowledge.service import KnowledgeService
 from app.domains.learner.service import LearnerService
 from app.database import get_db_context
+from app.utils.resource_content import normalize_resource_content
 
 
 class AgentOrchestrator:
@@ -173,6 +174,13 @@ class AgentOrchestrator:
                 generation_result["word_count"] = len(corrected_content)
                 generation_result["_debate_corrected"] = True
                 generation_result["_debate_rounds"] = len(debate_results)
+
+            # Validate once more at the orchestration boundary before any
+            # repository writes or follow-up question publication.
+            generation_result["content"] = normalize_resource_content(
+                generation_result.get("content"),
+            )
+            generation_result["word_count"] = len(generation_result["content"])
 
             final_result = self.task_repo.save_resource_and_complete(
                 task_id, learner_id, generation_result, final_audit, len(debate_results)

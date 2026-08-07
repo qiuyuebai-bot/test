@@ -101,9 +101,57 @@ class TestDynamicQuestionGeneration:
 
         assert len(questions) == 1
         assert questions[0]["topic"] == "反向传播算法"
+        assert questions[0]["difficulty"] == 2
+        assert questions[0]["generationMethod"] == "deterministic_fallback"
         assert "correctAnswer" not in questions[0]
+        assert "answer_key" not in questions[0]
         issued = db_session.query(IssuedTutoringQuestion).one()
         assert issued.answer_key
+
+    def test_high_difficulty_fallback_uses_expert_rubric(
+        self, db_session, sample_learner_profile, sample_user, monkeypatch
+    ):
+        monkeypatch.setattr(
+            tutoring_service_module.LLMUtil,
+            "is_available",
+            classmethod(lambda cls: False),
+        )
+
+        questions = AdaptiveTutoringService.generate_dynamic_questions(
+            user_id=sample_user.id,
+            learner_id=sample_learner_profile.id,
+            topic="分布式一致性",
+            difficulty=5,
+            question_count=1,
+        )
+
+        assert questions[0]["difficulty"] == 5
+        assert "专家级审查" in questions[0]["question"]
+
+    def test_fallback_round_uses_one_third_multiple_questions(
+        self, db_session, sample_learner_profile, sample_user, monkeypatch
+    ):
+        monkeypatch.setattr(
+            tutoring_service_module.LLMUtil,
+            "is_available",
+            classmethod(lambda cls: False),
+        )
+
+        questions = AdaptiveTutoringService.generate_dynamic_questions(
+            user_id=sample_user.id,
+            learner_id=sample_learner_profile.id,
+            topic="REST API 版本治理",
+            difficulty=4,
+            question_count=7,
+        )
+
+        assert len(questions) == 7
+        assert [question["type"] for question in questions].count("multiple") == 2
+        issued = db_session.query(IssuedTutoringQuestion).order_by(IssuedTutoringQuestion.id).all()
+        multiple = [question for question in issued if question.question_type == "multiple"]
+        assert len(multiple) == 2
+        assert all(len(question.answer_key) >= 2 for question in multiple)
+        assert all("REST API" in question.topic for question in issued)
 
 
 class TestRunAgentDecision:
@@ -112,7 +160,7 @@ class TestRunAgentDecision:
     def test_advance_when_accuracy_above_threshold(
         self, sample_learner_profile, monkeypatch
     ):
-        """正确率 >= 0.7 → advance"""
+        """单选题判定正确 → advance"""
         monkeypatch.setattr(
             tutoring_service_module, "DiagnosisAgent", lambda: _make_fake_agent([])
         )
@@ -124,12 +172,12 @@ class TestRunAgentDecision:
             is_correct=True,
         )
         assert decision["next_action"] == "advance"
-        assert "70" in decision["reason"]
+        assert "判定为正确" in decision["reason"]
 
     def test_simplify_when_accuracy_below_threshold(
         self, sample_learner_profile, monkeypatch
     ):
-        """正确率 < 0.7 → simplify"""
+        """单选题判定错误 → simplify"""
         monkeypatch.setattr(
             tutoring_service_module, "DiagnosisAgent", lambda: _make_fake_agent([])
         )
@@ -141,7 +189,7 @@ class TestRunAgentDecision:
             is_correct=False,
         )
         assert decision["next_action"] == "simplify"
-        assert "<70" in decision["reason"]
+        assert "判定为错误" in decision["reason"]
 
     def test_consolidate_when_correct_but_has_blind_area(
         self, sample_learner_profile, monkeypatch
@@ -197,16 +245,81 @@ class TestRunAgentDecision:
         assert decision["confidence"] <= 0.95
 
 
+class TestMultipleQuestionGrading:
+    def test_requires_all_correct_options_without_extras(
+        self, db_session, sample_learner_profile, sample_user, monkeypatch
+    ):
+        questions = []
+        for suffix in ("complete", "missed"):
+            question = IssuedTutoringQuestion(
+                user_id=sample_user.id,
+                learner_id=sample_learner_profile.id,
+                question_type="multiple",
+                topic="REST API",
+                difficulty=3,
+                content=f"Multiple question {suffix}",
+                options=["A", "B", "C", "D"],
+                answer_key=["A", "C"],
+                explanation="Explanation",
+                knowledge_points=["REST API"],
+                source_slice_ids=[],
+                source_doc_ids=[],
+                generation_method="test",
+                status="issued",
+            )
+            db_session.add(question)
+            questions.append(question)
+        db_session.commit()
+        for question in questions:
+            db_session.refresh(question)
+
+        monkeypatch.setattr(
+            AdaptiveTutoringService,
+            "_run_agent_decision",
+            classmethod(lambda cls, **kwargs: {"next_action": "advance" if kwargs["is_correct"] else "simplify", "reason": "test", "confidence": 0.9}),
+        )
+        monkeypatch.setattr(
+            AdaptiveTutoringService,
+            "_generate_simplified_explanation",
+            classmethod(lambda cls, *args, **kwargs: {"type": "simplified_explanation"}),
+        )
+        monkeypatch.setattr(
+            AdaptiveTutoringService,
+            "_generate_knowledge_expansion",
+            classmethod(lambda cls, *args, **kwargs: {"type": "knowledge_expansion"}),
+        )
+
+        complete = AdaptiveTutoringService.process_answer(
+            user_id=sample_user.id,
+            learner_id=sample_learner_profile.id,
+            question_id=str(questions[0].id),
+            user_answer=["C", "A"],
+            time_spent_ms=100,
+        )
+        missed = AdaptiveTutoringService.process_answer(
+            user_id=sample_user.id,
+            learner_id=sample_learner_profile.id,
+            question_id=str(questions[1].id),
+            user_answer=["A"],
+            time_spent_ms=100,
+        )
+
+        assert complete["is_correct"] is True
+        assert complete["score"] == 100
+        assert missed["is_correct"] is False
+        assert missed["score"] == 0
+
+
 class TestGetActionDescription:
     """_get_action_description 纯逻辑"""
 
     def test_simplify_description(self):
         desc = AdaptiveTutoringService._get_action_description("simplify")
-        assert "简化" in desc
+        assert "通俗讲解" in desc
 
     def test_advance_description(self):
         desc = AdaptiveTutoringService._get_action_description("advance")
-        assert "进阶" in desc
+        assert "知识点扩展" in desc
 
     def test_consolidate_description(self):
         desc = AdaptiveTutoringService._get_action_description("consolidate")
@@ -333,6 +446,7 @@ class TestGetInteractionHistory:
         assert result["total"] >= 1
         assert len(result["history"]) >= 1
         assert result["history"][0]["record_id"] == sample_answer_record.id
+        assert result["history"][0]["question_content"] == sample_answer_record.question_content
 
     def test_pagination(
         self, sample_learner_profile, sample_answer_record

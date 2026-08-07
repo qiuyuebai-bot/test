@@ -61,6 +61,8 @@ class LLMGenerator:
         question_count: int | None = None,
         variation_seed: str | int | None = None,
         excluded_questions: List[str] | None = None,
+        difficulty_standard: str | None = None,
+        multiple_choice_count: int | None = None,
     ) -> Dict[str, Any]:
         difficulty = cls._difficulty(diagnosis)
         question_count = max(1, min(10, question_count or 10))
@@ -69,7 +71,9 @@ class LLMGenerator:
             {
                 "knowledge_topic": topic,
                 "difficulty_level": difficulty,
+                "difficulty_standard": difficulty_standard or "",
                 "question_count": question_count,
+                "multiple_choice_count": max(0, min(question_count, multiple_choice_count if multiple_choice_count is not None else question_count // 3)),
                 "reference_knowledge": cls._reference_text(knowledge),
                 "variation_seed": variation_seed or "",
                 "variation_hint": cls._variation_hint("exercise", variation_seed),
@@ -79,6 +83,7 @@ class LLMGenerator:
             },
             temperature=0.7,
             use_cache=False,
+            allow_mock=False,
         )
         payload = parse_json_object(response)
         if payload.get("_meta", {}).get("model") == "mock":
@@ -110,6 +115,7 @@ class LLMGenerator:
             },
             temperature=0.7,
             use_cache=False,
+            allow_mock=False,
         )
         payload = parse_json_object(response)
         if payload.get("_meta", {}).get("model") == "mock":
@@ -147,23 +153,36 @@ class LLMGenerator:
             for point in bounded_list(item.get("knowledge_points", []), "knowledge_points", maximum=8)
         ]
         cls._reject_placeholder_question(question, options, explanation, knowledge_points)
-        answer = item.get("correct_answer")
-        if isinstance(answer, int):
-            answer_index = bounded_int(answer, "correct_answer", minimum=0, maximum=len(options) - 1)
-        elif isinstance(answer, str):
-            normalized = answer.strip().upper()
-            answer_index = ord(normalized[0]) - ord("A") if normalized else -1
-            if not 0 <= answer_index < len(options):
-                try:
-                    answer_index = options.index(answer)
-                except ValueError as exc:
-                    raise LLMResponseError("correct_answer does not match an option") from exc
-        else:
-            raise LLMResponseError("correct_answer is required")
+        question_type = "multiple" if str(item.get("type", "single")).lower() == "multiple" else "single"
+        raw_answers = item.get("correct_answers", item.get("correct_answer"))
+        answer_values = raw_answers if isinstance(raw_answers, list) else [raw_answers]
+        answer_indexes: List[int] = []
+        for answer in answer_values:
+            if isinstance(answer, int):
+                answer_index = bounded_int(answer, "correct_answer", minimum=0, maximum=len(options) - 1)
+            elif isinstance(answer, str):
+                normalized = answer.strip().upper()
+                answer_index = ord(normalized[0]) - ord("A") if len(normalized) == 1 else -1
+                if not 0 <= answer_index < len(options):
+                    try:
+                        answer_index = options.index(answer)
+                    except ValueError as exc:
+                        raise LLMResponseError("correct_answer does not match an option") from exc
+            else:
+                raise LLMResponseError("correct_answer is required")
+            if answer_index not in answer_indexes:
+                answer_indexes.append(answer_index)
+        answer_indexes.sort()
+        if question_type == "multiple" and len(answer_indexes) < 2:
+            raise LLMResponseError("multiple question requires at least two correct answers")
+        if question_type == "single" and len(answer_indexes) != 1:
+            raise LLMResponseError("single question requires exactly one correct answer")
         return {
             "question": question,
             "options": options,
-            "correct_answer": answer_index,
+            "type": question_type,
+            "correct_answer": answer_indexes if question_type == "multiple" else answer_indexes[0],
+            "correct_answers": answer_indexes,
             "difficulty": bounded_int(item.get("difficulty_level", item.get("difficulty", 3)), "difficulty", minimum=1, maximum=5),
             "explanation": explanation,
             "knowledge_points": knowledge_points,
@@ -189,7 +208,8 @@ class LLMGenerator:
         for index, question in enumerate(questions, 1):
             lines.extend([f"## 第{index}题：{question['question']}"])
             lines.extend(f"- {chr(65 + opt_index)}. {option}" for opt_index, option in enumerate(question["options"]))
-            lines.extend([f"\n**答案：{chr(65 + question['correct_answer'])}**", f"**解析：{question['explanation']}**", ""])
+            answer_letters = "、".join(chr(65 + answer_index) for answer_index in question["correct_answers"])
+            lines.extend([f"\n**答案：{answer_letters}**", f"**解析：{question['explanation']}**", ""])
         return {
             "content": "\n".join(lines),
             "content_json": {"basic_questions": basic, "advanced_questions": advanced, "total_questions": len(questions)},

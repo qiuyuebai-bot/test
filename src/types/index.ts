@@ -192,6 +192,7 @@ export interface LearningResource {
   contentSummary: string
   contentPath?: string
   contentType: 'pdf' | 'html' | 'video' | 'text'
+  formatType?: 'md' | 'text' | 'html' | 'json'
   qualityScore: number
   hallucinationDetected: boolean
   reviewStatus: 'pending' | 'approved' | 'rejected' | 'revised'
@@ -204,6 +205,7 @@ export interface LearningResource {
   difficultyLevel?: number
   targetTopic?: string
   content?: string
+  contentJson?: Record<string, unknown>
   createdAt?: string
   status?: string
   matchScore?: number
@@ -353,8 +355,10 @@ export interface InteractionHistoryRecord {
   questionId: number | null
   questionType: string
   questionTopic: string | null
+  questionContent?: string | null
   questionDifficulty: number
   userAnswer: unknown
+  feedbackContent?: string | null
   result: string
   score: number
   timeSpentMs: number

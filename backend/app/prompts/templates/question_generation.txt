@@ -8,6 +8,9 @@
 ## 难度等级（1-5）
 {difficulty_level}
 
+## 本等级必须满足的命题标准
+{difficulty_standard}
+
 ## 题目数量
 {question_count}
 
@@ -24,9 +27,11 @@
 {excluded_questions}
 
 优先基于参考知识库命题；如果参考知识库为空或资料不足，可以使用你的专业知识生成通用测试题，但题干和解析必须具体。
-请生成 {question_count} 道题，按 difficulty_level 从 1 到 5 由易到难排列。
+请生成 {question_count} 道题，并让每一道题都严格达到当前 difficulty_level 对应的命题标准。难度 1 到 5 必须体现认知要求、专业深度、推理步骤和干扰项质量的递增；不得只修改 difficulty_level 数字而保持题目内容不变。难度 4-5 的题目必须给出足够的专业条件或场景，选项都应具有迷惑性，不能通过生活常识、关键词或明显荒谬的选项直接排除。
+这 {question_count} 道题必须组成同一轮连贯学习序列，围绕“{knowledge_topic}”按“基础概念与前提 → 核心机制 → 场景应用 → 边界条件与专业权衡”逐步展开；相邻题不能只是换词重复，也不能跳到无关主题。
+其中必须恰好有 {multiple_choice_count} 道多选题（type 为 multiple），均匀分布在本轮中；其余为单选题（type 为 single）。多选题至少有两个正确选项，并确保只有完整选中全部正确项且不包含错误项时才成立。
 每次生成都要遵循“本次变体要求”，避免与同主题历史输出使用完全相同的题干、选项、正确答案位置和解析措辞。
-每题必须有 2-6 个选项、一个可验证的正确答案和解析。不得使用占位文字或输出任何额外字段。
+每题必须有 2-6 个选项、可验证的正确答案和解析。不得使用占位文字或输出任何额外字段。
 解析要使用严谨措辞，避免“据说、传闻、未经证实、绝对、必然、百分百”等词；不要把普通对比词写成无来源断言。
 输出 JSON：
-{{"questions": [{{"question": "题干", "options": ["选项一", "选项二", "选项三", "选项四"], "correct_answer": "A", "explanation": "解析", "difficulty_level": 1-5, "knowledge_points": ["知识点1"]}}]}}
+{{"questions": [{{"type": "single 或 multiple", "question": "题干", "options": ["选项一", "选项二", "选项三", "选项四"], "correct_answers": ["A"], "explanation": "解析", "difficulty_level": 1-5, "knowledge_points": ["知识点1"]}}]}}

@@ -19,7 +19,7 @@ from app.schemas.response import (
 from app.schemas.core import GenerateTutoringQuestionsRequest, SubmitAnswerRequest
 from app.services.tutoring_service import AdaptiveTutoringService
 from app.domains.learner.service import LearnerService
-from app.models import LearnerProfile
+from app.models import LearnerProfile, AnswerRecord
 from app.utils.logger import LoggerUtil
 from app.utils.auth import get_current_user, CurrentUser
 
@@ -80,8 +80,8 @@ def submit_answer(
     提交答题结果，触发多Agent协同自适应决策
 
     双分支逻辑：
-    - 正确率≥70% → 生成高阶进阶挑战任务
-    - 正确率<70% → 生成简化通俗知识点解释
+    - 单选题答对 → 继续深化并提供知识点扩展
+    - 单选题答错 → 提供纠错通俗讲解和知识点扩展
 
     完整留存交互记录，支持历史回溯
     """
@@ -101,6 +101,8 @@ def submit_answer(
             user_answer=request.user_answer,
             time_spent_ms=request.time_spent_ms,
             hints_used=request.hints_used,
+            session_id=request.session_id,
+            sequence_index=request.sequence_index,
         )
 
         if result.get("success"):
@@ -150,6 +152,32 @@ def get_interaction_history(
         return error(message=f"获取交互历史失败: {str(e)}")
 
 
+@router.delete("/tutoring/history/{learner_id}", summary="删除交互历史记录")
+def delete_interaction_history(
+    learner_id: int,
+    record_id: Optional[int] = Query(None, ge=1, description="单条记录ID"),
+    session_id: Optional[str] = Query(None, max_length=100, description="会话ID；不传则清空当前学习者历史"),
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> BaseResponse:
+    """按单条记录、会话或当前学习者范围删除交互历史。"""
+    if not current_user.is_admin and not LearnerService.check_data_permission(db, current_user.user_id, learner_id):
+        return unauthorized("无权限删除该学习者交互历史")
+    try:
+        query = db.query(AnswerRecord).filter(AnswerRecord.learner_id == learner_id)
+        if record_id is not None:
+            query = query.filter(AnswerRecord.id == record_id)
+        if session_id is not None:
+            query = query.filter(AnswerRecord.session_id == session_id)
+        deleted_count = query.delete(synchronize_session=False)
+        db.commit()
+        return success(data={"deleted_count": deleted_count}, message="交互历史已删除")
+    except Exception as e:
+        db.rollback()
+        LoggerUtil.log_error("删除交互历史失败", e)
+        return error(message=f"删除交互历史失败: {str(e)}")
+
+
 @router.get("/tutoring/decision-logic", summary="获取自适应决策逻辑说明")
 def get_decision_logic(db: Session = Depends(get_db)) -> BaseResponse:
     """获取自适应决策逻辑说明（双分支触发条件、Agent协同流程）"""
@@ -158,17 +186,17 @@ def get_decision_logic(db: Session = Depends(get_db)) -> BaseResponse:
             "decision_threshold": AdaptiveTutoringService.DECISION_THRESHOLD,
             "branches": [
                 {
-                    "condition": "答题正确率 >= 70%",
+                    "condition": "单选题判定正确",
                     "action": "advance",
-                    "description": "生成高阶进阶挑战任务，提升能力",
+                    "description": "继续深化并提供知识点扩展学习",
                 },
                 {
-                    "condition": "答题正确率 < 70%",
+                    "condition": "单选题判定错误",
                     "action": "simplify",
-                    "description": "生成简化通俗知识点解释，帮助理解",
+                    "description": "提供纠错通俗讲解和知识点扩展",
                 },
                 {
-                    "condition": "正确率达标但存在知识盲区",
+                    "condition": "本题判定正确但仍存在知识盲区",
                     "action": "consolidate",
                     "description": "巩固当前知识点，建议复习基础内容",
                 },
@@ -181,7 +209,7 @@ def get_decision_logic(db: Session = Depends(get_db)) -> BaseResponse:
             "record_retention": [
                 "答题记录（答案、得分、耗时）",
                 "Agent决策记录（决策类型、原因、置信度）",
-                "生成内容记录（简化解释/进阶挑战）",
+                "生成内容记录（通俗讲解/知识点扩展）",
                 "后续动作记录（推荐资源、下一题目难度）",
             ],
         }

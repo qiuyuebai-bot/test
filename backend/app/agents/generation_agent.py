@@ -8,7 +8,8 @@ from typing import Dict, Any, List
 from loguru import logger
 from app.agents.base import BaseAgent
 from app.agents.llm_generator import LLMGenerator
-from app.utils.llm import LLMUtil
+from app.utils.llm import LLMUtil, LLMUnavailableError
+from app.config import settings
 
 
 class GenerationAgent(BaseAgent):
@@ -143,6 +144,8 @@ class GenerationAgent(BaseAgent):
                     "generation_method": "deepseek",
                 }
             except Exception as exc:
+                if settings.REQUIRE_RESOURCE_LLM and isinstance(exc, LLMUnavailableError):
+                    raise
                 logger.warning(f"[知识生成Agent] LLM 实操指南生成失败，使用规则兜底: {exc}")
 
         difficulty = diagnosis.get("recommended_difficulty", {}).get("recommended_difficulty", 3)
@@ -240,6 +243,8 @@ class GenerationAgent(BaseAgent):
                     "generation_method": "deepseek",
                 }
             except Exception as exc:
+                if settings.REQUIRE_RESOURCE_LLM and isinstance(exc, LLMUnavailableError):
+                    raise
                 logger.warning(f"[知识生成Agent] LLM 测试题生成失败，使用规则兜底: {exc}")
 
         difficulty = diagnosis.get("recommended_difficulty", {}).get("recommended_difficulty", 3)
@@ -315,6 +320,8 @@ class GenerationAgent(BaseAgent):
                     "generation_method": "deepseek",
                 }
             except Exception as exc:
+                if settings.REQUIRE_RESOURCE_LLM and isinstance(exc, LLMUnavailableError):
+                    raise
                 logger.warning(f"[知识生成Agent] LLM 讲义生成失败，使用规则兜底: {exc}")
 
         difficulty = diagnosis.get("recommended_difficulty", {}).get("recommended_difficulty", 3)

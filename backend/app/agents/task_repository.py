@@ -16,6 +16,7 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.database import get_db_context
 from app.models import AgentTask, DebateRecord, LearningResource, LearnerProfile
+from app.utils.resource_content import normalize_resource_content
 
 
 class TaskRepository:
@@ -267,6 +268,12 @@ class TaskRepository:
         debate_rounds: int,
     ) -> Dict[str, Any]:
         """保存学习资源并标记任务完成"""
+        generation_result = dict(generation_result or {})
+        generation_result["content"] = normalize_resource_content(
+            generation_result.get("content")
+        )
+        generation_result["word_count"] = len(generation_result["content"])
+
         with get_db_context() as db:
             task = db.query(AgentTask).filter(AgentTask.id == task_id).first()
             task_input = task.input_data if task else {}
@@ -421,6 +428,10 @@ class TaskRepository:
             "generation_method": "reused_existing",
             "reused_from_resource_id": reusable_resource.get("id"),
         }
+        generation_result["content"] = normalize_resource_content(
+            generation_result["content"]
+        )
+        generation_result["word_count"] = len(generation_result["content"])
         audit_result = {
             "passed": True,
             "overall_score": reusable_resource.get("validation_score", 0),

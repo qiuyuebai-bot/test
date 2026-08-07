@@ -37,7 +37,7 @@ async function loginViaApi(page: Page, user: TestUser): Promise<LoginResponse> {
   })
   expect(res.ok(), `登录 API 应返回 2xx，实际：${res.status()}`).toBeTruthy()
   const body = (await res.json()) as LoginResponse
-  expect(body.code, `登录业务码应=0，实际：${body.code}`).toBe(0)
+  expect(body.code, `登录业务码应=200，实际：${body.code}`).toBe(200)
   return body
 }
 

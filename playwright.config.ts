@@ -1,5 +1,8 @@
 import { defineConfig, devices } from '@playwright/test'
 
+const e2eBaseURL = process.env.E2E_BASE_URL || 'http://127.0.0.1:5173'
+const customWebServerCommand = process.env.E2E_WEB_SERVER_COMMAND
+
 /**
  * Playwright E2E 配置
  * 6 条核心业务流程：登录画像、知识检索、Agent 协同、自适应导学、企业培训、健康指标
@@ -24,7 +27,7 @@ export default defineConfig({
     timeout: 10_000,
   },
   use: {
-    baseURL: process.env.E2E_BASE_URL || 'http://localhost:5173',
+    baseURL: e2eBaseURL,
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
@@ -40,11 +43,28 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: {
-    command: process.env.E2E_WEB_SERVER_COMMAND || 'npm run dev',
-    url: 'http://localhost:5173',
-    reuseExistingServer: !process.env.CI,
-    timeout: 120_000,
-    retries: 2,
-  },
+  webServer: customWebServerCommand
+    ? {
+        command: customWebServerCommand,
+        url: e2eBaseURL,
+        reuseExistingServer: !process.env.CI,
+        timeout: 120_000,
+        retries: 2,
+      }
+    : [
+        {
+          command: 'npm run start:backend',
+          url: 'http://127.0.0.1:8000/api/v1/health',
+          reuseExistingServer: !process.env.CI,
+          timeout: 120_000,
+          retries: 2,
+        },
+        {
+          command: 'npm run serve',
+          url: e2eBaseURL,
+          reuseExistingServer: !process.env.CI,
+          timeout: 120_000,
+          retries: 2,
+        },
+      ],
 })

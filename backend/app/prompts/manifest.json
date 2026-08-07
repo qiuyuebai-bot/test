@@ -23,7 +23,7 @@
   "question_generation": {
     "version": "1.0.0",
     "description": "分阶测试题生成：按难度等级生成对应题目与解析",
-    "variables": ["knowledge_topic", "difficulty_level", "question_count", "reference_knowledge", "excluded_questions"]
+      "variables": ["knowledge_topic", "difficulty_level", "difficulty_standard", "question_count", "multiple_choice_count", "reference_knowledge", "excluded_questions"]
   },
   "tutoring_feedback": {
     "version": "1.0.0",

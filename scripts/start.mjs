@@ -38,7 +38,7 @@ const CONFIG = {
   frontend: {
     dir: ".",
     packageJson: "package.json",
-    devScript: "dev",
+    devScript: "serve",
     nodeModules: "node_modules",
   },
   envExample: ".env.example",
@@ -87,7 +87,11 @@ function findVenv(backendDir) {
       ? join(venvPath, "Scripts", "python.exe")
       : join(venvPath, "bin", "python");
     if (existsSync(pythonExe)) {
-      return { venvPath, pythonExe };
+      const check = spawnSync(pythonExe, ["--version"], {
+        encoding: "utf8",
+        shell: false,
+      });
+      if (check.status === 0) return { venvPath, pythonExe };
     }
   }
   return null;
@@ -292,9 +296,11 @@ function attachOutput(service) {
     proc.stderr.on("data", prefixLine);
   }
   proc.on("error", (err) => {
+    if (service.stopping) return;
     log("error", `[${label}] 启动失败: ${err.message}`);
   });
   proc.on("exit", (code, signal) => {
+    if (service.stopping) return;
     if (signal === "SIGTERM" || signal === "SIGINT") return;
     if (code === 0) {
       log("info", `[${label}] 进程退出 (code=0)`);
@@ -388,11 +394,11 @@ function main() {
 
   section("服务地址");
   if (wantBackend) {
-    log("success", `后端 API:  http://localhost:${CONFIG.backend.port}`);
+    log("info", `后端启动中:  http://localhost:${CONFIG.backend.port}`);
     log("info", `API 文档:  http://localhost:${CONFIG.backend.port}/docs`);
   }
   if (wantFrontend) {
-    log("success", "前端页面:  http://localhost:5173");
+    log("info", "前端正在构建；看到 Vite 输出 Local 地址后再打开:  http://localhost:5173");
   }
   console.log(`\n${CONFIG.colors.dim}按 Ctrl+C 停止所有服务${CONFIG.colors.reset}\n`);
 
@@ -404,7 +410,16 @@ function main() {
     console.log(`\n${CONFIG.colors.warn}收到 ${signal}，正在关闭服务...${CONFIG.colors.reset}`);
     services.forEach((s) => {
       try {
-        if (!s.proc.killed) s.proc.kill("SIGTERM");
+        s.stopping = true;
+        if (s.proc.killed) return;
+        if (IS_WINDOWS) {
+          spawnSync("taskkill", ["/pid", String(s.proc.pid), "/t", "/f"], {
+            stdio: "ignore",
+            windowsHide: true,
+          });
+        } else {
+          s.proc.kill("SIGTERM");
+        }
       } catch (e) {
         log("error", `[${s.label}] 关闭失败: ${e.message}`);
       }

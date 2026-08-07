@@ -2,6 +2,26 @@
 @tailwind components;
 @tailwind utilities;
 
+@keyframes guidance-runner-chase {
+  0%, 100% { transform: translate3d(0, 2px, 0) rotate(-2deg); }
+  50% { transform: translate3d(22px, -4px, 0) rotate(2deg); }
+}
+
+@keyframes guidance-star-drift {
+  0%, 100% { transform: translateY(0) scale(.9); opacity: .65; }
+  50% { transform: translateY(-8px) scale(1.08); opacity: 1; }
+}
+
+.guidance-runner { animation: guidance-runner-chase 1.8s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.guidance-star { animation: guidance-star-drift 1.6s ease-in-out infinite; transform-box: fill-box; transform-origin: center; }
+.guidance-star-two { animation-delay: -.55s; }
+.guidance-star-three { animation-delay: -.95s; }
+.guidance-trail { stroke-dasharray: 10 12; animation: guidance-trail-flow 1.2s linear infinite; }
+@keyframes guidance-trail-flow { to { stroke-dashoffset: -44; } }
+@media (prefers-reduced-motion: reduce) {
+  .guidance-runner, .guidance-star, .guidance-trail { animation: none; }
+}
+
 /* ============================================
    科创极简高级风格 - 全局设计系统 CSS 变量
    ============================================ */
@@ -64,7 +84,7 @@
 
   /* 阴影 - 分层柔化（深化以增强高级质感） */
   --shadow-soft: rgba(0, 0, 0, 0.06);
-  --shadow-medium: rgba(0, 0, 0, 0.10);
+  --shadow-medium: rgba(0, 0, 0, 0.1);
   --shadow-heavy: rgba(0, 0, 0, 0.16);
   --shadow-glow: rgba(61, 90, 128, 0.25);
   --shadow-inner: rgba(0, 0, 0, 0.05);
@@ -158,7 +178,12 @@ html {
 }
 
 body {
-  font-family: 'Noto Sans SC', 'SF Pro Display', -apple-system, BlinkMacSystemFont, sans-serif;
+  font-family:
+    'Noto Sans SC',
+    'SF Pro Display',
+    -apple-system,
+    BlinkMacSystemFont,
+    sans-serif;
   font-weight: 400;
   color: var(--color-text-primary);
   background-color: var(--color-bg-secondary);
@@ -244,40 +269,80 @@ body {
    ============================================ */
 
 .shadow-card {
-  box-shadow: 0 2px 8px var(--shadow-soft), 0 1px 2px var(--shadow-inner);
+  box-shadow:
+    0 2px 8px var(--shadow-soft),
+    0 1px 2px var(--shadow-inner);
 }
 
 .shadow-elevated {
-  box-shadow: 0 4px 16px var(--shadow-medium), 0 2px 4px var(--shadow-inner);
+  box-shadow:
+    0 4px 16px var(--shadow-medium),
+    0 2px 4px var(--shadow-inner);
 }
 
 .shadow-modal {
-  box-shadow: 0 8px 32px var(--shadow-heavy), 0 4px 8px var(--shadow-medium);
+  box-shadow:
+    0 8px 32px var(--shadow-heavy),
+    0 4px 8px var(--shadow-medium);
 }
 
 /* ============================================
    统一间距规则（8px 倍数）
    ============================================ */
 
-.gap-xs { gap: 4px; }
-.gap-sm { gap: 8px; }
-.gap-md { gap: 16px; }
-.gap-lg { gap: 24px; }
-.gap-xl { gap: 32px; }
-.gap-2xl { gap: 48px; }
+.gap-xs {
+  gap: 4px;
+}
+.gap-sm {
+  gap: 8px;
+}
+.gap-md {
+  gap: 16px;
+}
+.gap-lg {
+  gap: 24px;
+}
+.gap-xl {
+  gap: 32px;
+}
+.gap-2xl {
+  gap: 48px;
+}
 
-.p-xs { padding: 4px; }
-.p-sm { padding: 8px; }
-.p-md { padding: 16px; }
-.p-lg { padding: 24px; }
-.p-xl { padding: 32px; }
-.p-2xl { padding: 48px; }
+.p-xs {
+  padding: 4px;
+}
+.p-sm {
+  padding: 8px;
+}
+.p-md {
+  padding: 16px;
+}
+.p-lg {
+  padding: 24px;
+}
+.p-xl {
+  padding: 32px;
+}
+.p-2xl {
+  padding: 48px;
+}
 
-.m-xs { margin: 4px; }
-.m-sm { margin: 8px; }
-.m-md { margin: 16px; }
-.m-lg { margin: 24px; }
-.m-xl { margin: 32px; }
+.m-xs {
+  margin: 4px;
+}
+.m-sm {
+  margin: 8px;
+}
+.m-md {
+  margin: 16px;
+}
+.m-lg {
+  margin: 24px;
+}
+.m-xl {
+  margin: 32px;
+}
 
 /* ============================================
    滚动条样式
@@ -357,7 +422,8 @@ body {
 }
 
 @keyframes nodePulse {
-  0%, 100% {
+  0%,
+  100% {
     box-shadow: 0 0 0 0 var(--agent-color);
   }
   50% {
@@ -398,14 +464,30 @@ body {
     @apply opacity-0;
     animation: staggerFadeIn 0.4s ease-out forwards;
   }
-  .stagger-item:nth-child(1) { animation-delay: 0.05s; }
-  .stagger-item:nth-child(2) { animation-delay: 0.10s; }
-  .stagger-item:nth-child(3) { animation-delay: 0.15s; }
-  .stagger-item:nth-child(4) { animation-delay: 0.20s; }
-  .stagger-item:nth-child(5) { animation-delay: 0.25s; }
-  .stagger-item:nth-child(6) { animation-delay: 0.30s; }
-  .stagger-item:nth-child(7) { animation-delay: 0.35s; }
-  .stagger-item:nth-child(8) { animation-delay: 0.40s; }
+  .stagger-item:nth-child(1) {
+    animation-delay: 0.05s;
+  }
+  .stagger-item:nth-child(2) {
+    animation-delay: 0.1s;
+  }
+  .stagger-item:nth-child(3) {
+    animation-delay: 0.15s;
+  }
+  .stagger-item:nth-child(4) {
+    animation-delay: 0.2s;
+  }
+  .stagger-item:nth-child(5) {
+    animation-delay: 0.25s;
+  }
+  .stagger-item:nth-child(6) {
+    animation-delay: 0.3s;
+  }
+  .stagger-item:nth-child(7) {
+    animation-delay: 0.35s;
+  }
+  .stagger-item:nth-child(8) {
+    animation-delay: 0.4s;
+  }
 
   /* 指标数字统一样式 */
   .metric-number {
@@ -423,5 +505,176 @@ body {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+/* 仅用于“资源生成”内 AI 产出的 Markdown 学习资料。 */
+.resource-markdown {
+  max-width: 46rem;
+  color: var(--color-text-primary);
+  font-size: 0.9375rem;
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.resource-markdown > :first-child {
+  margin-top: 0;
+}
+
+.resource-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.resource-markdown h1,
+.resource-markdown h2,
+.resource-markdown h3,
+.resource-markdown h4 {
+  color: var(--color-text-primary);
+  font-weight: 600;
+  line-height: 1.35;
+  scroll-margin-top: 1rem;
+}
+
+.resource-markdown h1 {
+  margin: 1.75rem 0 0.875rem;
+  font-size: 1.375rem;
+}
+
+.resource-markdown h2 {
+  margin: 1.5rem 0 0.75rem;
+  padding-bottom: 0.45rem;
+  border-bottom: 1px solid var(--color-border-light);
+  font-size: 1.125rem;
+}
+
+.resource-markdown h3 {
+  margin: 1.25rem 0 0.625rem;
+  font-size: 1rem;
+}
+
+.resource-markdown h4 {
+  margin: 1rem 0 0.5rem;
+  font-size: 0.9375rem;
+}
+
+.resource-markdown p,
+.resource-markdown ul,
+.resource-markdown ol,
+.resource-markdown blockquote,
+.resource-markdown pre,
+.resource-markdown .resource-markdown-table {
+  margin: 0.75rem 0;
+}
+
+.resource-markdown ul,
+.resource-markdown ol {
+  padding-left: 1.5rem;
+}
+
+.resource-markdown li + li {
+  margin-top: 0.3rem;
+}
+
+.resource-markdown li > ul,
+.resource-markdown li > ol {
+  margin: 0.3rem 0;
+}
+
+.resource-markdown blockquote {
+  padding: 0.7rem 0.9rem;
+  border-left: 3px solid var(--color-primary);
+  border-radius: 0 0.5rem 0.5rem 0;
+  background: var(--color-primary-subtle);
+  color: var(--color-text-secondary);
+}
+
+.resource-markdown blockquote > :first-child {
+  margin-top: 0;
+}
+
+.resource-markdown blockquote > :last-child {
+  margin-bottom: 0;
+}
+
+.resource-markdown a {
+  color: var(--color-primary);
+  text-decoration: underline;
+  text-underline-offset: 0.15em;
+}
+
+.resource-markdown code {
+  padding: 0.15rem 0.35rem;
+  border-radius: 0.25rem;
+  background: var(--color-bg-tertiary);
+  font-family: 'JetBrains Mono', 'SF Mono', Consolas, monospace;
+  font-size: 0.875em;
+}
+
+.resource-markdown pre {
+  overflow-x: auto;
+  padding: 0.875rem 1rem;
+  border: 1px solid var(--color-border);
+  border-radius: 0.625rem;
+  background: var(--color-bg-tertiary);
+}
+
+.resource-markdown pre code {
+  padding: 0;
+  background: transparent;
+  font-size: 0.8125rem;
+  line-height: 1.65;
+}
+
+.resource-markdown-table {
+  overflow-x: auto;
+  border: 1px solid var(--color-border);
+  border-radius: 0.625rem;
+}
+
+.resource-markdown table {
+  width: 100%;
+  min-width: 30rem;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.resource-markdown th,
+.resource-markdown td {
+  padding: 0.625rem 0.75rem;
+  border-bottom: 1px solid var(--color-border-light);
+  text-align: left;
+  vertical-align: top;
+}
+
+.resource-markdown th {
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  font-weight: 600;
+}
+
+.resource-markdown tr:last-child td {
+  border-bottom: 0;
+}
+
+.resource-markdown input[type='checkbox'] {
+  margin-right: 0.45rem;
+  accent-color: var(--color-primary);
+}
+
+.resource-markdown .katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.25rem 0;
+}
+
+@media print {
+  .resource-markdown {
+    max-width: none;
+  }
+
+  .resource-markdown pre,
+  .resource-markdown .resource-markdown-table,
+  .resource-markdown .katex-display {
+    overflow: visible;
   }
 }

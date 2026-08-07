@@ -8,9 +8,21 @@ export interface ResourceSlice {
   resourcesTotal: number
   resourcesLoading: boolean
   resourceLoading: boolean
-  fetchResources: (params?: { page?: number; pageSize?: number; learnerId?: number }) => Promise<void>
-  generateResources: (params: { learnerId: number; targetTopic: string; industry?: string }) => Promise<{ taskId: string }>
-  generateResource: (params: { learnerId: number; resourceType: string; title: string }) => Promise<LearningResource>
+  fetchResources: (params?: {
+    page?: number
+    pageSize?: number
+    learnerId?: number
+  }) => Promise<void>
+  generateResources: (params: {
+    learnerId: number
+    targetTopic: string
+    industry?: string
+  }) => Promise<{ taskId: string }>
+  generateResource: (params: {
+    learnerId: number
+    resourceType: string
+    title: string
+  }) => Promise<LearningResource>
 }
 
 export const createResourceSlice: StateCreator<AppState, [], [], ResourceSlice> = (set, get) => ({
@@ -34,6 +46,9 @@ export const createResourceSlice: StateCreator<AppState, [], [], ResourceSlice> 
         contentSummary: item.contentSummary ?? item.summary ?? '',
         contentPath: item.contentPath ?? undefined,
         contentType: (item.contentType || 'text') as LearningResource['contentType'],
+        formatType:
+          item.formatType ||
+          (['guide', 'exercise', 'lecture'].includes(item.resourceType) ? 'md' : 'text'),
         qualityScore: item.qualityScore ?? Math.round((item.matchScore || 0) * 100),
         hallucinationDetected: item.hallucinationDetected ?? item.hasHallucination ?? false,
         reviewStatus: (item.reviewStatus || 'pending') as LearningResource['reviewStatus'],
@@ -43,7 +58,12 @@ export const createResourceSlice: StateCreator<AppState, [], [], ResourceSlice> 
         generationTime: item.generationTime ?? item.createdAt ?? new Date().toISOString(),
         metaData: item.metaData ?? {},
       }))
-      set({ resources: mappedItems, resourcesTotal: result.total, resourcesLoading: false, resourceLoading: false })
+      set({
+        resources: mappedItems,
+        resourcesTotal: result.total,
+        resourcesLoading: false,
+        resourceLoading: false,
+      })
     } catch (err) {
       console.error('fetchResources failed:', err)
       set({ resourcesLoading: false, resourceLoading: false })

@@ -3,7 +3,7 @@ import type { UserInfo, LoginRequest, LoginResponse } from '../types'
 
 export const authApi = {
   login(data: LoginRequest): Promise<LoginResponse> {
-    return http.post<LoginResponse>('/auth/login', data)
+    return http.post<LoginResponse>('/auth/login', data, { timeout: 10000 })
   },
 
   register(data: { username: string; password: string; email?: string; role?: string }): Promise<LoginResponse> {

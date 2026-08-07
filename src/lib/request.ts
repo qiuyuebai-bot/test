@@ -369,9 +369,10 @@ export const http = {
   },
   delete<T = unknown>(
     path: string,
+    params?: Record<string, string | number | boolean | undefined>,
     options?: Omit<RequestOptions, 'method' | 'body'>,
   ): Promise<T> {
-    return request<T>(path, { ...options, method: 'DELETE' })
+    return request<T>(path, { ...options, method: 'DELETE', params })
   },
   patch<T = unknown>(
     path: string,

@@ -189,4 +189,41 @@ describe('LearningReport page', () => {
     expect(await screen.findByText('No evidence')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: 'Upload relevant materials' })).toBeInTheDocument()
   })
+
+  it('summarizes adaptive answers by round accuracy instead of 100-point scores', async () => {
+    apiMocks.getInteractionHistory.mockResolvedValue({
+      learnerId: 1,
+      history: Array.from({ length: 7 }, (_, index) => ({
+        recordId: index + 1,
+        sessionId: 'round-accuracy',
+        sequenceIndex: index,
+        questionId: index + 10,
+        questionType: index === 2 || index === 5 ? 'multiple' : 'single',
+        questionTopic: 'REST API',
+        questionDifficulty: 4,
+        userAnswer: ['A'],
+        result: index < 3 ? 'correct' : 'wrong',
+        score: index < 3 ? 100 : 0,
+        timeSpentMs: 1000,
+        agentDecision: index < 3 ? 'advance' : 'simplify',
+        decisionReason: null,
+        decisionConfidence: null,
+        nextAction: null,
+        nextResourceId: null,
+        feedbackGiven: null,
+        createdAt: `2026-08-07T10:0${index}:00`,
+      })),
+      total: 7,
+      page: 1,
+      pageSize: 100,
+    })
+
+    const { default: Page } = await import('./LearningReport')
+    renderWithRouter(<Page />)
+
+    expect((await screen.findAllByText('43%')).length).toBeGreaterThanOrEqual(2)
+    expect(screen.getByText('3 / 7')).toBeInTheDocument()
+    expect(screen.getByText('1 轮')).toBeInTheDocument()
+    expect(screen.queryByText('/ 100')).not.toBeInTheDocument()
+  })
 })

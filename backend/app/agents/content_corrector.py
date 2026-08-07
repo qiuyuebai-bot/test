@@ -12,6 +12,7 @@ from loguru import logger
 
 from app.services.ai_content_service import AIContentService
 from app.utils.llm import LLMUtil
+from app.utils.resource_content import ResourceContentError, normalize_resource_content
 
 
 class ContentCorrector:
@@ -88,6 +89,7 @@ class ContentCorrector:
                 prompt=user_prompt,
                 system_prompt=system_prompt,
                 temperature=0.3,
+                allow_mock=False,
             )
 
             revised = revised.strip()
@@ -95,7 +97,11 @@ class ContentCorrector:
                 revised = re.sub(r'^```\w*\n?', '', revised)
                 revised = re.sub(r'\n?```$', '', revised)
 
-            return revised.strip()
+            return normalize_resource_content(revised)
+
+        except ResourceContentError as e:
+            logger.warning(f"[内容修正] 拒绝非正文 LLM 响应，回退到规则修正: {e}")
+            return None
 
         except Exception as e:
             logger.warning(f"[内容修正] LLM修正失败，回退到规则修正: {e}")

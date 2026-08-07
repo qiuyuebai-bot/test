@@ -1,5 +1,6 @@
 """Focused tests for strict LLM parsing and deterministic fallback behavior."""
 import json
+import httpx
 import pytest
 
 from app.agents.diagnosis_agent import DiagnosisAgent
@@ -9,6 +10,39 @@ from app.services.llm_question_generator import LLMQuestionGenerator
 from app.utils import llm_response
 from app.utils.llm import LLMUtil
 from app.utils.llm_response import LLMResponseError, parse_json_object
+from app.config import settings
+
+
+def test_deepseek_request_disables_thinking_mode_by_default(monkeypatch):
+    captured = {}
+
+    class FakeClient:
+        def post(self, url, json):
+            captured["url"] = url
+            captured["payload"] = json
+            return httpx.Response(200, json={"choices": [{"message": {"content": "ok"}}]})
+
+    monkeypatch.setattr(settings, "OPENAI_THINKING_ENABLED", False)
+    monkeypatch.setattr(LLMUtil, "_get_sync_client", classmethod(lambda cls: FakeClient()))
+
+    LLMUtil._call_api([{"role": "user", "content": "hello"}], temperature=0)
+
+    assert captured["url"].endswith("/chat/completions")
+    assert captured["payload"]["thinking"] == {"type": "disabled"}
+
+
+def test_empty_final_content_is_rejected():
+    response = httpx.Response(
+        200,
+        json={
+            "choices": [
+                {"message": {"content": "", "reasoning_content": "internal reasoning"}}
+            ]
+        },
+    )
+
+    with pytest.raises(ValueError, match="final content"):
+        LLMUtil._parse_response(response)
 
 
 def test_parse_json_object_accepts_fenced_json():
@@ -131,12 +165,16 @@ def test_llm_question_generation_allows_ten_questions(monkeypatch):
     def fake_call(cls, template_name, variables=None, temperature=None, model=None, use_cache=True):
         captured["template_name"] = template_name
         captured["question_count"] = variables["question_count"]
+        captured["multiple_choice_count"] = variables["multiple_choice_count"]
+        captured["difficulty_standard"] = variables["difficulty_standard"]
         questions = []
         for index in range(10):
+            is_multiple = index in {2, 5, 8}
             questions.append({
+                "type": "multiple" if is_multiple else "single",
                 "question": f"Question {index + 1}",
                 "options": ["Option A", "Option B", "Option C", "Option D"],
-                "correct_answer": 0,
+                "correct_answers": ["A", "C"] if is_multiple else ["A"],
                 "difficulty_level": 2 if index < 5 else 4,
                 "explanation": "Detailed explanation",
                 "knowledge_points": ["knowledge point"],
@@ -154,7 +192,11 @@ def test_llm_question_generation_allows_ten_questions(monkeypatch):
 
     assert captured["template_name"] == "question_generation"
     assert captured["question_count"] == 10
+    assert captured["multiple_choice_count"] == 3
+    assert "综合应用" in captured["difficulty_standard"]
     assert len(result) == 10
+    assert sum(question["type"] == "multiple" for question in result) == 3
+    assert result[2]["correctIndex"] == [0, 2]
     assert result[0]["generation_method"] == "deepseek"
 
 

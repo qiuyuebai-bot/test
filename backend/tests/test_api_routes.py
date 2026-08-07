@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.models import IssuedTutoringQuestion, User, LearnerProfile, KnowledgeDoc
+from app.models import IssuedTutoringQuestion, User, LearnerProfile, KnowledgeDoc, AnswerRecord
 from app.services import tutoring_service as tutoring_service_module
 
 
@@ -289,13 +289,36 @@ class TestCoreRoutes:
             "result": "correct",
             "score": 10.0,
             "time_spent_ms": 30000,
+            "session_id": "e2e-round-1",
+            "sequence_index": 1,
         }, headers=auth_headers)
         assert response.status_code == 200
+        payload = response.json()["data"]
+        assert payload["score"] in {0, 100}
+        assert "knowledge_expansion" in payload["generated_content"]
+        record = db_session.query(AnswerRecord).filter(AnswerRecord.learner_id == sample_learner_profile.id).order_by(AnswerRecord.id.desc()).first()
+        assert record is not None
+        assert record.session_id == "e2e-round-1"
+        assert record.sequence_index == 1
 
     def test_get_tutoring_history(self, client: TestClient, sample_learner_profile: LearnerProfile, auth_headers: dict):
         """测试获取交互历史"""
         response = client.get(f"/api/v1/tutoring/history/{sample_learner_profile.id}?page=1&page_size=10", headers=auth_headers)
         assert response.status_code == 200
+
+    def test_delete_tutoring_history_record(
+        self,
+        client: TestClient,
+        sample_learner_profile: LearnerProfile,
+        sample_answer_record: AnswerRecord,
+        auth_headers: dict,
+    ):
+        response = client.delete(
+            f"/api/v1/tutoring/history/{sample_learner_profile.id}?record_id={sample_answer_record.id}",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        assert response.json()["data"]["deleted_count"] == 1
 
     def test_generate_tutoring_questions_normalizes_topic_and_hides_answer(
         self,
@@ -335,6 +358,70 @@ class TestCoreRoutes:
         assert question["topic"] == "反向传播算法"
         assert "answer_key" not in question
         assert "correctAnswer" not in question
+
+    def test_generate_tutoring_questions_accepts_custom_topic_and_count(
+        self,
+        client: TestClient,
+        sample_learner_profile: LearnerProfile,
+        auth_headers: dict,
+        monkeypatch,
+    ):
+        monkeypatch.setattr(
+            tutoring_service_module.LLMUtil,
+            "is_available",
+            classmethod(lambda cls: False),
+        )
+        monkeypatch.setattr(
+            tutoring_service_module,
+            "DiagnosisAgent",
+            lambda: type(
+                "FakeDiagnosis",
+                (),
+                {"execute": lambda self, payload: {"recommended_difficulty": {"recommended_difficulty": 3}}},
+            )(),
+        )
+
+        response = client.post(
+            "/api/v1/tutoring/questions/generate",
+            json={
+                "learner_id": sample_learner_profile.id,
+                "topic": "REST API",
+                "difficulty": 4,
+                "question_count": 5,
+            },
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        questions = response.json()["data"]["questions"]
+        assert len(questions) == 5
+        assert all(question["topic"] == "REST API" for question in questions)
+        assert all(question["difficulty"] == 4 for question in questions)
+        assert all("correctAnswer" not in question and "answer_key" not in question for question in questions)
+
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"topic": "REST API", "difficulty": 0, "question_count": 3},
+            {"topic": "REST API", "difficulty": 6, "question_count": 3},
+            {"topic": "REST API", "difficulty": 3, "question_count": 0},
+            {"topic": "REST API", "difficulty": 3, "question_count": 11},
+        ],
+    )
+    def test_generate_tutoring_questions_rejects_invalid_bounds(
+        self,
+        client: TestClient,
+        sample_learner_profile: LearnerProfile,
+        auth_headers: dict,
+        payload: dict,
+    ):
+        response = client.post(
+            "/api/v1/tutoring/questions/generate",
+            json={"learner_id": sample_learner_profile.id, **payload},
+            headers=auth_headers,
+        )
+
+        assert response.status_code in (400, 422)
 
 
 class TestErrorHandling:

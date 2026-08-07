@@ -6,7 +6,7 @@ import Input from '../components/Input'
 import { Form, FormField } from '../components'
 import { loginSchema, registerSchema, type LoginFormValues, type RegisterFormValues } from '../lib/validations'
 import { toast } from '../components/toastStore'
-import { ApiError } from '../lib/request'
+import { ApiError, NetworkError, TimeoutError } from '../lib/request'
 import { useStore } from '../store'
 
 type AuthMode = 'login' | 'register'
@@ -15,6 +15,10 @@ const inputClassName =
   'h-12 rounded-xl border-indigo-100 bg-white pl-11 text-slate-950 placeholder:text-slate-400 focus:border-emerald-500 focus:ring-emerald-500/15'
 
 function reportAuthError(title: string, err: unknown, fallback: string) {
+  if (err instanceof NetworkError || err instanceof TimeoutError) {
+    toast.error(title, '无法连接后端服务，请确认服务已正常启动')
+    return
+  }
   if (err instanceof ApiError) {
     toast.error(title, err.message)
     return

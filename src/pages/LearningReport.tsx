@@ -91,6 +91,18 @@ function formatTestDate(isoString: string | null): string {
   }
 }
 
+interface RoundSummary {
+  id: string
+  topic: string
+  total: number
+  correct: number
+  accuracy: number
+  difficulty: number | null
+  latestAt: string | null
+  roundNumber: number
+  agentDecision: string | null
+}
+
 export default function LearningReport() {
   const navigate = useNavigate()
   const { currentLearner, learners } = useStore(
@@ -122,12 +134,12 @@ export default function LearningReport() {
     try {
       const [reportData, historyData, sysMetrics, abilityTrend] = await Promise.all([
         coreApi.getLearnerReport(learner.id).catch(() => null),
-        coreApi.getInteractionHistory(learner.id).catch(() => ({
+        coreApi.getInteractionHistory(learner.id, { page: 1, pageSize: 100 }).catch(() => ({
           learnerId: learner.id,
           history: [],
           total: 0,
           page: 1,
-          pageSize: 20,
+          pageSize: 100,
         })),
         coreApi.getSystemMetrics().catch(() => null),
         coreApi.getAbilityTrend(learner.id).catch(() => []),
@@ -203,6 +215,41 @@ export default function LearningReport() {
   const displayName = learnerInfo?.name || learner?.realName || '-'
   const displayEducation = learnerInfo?.education || learner?.educationLevel || '-'
   const displayMajor = learnerInfo?.major || learner?.major || '-'
+
+  const roundSummaries: RoundSummary[] = (() => {
+    const groups = new Map<string, InteractionHistoryRecord[]>()
+    testHistory.forEach((record) => {
+      const key = record.sessionId || `record-${record.recordId}`
+      groups.set(key, [...(groups.get(key) ?? []), record])
+    })
+    const chronological = Array.from(groups.entries())
+      .map(([id, records]) => {
+        const ordered = [...records].sort((left, right) => {
+          if (left.sequenceIndex !== null && right.sequenceIndex !== null) {
+            return left.sequenceIndex - right.sequenceIndex
+          }
+          return new Date(left.createdAt ?? '').getTime() - new Date(right.createdAt ?? '').getTime()
+        })
+        const correct = ordered.filter((record) => record.result === 'correct').length
+        const difficulties = new Set(ordered.map((record) => record.questionDifficulty).filter(Boolean))
+        return {
+          id,
+          topic: ordered[0]?.questionTopic || ordered[0]?.questionType || '自适应导学',
+          total: ordered.length,
+          correct,
+          accuracy: ordered.length > 0 ? Math.round((correct / ordered.length) * 100) : 0,
+          difficulty: difficulties.size === 1 ? [...difficulties][0] : null,
+          latestAt: ordered[ordered.length - 1]?.createdAt ?? null,
+          firstAt: new Date(ordered[0]?.createdAt ?? '').getTime() || 0,
+          agentDecision: ordered[ordered.length - 1]?.agentDecision ?? null,
+        }
+      })
+      .sort((left, right) => left.firstAt - right.firstAt)
+
+    return chronological
+      .map((round, index) => ({ ...round, roundNumber: index + 1 }))
+      .sort((left, right) => (new Date(right.latestAt ?? '').getTime() || 0) - (new Date(left.latestAt ?? '').getTime() || 0))
+  })()
 
   const exportPdf = async () => {
     if (!learner?.id || pdfExporting) return
@@ -547,23 +594,23 @@ export default function LearningReport() {
 
           {/* 测试历史趋势 */}
           <Card padding="md">
-            <h4 className="text-xs font-medium text-text-secondary mb-3">近期测试成绩</h4>
-            {testHistory.length > 0 ? (
+            <h4 className="text-xs font-medium text-text-secondary mb-3">近期轮次正确率</h4>
+            {roundSummaries.length > 0 ? (
               <div className="flex items-end justify-between gap-2">
-                {testHistory.slice(0, 5).map((test, idx) => (
-                  <div key={test.recordId} className="flex-1 flex flex-col items-center gap-1">
+                {roundSummaries.slice(0, 5).map((round) => (
+                  <div key={round.id} className="flex-1 flex flex-col items-center gap-1">
                     <div className="w-full flex flex-col items-center">
-                      <span className="text-xs font-semibold text-text-primary">{test.score.toFixed(0)}</span>
+                      <span className="text-xs font-semibold text-text-primary">{round.accuracy}%</span>
                       <div className="w-full h-12 flex items-end">
                         <div
                           className={`w-full rounded-t-sm transition-all ${
-                            test.score >= SCORE_EXCELLENT_THRESHOLD ? 'bg-success' : test.score >= SCORE_GOOD_THRESHOLD ? 'bg-primary' : 'bg-warning'
+                            round.accuracy >= SCORE_EXCELLENT_THRESHOLD ? 'bg-success' : round.accuracy >= SCORE_GOOD_THRESHOLD ? 'bg-primary' : 'bg-warning'
                           }`}
-                          style={{ height: `${test.score}%` }}
+                          style={{ height: `${round.accuracy}%` }}
                         />
                       </div>
                     </div>
-                    <span className="text-xs text-text-tertiary">{idx + 1}</span>
+                    <span className="text-xs text-text-tertiary">第 {round.roundNumber} 轮</span>
                   </div>
                 ))}
               </div>
@@ -691,38 +738,39 @@ export default function LearningReport() {
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Activity className="w-4 h-4 text-text-secondary" />
-              <h3 className="text-sm font-semibold text-text-primary">历史测试详情</h3>
+              <h3 className="text-sm font-semibold text-text-primary">历史轮次详情</h3>
             </div>
-            <span className="text-xs text-text-tertiary">{testHistory.length} 条记录</span>
+            <span className="text-xs text-text-tertiary">{roundSummaries.length} 轮</span>
           </div>
         </div>
-        {testHistory.length > 0 ? (
+        {roundSummaries.length > 0 ? (
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead>
                 <tr className="border-b border-border/50">
                   <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">测试时间</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">测试主题</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">题目数</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">难度</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">得分</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">正确率</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">能力评估</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">Agent 决策</th>
                 </tr>
               </thead>
               <tbody>
-                {testHistory.map((test, idx) => {
-                  const status = getScoreStatus(test.score)
+                {roundSummaries.map((round, idx) => {
+                  const status = getScoreStatus(round.accuracy)
                   return (
-                    <tr key={test.recordId ?? idx} className={`border-b border-border/30 transition-colors hover:bg-bg-secondary/30 ${idx % 2 === 1 ? 'bg-bg-secondary/10' : ''}`}>
-                      <td className="px-4 py-3 text-sm text-text-secondary">{formatTestDate(test.createdAt)}</td>
-                      <td className="px-4 py-3 text-sm font-medium text-text-primary">{test.questionTopic || test.questionType}</td>
-                      <td className="px-4 py-3 text-sm text-text-secondary">{test.questionDifficulty}</td>
+                    <tr key={round.id} className={`border-b border-border/30 transition-colors hover:bg-bg-secondary/30 ${idx % 2 === 1 ? 'bg-bg-secondary/10' : ''}`}>
+                      <td className="px-4 py-3 text-sm text-text-secondary">{formatTestDate(round.latestAt)}</td>
+                      <td className="px-4 py-3 text-sm font-medium text-text-primary">第 {round.roundNumber} 轮 · {round.topic}</td>
+                      <td className="px-4 py-3 text-sm text-text-secondary">{round.correct} / {round.total}</td>
+                      <td className="px-4 py-3 text-sm text-text-secondary">{round.difficulty ?? '混合'}</td>
                       <td className="px-4 py-3">
                         <div className="flex items-center gap-2">
                           <span className={`text-lg font-semibold ${status.variant === 'success' ? 'text-success' : status.variant === 'warning' ? 'text-primary' : 'text-warning'}`}>
-                            {test.score.toFixed(0)}
+                            {round.accuracy}%
                           </span>
-                          <span className="text-sm text-text-tertiary">/ 100</span>
                         </div>
                       </td>
                       <td className="px-4 py-3">
@@ -732,9 +780,9 @@ export default function LearningReport() {
                       </td>
                       <td className="px-4 py-3">
                         <span className="text-xs text-text-secondary">
-                          {test.agentDecision ? (
+                          {round.agentDecision ? (
                             <span className="px-2 py-0.5 rounded bg-primary/5 text-primary border border-primary/20">
-                              {test.agentDecision}
+                              {round.agentDecision}
                             </span>
                           ) : '-'}
                         </span>

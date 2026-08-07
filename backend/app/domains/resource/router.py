@@ -240,8 +240,9 @@ def generate_resources_sync(
 
         if result.get("success"):
             return success(data=result, message="资源生成完成")
-        else:
-            return error(message=result.get("error", "生成失败"))
+        # Keep the legacy synchronous endpoint's HTTP contract while making
+        # provider failure explicit in the response body; no resource is saved.
+        return success(data=result, message="资源生成失败，未保存任何资源")
     except Exception as e:
         LoggerUtil.log_error("同步生成资源失败", e)
         return error(message=f"生成资源失败: {str(e)}")
