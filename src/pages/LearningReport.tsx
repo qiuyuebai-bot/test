@@ -91,6 +91,27 @@ function formatTestDate(isoString: string | null): string {
   }
 }
 
+const educationLabels: Record<string, string> = {
+  high_school: '高中',
+  highschool: '高中',
+  college: '大专',
+  associate: '大专',
+  bachelor: '本科',
+  undergraduate: '本科',
+  master: '硕士',
+  postgraduate: '硕士',
+  doctor: '博士',
+  phd: '博士',
+}
+
+const agentDecisionLabels: Record<string, string> = {
+  advance: '深化',
+  simplify: '讲解',
+  maintain: '巩固',
+  consolidate: '巩固',
+  review: '复习',
+}
+
 interface RoundSummary {
   id: string
   topic: string
@@ -182,10 +203,10 @@ export default function LearningReport() {
   const statistics = report?.statistics
   const hallucinationReport = normalizeHallucinationReport(report?.hallucinationReport)
   const credibilityLabels = {
-    high: 'High credibility',
-    medium: 'Medium credibility',
-    low: 'Low credibility',
-    noEvidence: 'No evidence',
+    high: '高可信度',
+    medium: '中等可信度',
+    low: '低可信度',
+    noEvidence: '暂无证据',
   } as const
   const credibilityColors = {
     high: 'text-success bg-success/10',
@@ -213,7 +234,7 @@ export default function LearningReport() {
     : []
 
   const displayName = learnerInfo?.name || learner?.realName || '-'
-  const displayEducation = learnerInfo?.education || learner?.educationLevel || '-'
+  const displayEducation = learnerInfo?.education || educationLabels[learner?.educationLevel] || learner?.educationLevel || '-'
   const displayMajor = learnerInfo?.major || learner?.major || '-'
 
   const roundSummaries: RoundSummary[] = (() => {
@@ -330,13 +351,13 @@ export default function LearningReport() {
       <Card padding="md">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
-            <p className="text-xs uppercase tracking-wide text-text-tertiary">Evidence credibility</p>
+            <p className="text-xs font-medium text-text-tertiary">证据可信度</p>
             <p className={`mt-1 inline-flex rounded-full px-3 py-1 text-sm font-medium ${credibilityColors[hallucinationReport.credibility]}`}>
               {credibilityLabels[hallucinationReport.credibility]}
             </p>
           </div>
           <div className="text-sm text-text-secondary">
-            Evidence coverage: {(hallucinationReport.evidenceCoverage * 100).toFixed(0)}%
+            证据覆盖率：{(hallucinationReport.evidenceCoverage * 100).toFixed(0)}%
           </div>
           {hallucinationReport.credibility === 'noEvidence' && (
             <button
@@ -344,14 +365,14 @@ export default function LearningReport() {
               onClick={() => navigate('/knowledge-base')}
               className="rounded-lg bg-primary px-3 py-2 text-sm font-medium text-white hover:bg-primary/90"
             >
-              Upload relevant materials
+              上传相关资料
             </button>
           )}
         </div>
         {hallucinationReport.citations.length > 0 && (
           <div className="mt-3 text-xs text-text-secondary">
-            <span className="font-medium">Sources: </span>
-            {hallucinationReport.citations.map((citation) => citation.label).join(' · ')}
+            <span className="font-medium">来源： </span>
+            {hallucinationReport.citations.map((citation) => `${citation.title} · 第${citation.paragraph}段`).join(' · ')}
           </div>
         )}
         {hallucinationReport.knowledgeGap.present && (
@@ -754,7 +775,7 @@ export default function LearningReport() {
                   <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">难度</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">正确率</th>
                   <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">能力评估</th>
-                  <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">Agent 决策</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-text-secondary">智能体决策</th>
                 </tr>
               </thead>
               <tbody>
@@ -782,7 +803,7 @@ export default function LearningReport() {
                         <span className="text-xs text-text-secondary">
                           {round.agentDecision ? (
                             <span className="px-2 py-0.5 rounded bg-primary/5 text-primary border border-primary/20">
-                              {round.agentDecision}
+                              {agentDecisionLabels[round.agentDecision] || round.agentDecision}
                             </span>
                           ) : '-'}
                         </span>

@@ -253,7 +253,7 @@ export default function SystemTest() {
               Agent 运行监控
             </h2>
             <p className="text-sm text-text-secondary mt-1">
-              展示 Agent 任务执行与知识库索引状态；此页面不执行 pytest 或前端单元测试
+              展示 Agent 任务执行与知识库索引状态
               {performance && (
                 <span className="ml-2 text-text-tertiary">· 总任务 {performance.totalTasks} · 成功 {performance.successCount} · 失败 {performance.failedCount}</span>
               )}

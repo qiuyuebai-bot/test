@@ -218,7 +218,7 @@ class HallucinationUtil:
             "claims": claims,
             "entities": list(dict.fromkeys(entities)),
             "attributes": list(dict.fromkeys(attributes)),
-            "upload_prompt": "Upload relevant materials to improve evidence coverage.",
+            "upload_prompt": "上传相关资料以提升证据覆盖率。",
         }
 
     @staticmethod

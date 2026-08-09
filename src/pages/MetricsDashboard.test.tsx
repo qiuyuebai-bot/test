@@ -21,6 +21,7 @@ describe('MetricsDashboard', () => {
         hasSufficientSample: false,
         resourceMatchAccuracy: null,
         knowledgeCoverageRate: 100,
+        calculatedAt: '2026-08-09T12:34:00Z',
         totalLearners: 5,
         totalResources: 0,
         totalAnswers: 0,
@@ -41,6 +42,71 @@ describe('MetricsDashboard', () => {
     expect((await screen.findAllByText('100.0%')).length).toBeGreaterThan(0)
     expect(screen.getAllByText('暂无数据').length).toBeGreaterThan(0)
     expect(screen.getAllByText('样本不足/待审核').length).toBeGreaterThan(0)
+    expect(screen.getByText('待采集')).toBeInTheDocument()
+    expect(screen.getByText('样本数：0（至少 5）')).toBeInTheDocument()
+    expect(screen.getByText(/更新时间：/)).toBeInTheDocument()
+  })
+
+  it('judges resource matching only after enough samples are collected', async () => {
+    setMockStore({
+      systemMetrics: {
+        hallucinationRate: null,
+        hasSufficientSample: false,
+        resourceMatchAccuracy: 96.4,
+        knowledgeCoverageRate: 100,
+        calculatedAt: '2026-08-09T12:34:00Z',
+        totalLearners: 5,
+        totalResources: 5,
+        totalAnswers: 0,
+        totalTasks: 0,
+        tasksCompleted: 0,
+        avgResponseTime: 0,
+        avgCompletionTime: '-',
+        activeSessions: 0,
+        satisfactionScore: 0,
+        trends: [],
+      },
+      metricsStatus: 'ready',
+    })
+    const { default: Page } = await import('./MetricsDashboard')
+
+    render(<MemoryRouter><Page /></MemoryRouter>)
+
+    expect(await screen.findAllByText('96.4%')).toHaveLength(2)
+    expect(screen.getAllByText('达标')).toHaveLength(2)
+    expect(screen.getByText('样本数：5（至少 5）')).toBeInTheDocument()
+    expect(screen.getByText(/更新时间：/)).toBeInTheDocument()
+  })
+
+  it('keeps a resource match value pending while the sample is still insufficient', async () => {
+    setMockStore({
+      systemMetrics: {
+        hallucinationRate: null,
+        hasSufficientSample: false,
+        resourceMatchAccuracy: 96.4,
+        knowledgeCoverageRate: 100,
+        calculatedAt: '2026-08-09T12:34:00Z',
+        totalLearners: 5,
+        totalResources: 4,
+        totalAnswers: 0,
+        totalTasks: 0,
+        tasksCompleted: 0,
+        avgResponseTime: 0,
+        avgCompletionTime: '-',
+        activeSessions: 0,
+        satisfactionScore: 0,
+        trends: [],
+      },
+      metricsStatus: 'ready',
+    })
+    const { default: Page } = await import('./MetricsDashboard')
+
+    render(<MemoryRouter><Page /></MemoryRouter>)
+
+    expect(await screen.findAllByText('暂无数据')).not.toHaveLength(0)
+    expect(screen.getByText('待采集')).toBeInTheDocument()
+    expect(screen.getByText('样本数：4（至少 5）')).toBeInTheDocument()
+    expect(screen.queryByText('96.4%')).not.toBeInTheDocument()
   })
 
   it('shows an error state when the metrics request fails', async () => {

@@ -36,6 +36,9 @@ export interface HallucinationReport {
   }
 }
 
+const DEFAULT_UPLOAD_PROMPT = '上传相关资料以提升证据覆盖率。'
+const LEGACY_UPLOAD_PROMPT = 'Upload relevant materials to improve evidence coverage.'
+
 const defaultReport = (): HallucinationReport => ({
   detected: false,
   score: 0,
@@ -49,7 +52,7 @@ const defaultReport = (): HallucinationReport => ({
     claims: [],
     entities: [],
     attributes: [],
-    uploadPrompt: 'Upload relevant materials to improve evidence coverage.',
+    uploadPrompt: DEFAULT_UPLOAD_PROMPT,
   },
 })
 
@@ -95,9 +98,8 @@ export function normalizeHallucinationReport(raw: unknown): HallucinationReport 
     claims: Array.isArray(gap?.claims) ? gap.claims.filter((claim): claim is string => typeof claim === 'string') : [],
     entities: Array.isArray(gap?.entities) ? gap.entities.filter((entity): entity is string => typeof entity === 'string') : [],
     attributes: Array.isArray(gap?.attributes) ? gap.attributes.filter((attribute): attribute is string => typeof attribute === 'string') : [],
-    uploadPrompt: typeof gap?.uploadPrompt === 'string' ? gap.uploadPrompt : typeof gap?.upload_prompt === 'string' ? gap.upload_prompt : normalized.knowledgeGap.uploadPrompt,
+    uploadPrompt: [gap?.uploadPrompt, gap?.upload_prompt].find((prompt): prompt is string => typeof prompt === 'string' && prompt !== LEGACY_UPLOAD_PROMPT) ?? normalized.knowledgeGap.uploadPrompt,
   }
   if (normalized.knowledgeGap.present && normalized.credibility === 'high') normalized.credibility = 'noEvidence'
   return normalized
 }
-

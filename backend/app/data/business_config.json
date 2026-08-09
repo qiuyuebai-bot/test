@@ -16,7 +16,9 @@
     { "value": "smart_manufacturing", "label": "智能制造", "color": "bg-[#3d5a80]/10 text-[#3d5a80] border-[#3d5a80]/30" },
     { "value": "industrial_internet", "label": "工业互联网", "color": "bg-[#5b8def]/10 text-[#5b8def] border-[#5b8def]/30" },
     { "value": "software_development", "label": "软件开发", "color": "bg-[#10b981]/10 text-[#10b981] border-[#10b981]/30" },
-    { "value": "artificial_intelligence", "label": "人工智能", "color": "bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/30" }
+    { "value": "artificial_intelligence", "label": "人工智能", "color": "bg-[#f59e0b]/10 text-[#f59e0b] border-[#f59e0b]/30" },
+    { "value": "data_analysis", "label": "数据分析", "color": "bg-[#14b8a6]/10 text-[#0f766e] border-[#14b8a6]/30" },
+    { "value": "general", "label": "通用", "color": "bg-bg-secondary text-text-secondary border-border" }
   ],
   "training_templates": [
     { "title": "新员工入职", "duration": "2周", "courses": 12 },

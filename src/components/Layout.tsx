@@ -17,23 +17,52 @@ import {
   X,
   LogOut,
   ChevronDown,
+  type LucideIcon,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useState, useEffect, useRef } from 'react'
 
-const navigation = [
-  { name: '数据看板', href: '/dashboard', icon: LayoutDashboard },
-  { name: '多智能体协同', href: '/multi-agent', icon: Network },
-  { name: '学习者画像', href: '/profile', icon: UserCircle },
-  { name: '领域知识库', href: '/knowledge-base', icon: Database },
-  { name: '资源生成', href: '/resources', icon: FileText },
-  { name: '学情报告', href: '/report', icon: BarChart3 },
-  { name: '自适应导学', href: '/guidance', icon: GraduationCap },
-  { name: '量化指标', href: '/metrics', icon: TrendingUp },
-]
+type NavigationItem = {
+  name: string
+  href: string
+  icon: LucideIcon
+}
 
-const secondaryNav = [
-  { name: '运行监控', href: '/monitoring', icon: FlaskConical },
+type NavigationGroup = {
+  name: string
+  adminOnly?: boolean
+  items: NavigationItem[]
+}
+
+const navigationGroups: NavigationGroup[] = [
+  {
+    name: '工作台',
+    items: [{ name: '数据看板', href: '/dashboard', icon: LayoutDashboard }],
+  },
+  {
+    name: '学习准备',
+    items: [
+      { name: '学习者画像', href: '/profile', icon: UserCircle },
+      { name: '领域知识库', href: '/knowledge-base', icon: Database },
+    ],
+  },
+  {
+    name: '学习应用',
+    items: [
+      { name: '自适应导学', href: '/guidance', icon: GraduationCap },
+      { name: '资源生成', href: '/resources', icon: FileText },
+      { name: '学情报告', href: '/report', icon: BarChart3 },
+    ],
+  },
+  {
+    name: '系统管理',
+    adminOnly: true,
+    items: [
+      { name: '多智能体', href: '/multi-agent', icon: Network },
+      { name: '量化指标', href: '/metrics', icon: TrendingUp },
+      { name: '运行监控', href: '/monitoring', icon: FlaskConical },
+    ],
+  },
 ]
 
 export default function Layout() {
@@ -68,6 +97,11 @@ export default function Layout() {
     navigate('/login', { replace: true })
   }
 
+  const visibleNavigationGroups = navigationGroups.filter((group) => !group.adminOnly || user?.role === 'admin')
+  const currentNavigationItem = navigationGroups
+    .flatMap((group) => group.items)
+    .find((item) => item.href === location.pathname)
+
   const roleMap: Record<string, string> = {
     admin: '管理员',
     teacher: '教师',
@@ -98,46 +132,39 @@ export default function Layout() {
       </div>
 
       {/* 主导航 */}
-      <nav className="flex-1 py-4 px-3 space-y-1 overflow-y-auto">
-        {navigation.map((item) => {
-          const isActive = location.pathname === item.href
-          return (
-            <Link
-              key={item.name}
-              to={item.href}
-              className={clsx(
-                'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-250',
-                isActive
-                  ? 'bg-primary-light text-primary font-medium'
-                  : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'
-              )}
-            >
-              <item.icon className={clsx('w-5 h-5 flex-shrink-0', isActive && 'text-primary')} />
-              {!isSidebarCollapsed && <span className="text-sm whitespace-nowrap">{item.name}</span>}
-            </Link>
-          )
-        })}
-
-        <div className="pt-4 mt-4 border-t border-border">
-          {secondaryNav.map((item) => {
-            const isActive = location.pathname === item.href
-            return (
-              <Link
-                key={item.name}
-                to={item.href}
-                className={clsx(
-                  'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-250',
-                  isActive
-                    ? 'bg-primary-light text-primary font-medium'
-                    : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'
-                  )}
-              >
-                <item.icon className={clsx('w-5 h-5 flex-shrink-0', isActive && 'text-primary')} />
-                {!isSidebarCollapsed && <span className="text-sm whitespace-nowrap">{item.name}</span>}
-              </Link>
-            )
-          })}
-        </div>
+      <nav aria-label="主导航" className="flex-1 py-4 px-3 overflow-y-auto">
+        {visibleNavigationGroups.map((group, groupIndex) => (
+          <section
+            key={group.name}
+            className={clsx(groupIndex > 0 && 'pt-4 mt-4 border-t border-border')}
+          >
+            {!isSidebarCollapsed && (
+              <h2 className="px-3 pb-2 text-xs font-medium text-text-tertiary">{group.name}</h2>
+            )}
+            <div className="space-y-1">
+              {group.items.map((item) => {
+                const isActive = location.pathname === item.href
+                return (
+                  <Link
+                    key={item.name}
+                    to={item.href}
+                    aria-label={item.name}
+                    title={isSidebarCollapsed ? item.name : undefined}
+                    className={clsx(
+                      'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-250',
+                      isActive
+                        ? 'bg-primary-light text-primary font-medium'
+                        : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'
+                    )}
+                  >
+                    <item.icon className={clsx('w-5 h-5 flex-shrink-0', isActive && 'text-primary')} />
+                    {!isSidebarCollapsed && <span className="text-sm whitespace-nowrap">{item.name}</span>}
+                  </Link>
+                )
+              })}
+            </div>
+          </section>
+        ))}
       </nav>
 
       {/* 底部折叠按钮 */}
@@ -197,8 +224,7 @@ export default function Layout() {
               <Menu className="w-5 h-5" />
             </button>
             <h1 className="text-base md:text-lg font-medium text-text-primary truncate">
-              {navigation.find((n) => n.href === location.pathname)?.name ||
-               secondaryNav.find((n) => n.href === location.pathname)?.name ||
+              {currentNavigationItem?.name ||
                '领域知识个性化生成与多智能体协同决策系统'}
             </h1>
           </div>

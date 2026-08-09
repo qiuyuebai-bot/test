@@ -31,6 +31,19 @@ import ErrorState from '@/components/ErrorState'
 import { PageSkeleton } from '@/components/Skeleton'
 import { toast } from '@/components/toastStore'
 
+const FALLBACK_DOMAIN_LABELS: Record<string, string> = {
+  smart_manufacturing: '智能制造',
+  industrial_internet: '工业互联网',
+  software_development: '软件开发',
+  artificial_intelligence: '人工智能',
+  data_analysis: '数据分析',
+  general: '通用',
+}
+
+function getDomainLabel(domain: string, options: DomainOption[]): string {
+  return options.find(d => d.value === domain)?.label || FALLBACK_DOMAIN_LABELS[domain] || '未分类'
+}
+
 const statusConfig = {
   indexed: { label: '已索引', color: 'bg-success/10 text-success border-success/20', icon: CheckCircle },
   pending: { label: '处理中', color: 'bg-warning-light text-warning-dark border-warning/30', icon: Clock },
@@ -39,7 +52,7 @@ const statusConfig = {
 
 function DomainTag({ domain, options }: { domain: string; options: DomainOption[] }) {
   const config = options.find(d => d.value === domain)
-  const label = config?.label || domain
+  const label = getDomainLabel(domain, options)
   return (
     <span className={`px-3 py-1 rounded-full text-xs font-medium border transition-all hover:shadow-lift ${config?.color || 'bg-bg-secondary/30 text-text-secondary border-border'}`}>
       {label}
@@ -73,7 +86,7 @@ function DocPreviewModal({
           </div>
           <div>
             <h3 className="font-semibold text-text-primary">{doc.title}</h3>
-            <p className="text-sm text-text-tertiary">{domainToLabel[doc.domain] || doc.domain} · {doc.category}</p>
+            <p className="text-sm text-text-tertiary">{domainToLabel[doc.domain] || '未分类'} · {doc.category}</p>
           </div>
         </div>
       </div>
@@ -299,9 +312,10 @@ export default function KnowledgeBase() {
     configApi.getOptions().then(opts => setDomainOptions(opts.domains)).catch(() => {})
   }, [])
 
-  const domainToLabel: Record<string, string> = Object.fromEntries(
-    domainOptions.map(d => [d.value, d.label])
-  )
+  const domainToLabel: Record<string, string> = {
+    ...FALLBACK_DOMAIN_LABELS,
+    ...Object.fromEntries(domainOptions.map(d => [d.value, d.label])),
+  }
 
   const handleSliceSearch = async () => {
     const query = sliceSearchQuery.trim()

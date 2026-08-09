@@ -186,8 +186,10 @@ describe('LearningReport page', () => {
     const { default: Page } = await import('./LearningReport')
     renderWithRouter(<Page />)
 
-    expect(await screen.findByText('No evidence')).toBeInTheDocument()
-    expect(screen.getByRole('button', { name: 'Upload relevant materials' })).toBeInTheDocument()
+    expect(await screen.findByText('暂无证据')).toBeInTheDocument()
+    expect(screen.getByText('证据可信度')).toBeInTheDocument()
+    expect(screen.getByText('证据覆盖率：0%')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '上传相关资料' })).toBeInTheDocument()
   })
 
   it('summarizes adaptive answers by round accuracy instead of 100-point scores', async () => {

@@ -63,7 +63,14 @@ function App() {
           >
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
-            <Route path="multi-agent" element={<MultiAgentVisualization />} />
+            <Route
+              path="multi-agent"
+              element={
+                <ProtectedRoute roles={['admin']}>
+                  <MultiAgentVisualization />
+                </ProtectedRoute>
+              }
+            />
             <Route path="profile" element={<LearnerProfile />} />
             <Route path="knowledge-base" element={<KnowledgeBase />} />
             <Route path="resources" element={<ResourceGeneration />} />
@@ -71,10 +78,24 @@ function App() {
             <Route path="guidance" element={<AdaptiveGuidance />} />
             <Route path="enterprise" element={<Navigate to="/dashboard" replace />} />
             <Route path="privacy" element={<Navigate to="/dashboard" replace />} />
-            <Route path="monitoring" element={<SystemTest />} />
+            <Route
+              path="monitoring"
+              element={
+                <ProtectedRoute roles={['admin']}>
+                  <SystemTest />
+                </ProtectedRoute>
+              }
+            />
             <Route path="test" element={<Navigate to="/monitoring" replace />} />
             <Route path="deployment" element={<Navigate to="/dashboard" replace />} />
-            <Route path="metrics" element={<MetricsDashboard />} />
+            <Route
+              path="metrics"
+              element={
+                <ProtectedRoute roles={['admin']}>
+                  <MetricsDashboard />
+                </ProtectedRoute>
+              }
+            />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
         </Routes>

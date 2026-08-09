@@ -33,6 +33,21 @@ import {
   Legend,
 } from 'recharts'
 
+const RESOURCE_MATCH_MIN_SAMPLE_SIZE = 5
+
+function formatMetricUpdatedAt(value?: string): string {
+  if (!value) return '暂无'
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return '暂无'
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 export default function MetricsDashboard() {
   const { systemMetrics, metricsLoading, metricsError, metricsStatus } = useStore(
     useShallow((s) => ({
@@ -69,7 +84,12 @@ export default function MetricsDashboard() {
   const hallucinationRateLabel = hasSufficientHallucinationSample
     ? `${(hallucinationRate ?? 0).toFixed(1)}%`
     : '样本不足/待审核'
-  const resourceMatchAccuracy = systemMetrics?.resourceMatchAccuracy ?? null
+  const rawResourceMatchAccuracy = systemMetrics?.resourceMatchAccuracy ?? null
+  const resourceMatchSampleCount = systemMetrics?.totalResources ?? 0
+  const hasSufficientResourceMatchSample = resourceMatchSampleCount >= RESOURCE_MATCH_MIN_SAMPLE_SIZE
+  const hasResourceMatchData = hasSufficientResourceMatchSample && rawResourceMatchAccuracy !== null
+  const resourceMatchAccuracy = hasResourceMatchData ? rawResourceMatchAccuracy : null
+  const resourceMatchUpdatedAt = formatMetricUpdatedAt(systemMetrics?.calculatedAt)
   const knowledgeCoverageRate = systemMetrics?.knowledgeCoverageRate ?? null
   const trendData = systemMetrics?.trends ?? []
 
@@ -78,6 +98,7 @@ export default function MetricsDashboard() {
       label: '幻觉率',
       value: hallucinationRateLabel,
       isPending: !hasSufficientHallucinationSample,
+      pendingLabel: '样本不足/待审核',
       target: '< 5%',
       isOnTarget: hasSufficientHallucinationSample && (hallucinationRate ?? 0) < 5,
       icon: AlertTriangle,
@@ -92,6 +113,8 @@ export default function MetricsDashboard() {
     {
       label: '资源匹配准确率',
       value: resourceMatchAccuracy === null ? '暂无数据' : `${resourceMatchAccuracy.toFixed(1)}%`,
+      isPending: !hasResourceMatchData,
+      pendingLabel: '待采集',
       target: '> 90%',
       isOnTarget: resourceMatchAccuracy !== null && resourceMatchAccuracy >= 90,
       icon: Target,
@@ -102,10 +125,13 @@ export default function MetricsDashboard() {
       progressVariant: 'default' as const,
       description: '衡量生成资源与学习者需求的匹配程度。基于用户反馈和测试结果持续优化。',
       targetText: '目标值: > 90%',
+      showSampleMetadata: true,
     },
     {
       label: '知识点覆盖率',
       value: knowledgeCoverageRate === null ? '暂无数据' : `${knowledgeCoverageRate.toFixed(1)}%`,
+      isPending: knowledgeCoverageRate === null,
+      pendingLabel: '暂无数据',
       target: '> 85%',
       isOnTarget: knowledgeCoverageRate !== null && knowledgeCoverageRate >= 85,
       icon: Brain,
@@ -146,9 +172,9 @@ export default function MetricsDashboard() {
               <div className={`${metric.bgColor} p-3 rounded-xl`}>
                 <metric.icon className={`w-6 h-6 ${metric.color}`} />
               </div>
-              <Badge variant={metric.isOnTarget ? 'success' : 'warning'} size="sm">
-                <CheckCircle className="w-3 h-3 mr-1" />
-                {'isPending' in metric && metric.isPending ? '待审核' : metric.isOnTarget ? '达标' : '待优化'}
+              <Badge variant={metric.isPending ? 'default' : metric.isOnTarget ? 'success' : 'warning'} size="sm">
+                {metric.isPending ? <Clock className="w-3 h-3 mr-1" /> : <CheckCircle className="w-3 h-3 mr-1" />}
+                {metric.isPending ? metric.pendingLabel : metric.isOnTarget ? '达标' : '待优化'}
               </Badge>
             </div>
             <p className="metric-number text-3xl font-semibold text-text-primary mb-1">{metric.value}</p>
@@ -157,6 +183,12 @@ export default function MetricsDashboard() {
               <span className="text-xs text-text-tertiary">目标: {metric.target}</span>
               <span className="text-xs text-text-tertiary">{metric.targetText}</span>
             </div>
+            {'showSampleMetadata' in metric && metric.showSampleMetadata && (
+              <div className="mt-3 space-y-1 text-xs text-text-tertiary">
+                <p>样本数：{resourceMatchSampleCount}（至少 {RESOURCE_MATCH_MIN_SAMPLE_SIZE}）</p>
+                <p>更新时间：{resourceMatchUpdatedAt}</p>
+              </div>
+            )}
           </Card>
         ))}
       </div>
