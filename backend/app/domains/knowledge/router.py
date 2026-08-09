@@ -2,7 +2,7 @@
 知识库模块 API 路由
 实现文档上传、解析、切片、检索、溯源等接口
 """
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Query, Request
 from sqlalchemy.orm import Session
 from typing import Optional
 from loguru import logger
@@ -212,8 +212,8 @@ async def upload_document(
 
 @router.get("/docs", summary="获取文档列表")
 def get_doc_list(
-    page: int = 1,
-    page_size: int = 10,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
     keyword: Optional[str] = None,
     industry: Optional[str] = None,
     status: Optional[str] = None,
@@ -454,6 +454,7 @@ def get_doc_preview(
 def trace_resource_knowledge(
     resource_id: int,
     db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_admin),
 ):
     """
     根据资源ID反向溯源知识库原始文档
@@ -470,6 +471,13 @@ def trace_resource_knowledge(
 # ===========================================
 # 10. 行业统计
 # ===========================================
+
+@router.get("/stats/summary", summary="知识库汇总统计")
+def get_knowledge_summary(
+    db: Session = Depends(get_db),
+):
+    """获取不受当前分页影响的知识库汇总统计。"""
+    return success(KnowledgeService.get_summary_stats(db), "查询成功")
 
 @router.get("/stats/industries", summary="各行业知识库统计")
 def get_industry_stats(

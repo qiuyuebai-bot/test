@@ -12,7 +12,7 @@ from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 from pathlib import Path
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import func as sa_func, or_
 from loguru import logger
 
 from app.config import settings
@@ -333,6 +333,7 @@ class KnowledgeService:
             query = query.filter(
                 or_(
                     KnowledgeDoc.title.like(f"%{escaped_kw}%", escape="\\"),
+                    KnowledgeDoc.category.like(f"%{escaped_kw}%", escape="\\"),
                     KnowledgeDoc.tags.like(f"%{escaped_kw}%", escape="\\"),
                 )
             )
@@ -357,6 +358,39 @@ class KnowledgeService:
         ).limit(page_size).all()
         
         return items, total
+
+    @staticmethod
+    def get_summary_stats(db: Session) -> Dict[str, int]:
+        """获取启用文档的全库汇总，避免页面统计受当前分页影响。"""
+        rows = db.query(
+            KnowledgeDoc.status,
+            sa_func.count(KnowledgeDoc.id).label("doc_count"),
+            sa_func.coalesce(sa_func.sum(KnowledgeDoc.slice_count), 0).label("total_slices"),
+            sa_func.coalesce(sa_func.sum(KnowledgeDoc.indexed_slice_count), 0).label("indexed_slices"),
+        ).filter(
+            KnowledgeDoc.is_enabled == True,
+        ).group_by(KnowledgeDoc.status).all()
+
+        summary = {
+            "total_docs": 0,
+            "indexed_docs": 0,
+            "pending_docs": 0,
+            "error_docs": 0,
+            "total_slices": 0,
+            "indexed_slices": 0,
+        }
+        for status, doc_count, total_slices, indexed_slices in rows:
+            summary["total_docs"] += doc_count
+            summary["total_slices"] += total_slices
+            summary["indexed_slices"] += indexed_slices
+            if status == "ready":
+                summary["indexed_docs"] += doc_count
+            elif status == "error":
+                summary["error_docs"] += doc_count
+            else:
+                summary["pending_docs"] += doc_count
+
+        return summary
     
     @staticmethod
     def get_doc_by_id(db: Session, doc_id: int) -> Optional[KnowledgeDoc]:

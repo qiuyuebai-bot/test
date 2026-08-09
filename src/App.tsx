@@ -17,6 +17,7 @@ const LearningReport = lazy(() => import('./pages/LearningReport'))
 const AdaptiveGuidance = lazy(() => import('./pages/AdaptiveGuidance'))
 const SystemTest = lazy(() => import('./pages/SystemTest'))
 const MetricsDashboard = lazy(() => import('./pages/MetricsDashboard'))
+const AdminOpsOverview = lazy(() => import('./pages/AdminOpsOverview'))
 
 function PageFallback() {
   return <PageSkeleton />
@@ -63,6 +64,14 @@ function App() {
           >
             <Route index element={<Navigate to="/dashboard" replace />} />
             <Route path="dashboard" element={<Dashboard />} />
+            <Route
+              path="ops"
+              element={
+                <ProtectedRoute roles={['admin']}>
+                  <AdminOpsOverview />
+                </ProtectedRoute>
+              }
+            />
             <Route
               path="multi-agent"
               element={

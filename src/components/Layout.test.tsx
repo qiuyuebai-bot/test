@@ -44,6 +44,7 @@ describe('Layout navigation', () => {
     expect(navigation.getByRole('heading', { name: '学习准备' })).toBeInTheDocument()
     expect(navigation.getByRole('heading', { name: '学习应用' })).toBeInTheDocument()
     expect(navigation.getByRole('heading', { name: '系统管理' })).toBeInTheDocument()
+    expect(navigation.getByRole('link', { name: '运维总览' })).toBeInTheDocument()
     expect(navigation.getByRole('link', { name: '多智能体' })).toBeInTheDocument()
   })
 
@@ -60,6 +61,7 @@ describe('Layout navigation', () => {
 
     const navigation = within(screen.getAllByRole('navigation', { name: '主导航' })[0])
     expect(navigation.queryByRole('heading', { name: '系统管理' })).not.toBeInTheDocument()
+    expect(navigation.queryByRole('link', { name: '运维总览' })).not.toBeInTheDocument()
     expect(navigation.queryByRole('link', { name: '多智能体' })).not.toBeInTheDocument()
     expect(navigation.queryByRole('link', { name: '量化指标' })).not.toBeInTheDocument()
     expect(navigation.queryByRole('link', { name: '运行监控' })).not.toBeInTheDocument()

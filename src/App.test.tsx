@@ -34,7 +34,7 @@ describe('hidden legacy routes', () => {
     await waitFor(() => expect(window.location.pathname).toBe('/monitoring'))
   })
 
-  it.each(['/multi-agent', '/metrics', '/monitoring'])
+  it.each(['/ops', '/multi-agent', '/metrics', '/monitoring'])
     ('redirects non-admin users away from %s', async (path) => {
       setMockStore({ user: { id: 2, username: 'learner', role: 'learner' } })
       window.history.replaceState({}, '', path)

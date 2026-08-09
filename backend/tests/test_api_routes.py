@@ -164,6 +164,12 @@ class TestKnowledgeRoutes:
         data = response.json()
         assert data["code"] == 200
 
+    def test_get_doc_list_rejects_invalid_pagination(self, client: TestClient, auth_headers: dict):
+        """文档列表分页参数必须在合理范围内"""
+        response = client.get("/api/v1/knowledge/docs?page=0&page_size=101", headers=auth_headers)
+        assert response.status_code == 400
+        assert response.json()["code"] == 400
+
     def test_get_doc_detail(self, client: TestClient, sample_knowledge_doc: KnowledgeDoc, auth_headers: dict):
         """测试获取文档详情"""
         response = client.get(f"/api/v1/knowledge/docs/{sample_knowledge_doc.id}", headers=auth_headers)
@@ -187,6 +193,27 @@ class TestKnowledgeRoutes:
         assert response.status_code == 200
         data = response.json()
         assert data["code"] == 200
+
+    def test_get_knowledge_summary(self, client: TestClient, sample_knowledge_doc: KnowledgeDoc, auth_headers: dict):
+        """测试知识库汇总统计不受分页影响"""
+        response = client.get("/api/v1/knowledge/stats/summary", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["total_docs"] == 1
+        assert data["indexed_docs"] == 1
+        assert data["total_slices"] == 10
+        assert data["indexed_slices"] == 10
+
+    def test_trace_resource_requires_admin(self, client: TestClient, sample_learning_resource, auth_headers: dict):
+        """学习者不能查询知识溯源"""
+        response = client.get(f"/api/v1/knowledge/trace/{sample_learning_resource.id}", headers=auth_headers)
+        assert response.status_code == 403
+
+    def test_trace_resource_for_admin(self, client: TestClient, sample_learning_resource, admin_auth_headers: dict):
+        """管理员可以查询知识溯源"""
+        response = client.get(f"/api/v1/knowledge/trace/{sample_learning_resource.id}", headers=admin_auth_headers)
+        assert response.status_code == 200
+        assert response.json()["code"] == 200
 
 
 class TestAgentRoutes:

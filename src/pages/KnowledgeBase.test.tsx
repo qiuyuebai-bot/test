@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 
 vi.mock('@/store', async () => {
   const { useStoreMock } = await import('../test/mockStore')
@@ -10,7 +10,10 @@ vi.mock('@/api', () => ({
   configApi: {
     getOptions: vi.fn(),
   },
+  domainToIndustry: vi.fn((domain: string) => ({ data_analysis: '数据分析' }[domain])),
   knowledgeApi: {
+    getList: vi.fn(),
+    getStats: vi.fn(),
     delete: vi.fn(),
     getPreview: vi.fn(),
     reindex: vi.fn(),
@@ -21,7 +24,7 @@ vi.mock('@/api', () => ({
 }))
 
 const { resetMockStore, setMockStore } = await import('../test/mockStore')
-const { configApi } = await import('@/api')
+const { configApi, knowledgeApi } = await import('@/api')
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -37,6 +40,15 @@ beforeEach(() => {
       { value: 'general', label: '通用', color: '' },
     ],
     desensitizationRules: [],
+  })
+  vi.mocked(knowledgeApi.getList).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 2, totalPages: 0 })
+  vi.mocked(knowledgeApi.getStats).mockResolvedValue({
+    totalDocs: 1,
+    indexedDocs: 1,
+    pendingDocs: 0,
+    errorDocs: 0,
+    totalSlices: 1,
+    indexedSlices: 1,
   })
   setMockStore({
     knowledgeDocs: [{
@@ -74,6 +86,30 @@ describe('KnowledgeBase domain labels', () => {
     await screen.findAllByText('数据分析', { exact: true })
     expect(screen.queryByRole('button', { name: '上传文档' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '导入样例' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '知识溯源' })).not.toBeInTheDocument()
     expect(screen.queryByRole('button', { name: '删除' })).not.toBeInTheDocument()
+  })
+
+  it('uses server-side search and pagination for the document table', async () => {
+    const fetchKnowledgeDocs = vi.fn()
+    setMockStore({
+      fetchKnowledgeDocs,
+      fetchKnowledgeStats: vi.fn(),
+      totalKnowledgeDocs: 41,
+      totalKnowledgePages: 3,
+      currentPage: 1,
+      pageSize: 20,
+    })
+    const { default: Page } = await import('./KnowledgeBase')
+
+    render(<Page />)
+    fireEvent.change(await screen.findByPlaceholderText('搜索文档...'), { target: { value: '深度学习' } })
+
+    await waitFor(() => {
+      expect(fetchKnowledgeDocs).toHaveBeenCalledWith(expect.objectContaining({ page: 1, keyword: '深度学习' }))
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '2' }))
+    expect(fetchKnowledgeDocs).toHaveBeenCalledWith(expect.objectContaining({ page: 2, keyword: '深度学习' }))
   })
 })

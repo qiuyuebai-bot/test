@@ -17,6 +17,7 @@ vi.mock('../api', () => ({
   knowledgeApi: {
     getList: vi.fn(),
     getSlices: vi.fn(),
+    getStats: vi.fn(),
   },
   agentApi: {
     getAllStatus: vi.fn(),
@@ -215,6 +216,21 @@ describe('store knowledge state', () => {
     expect(useStore.getState().knowledgeLoading).toBe(false)
   })
 
+  it('fetchKnowledgeStats populates full-library totals', async () => {
+    vi.mocked(knowledgeApi.getStats).mockResolvedValue({
+      totalDocs: 51,
+      indexedDocs: 49,
+      pendingDocs: 1,
+      errorDocs: 1,
+      totalSlices: 120,
+      indexedSlices: 118,
+    })
+    const useStore = await freshStore()
+    await useStore.getState().fetchKnowledgeStats()
+    expect(useStore.getState().knowledgeStats?.totalDocs).toBe(51)
+    expect(useStore.getState().knowledgeStats?.indexedSlices).toBe(118)
+  })
+
   it('fetchKnowledgeSlices populates slices', async () => {
     vi.mocked(knowledgeApi.getSlices).mockResolvedValue([{ id: 1 }] as never)
     const useStore = await freshStore()
@@ -315,6 +331,9 @@ describe('store metrics state', () => {
     expect(m?.totalLearners).toBe(5)
     expect(m?.totalTasks).toBe(10)
     expect(m?.tasksCompleted).toBe(8)
+    expect(m?.failedTasks).toBe(0)
+    expect(m?.runningTasks).toBe(0)
+    expect(m?.taskSuccessRate).toBeNull()
     expect(m?.avgResponseTime).toBe(200)
     expect(useStore.getState().metricsLoading).toBe(false)
     expect(useStore.getState().metricsStatus).toBe('ready')

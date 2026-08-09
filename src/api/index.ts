@@ -1,6 +1,6 @@
 export { authApi } from './auth'
 export { learnerApi } from './learner'
-export { knowledgeApi } from './knowledge'
+export { domainToIndustry, knowledgeApi } from './knowledge'
 export { agentApi } from './agent'
 export { coreApi } from './core'
 export { privacyApi } from './privacy'

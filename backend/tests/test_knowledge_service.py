@@ -80,6 +80,15 @@ class TestKnowledgeDocCRUD:
         for doc in docs:
             assert doc.status == "ready"
 
+    def test_get_doc_list_by_category_keyword(self, db_session: Session, sample_knowledge_doc: KnowledgeDoc):
+        """关键词搜索应覆盖文档分类"""
+        docs, total = KnowledgeService.get_doc_list(
+            db_session, page=1, page_size=10, keyword="机器学习"
+        )
+
+        assert total == 1
+        assert docs[0].id == sample_knowledge_doc.id
+
     def test_get_doc_by_id(self, db_session: Session, sample_knowledge_doc: KnowledgeDoc):
         """测试根据ID获取文档"""
         doc = KnowledgeService.get_doc_by_id(db_session, sample_knowledge_doc.id)

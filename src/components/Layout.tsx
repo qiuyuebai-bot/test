@@ -17,6 +17,7 @@ import {
   X,
   LogOut,
   ChevronDown,
+  ShieldCheck,
   type LucideIcon,
 } from 'lucide-react'
 import { clsx } from 'clsx'
@@ -58,6 +59,7 @@ const navigationGroups: NavigationGroup[] = [
     name: '系统管理',
     adminOnly: true,
     items: [
+      { name: '运维总览', href: '/ops', icon: ShieldCheck },
       { name: '多智能体', href: '/multi-agent', icon: Network },
       { name: '量化指标', href: '/metrics', icon: TrendingUp },
       { name: '运行监控', href: '/monitoring', icon: FlaskConical },

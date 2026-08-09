@@ -14,9 +14,6 @@ import {
   CheckCircle2,
   XCircle,
   Database,
-  Users,
-  Target,
-  Crosshair,
   Bug,
   Zap,
   BookOpen,
@@ -61,13 +58,6 @@ export default function SystemTest() {
   const [error, setError] = useState<string | null>(null)
   const [dataWarning, setDataWarning] = useState<string | null>(null)
 
-  const [hallucinationRate, setHallucinationRate] = useState<number | null>(null)
-  const [performance, setPerformance] = useState<{
-    totalTasks: number
-    successCount: number
-    failedCount: number
-    successRate: number | null
-  } | null>(null)
   const [agents, setAgents] = useState<AgentStatus[]>([])
   const [taskGroups, setTaskGroups] = useState<TaskGroup[]>([])
   const [recentResults, setRecentResults] = useState<AgentTask[]>([])
@@ -80,8 +70,6 @@ export default function SystemTest() {
     try {
       const results = await Promise.allSettled([
         fetchSystemMetrics(),
-        agentApi.getHallucinationMetrics(),
-        agentApi.getPerformanceMetrics(),
         agentApi.getAllStatus(),
         agentApi.getTaskList({ page: 1, pageSize: 100 }),
         knowledgeApi.getList({ page: 1, pageSize: 100 }),
@@ -94,9 +82,7 @@ export default function SystemTest() {
         setDataWarning(`${failedCount} 个运行数据源暂时不可用，当前仅显示可用数据`)
       }
 
-      const [, hallucResult, performanceResult, agentResult, taskResult, knowledgeResult] = results
-      const hallucMetrics = hallucResult.status === 'fulfilled' ? hallucResult.value : null
-      const perfMetrics = performanceResult.status === 'fulfilled' ? performanceResult.value : null
+      const [, agentResult, taskResult, knowledgeResult] = results
       const agentStatus = agentResult.status === 'fulfilled' ? agentResult.value : { agents: [] as AgentStatus[], total: 0 }
       const taskListResp = taskResult.status === 'fulfilled'
         ? taskResult.value
@@ -104,21 +90,6 @@ export default function SystemTest() {
       const knowledgeResp = knowledgeResult.status === 'fulfilled'
         ? knowledgeResult.value
         : { items: [] as KnowledgeDoc[], total: 0, page: 1, pageSize: 100, totalPages: 0 }
-
-      // 幻觉率
-      if (hallucMetrics?.hallucinationRate !== undefined) {
-        setHallucinationRate(hallucMetrics.hallucinationRate)
-      }
-
-      // 性能指标
-      if (perfMetrics) {
-        setPerformance({
-          totalTasks: perfMetrics.totalTasks,
-          successCount: perfMetrics.successCount,
-          failedCount: perfMetrics.failedCount,
-          successRate: perfMetrics.successRate,
-        })
-      }
 
       // Agent 状态
       setAgents((agentStatus as { agents: AgentStatus[] }).agents || [])
@@ -176,21 +147,15 @@ export default function SystemTest() {
     loadData()
   }, [loadData])
 
-  const totalPassed = performance?.successCount ?? 0
-  const totalFailed = performance?.failedCount ?? 0
-  const passRate = performance?.successRate ?? null
+  const totalPassed = systemMetrics?.tasksCompleted ?? 0
+  const totalFailed = systemMetrics?.failedTasks ?? 0
+  const passRate = systemMetrics?.taskSuccessRate ?? null
 
   if (loading) return <PageSkeleton type="default" />
 
   if (error) {
     return <ErrorState type="default" onRetry={() => loadData()} />
   }
-
-  // 三大核心量化指标（来自真实系统指标）
-  const hallucinationSampleSufficient = systemMetrics?.hasSufficientSample === true
-  const hallucinationRateValue = hallucinationRate ?? systemMetrics?.hallucinationRate ?? null
-  const resourceMatchAccuracy = systemMetrics?.resourceMatchAccuracy ?? null
-  const knowledgeCoverageRate = systemMetrics?.knowledgeCoverageRate ?? null
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -199,51 +164,6 @@ export default function SystemTest() {
           {dataWarning || metricsError}
         </div>
       )}
-      {/* 三大核心量化指标 */}
-      <div className="grid grid-cols-3 gap-3">
-        <Card padding="md" className="border-l-4 border-l-warning">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-warning-light flex items-center justify-center">
-              <Crosshair className="w-5 h-5 text-warning" />
-            </div>
-            <div>
-              <p className="text-xl font-semibold metric-number text-warning">
-                {hallucinationSampleSufficient && hallucinationRateValue !== null
-                  ? `${hallucinationRateValue.toFixed(1)}%`
-                  : '样本不足/待审核'}
-              </p>
-              <p className="text-xs text-text-tertiary">知识幻觉错误率</p>
-            </div>
-          </div>
-        </Card>
-        <Card padding="md" className="border-l-4 border-l-primary">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-primary/10 flex items-center justify-center">
-              <Target className="w-5 h-5 text-primary" />
-            </div>
-            <div>
-              <p className="text-xl font-semibold metric-number text-primary">
-                {resourceMatchAccuracy === null ? '暂无数据' : `${resourceMatchAccuracy.toFixed(1)}%`}
-              </p>
-              <p className="text-xs text-text-tertiary">资源匹配准确率</p>
-            </div>
-          </div>
-        </Card>
-        <Card padding="md" className="border-l-4 border-l-success">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-success/10 flex items-center justify-center">
-              <Users className="w-5 h-5 text-success" />
-            </div>
-            <div>
-              <p className="text-xl font-semibold metric-number text-success">
-                {knowledgeCoverageRate === null ? '暂无数据' : `${knowledgeCoverageRate.toFixed(1)}%`}
-              </p>
-              <p className="text-xs text-text-tertiary">知识点覆盖率</p>
-            </div>
-          </div>
-        </Card>
-      </div>
-
       {/* 操作栏 */}
       <Card padding="md">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -254,8 +174,8 @@ export default function SystemTest() {
             </h2>
             <p className="text-sm text-text-secondary mt-1">
               展示 Agent 任务执行与知识库索引状态
-              {performance && (
-                <span className="ml-2 text-text-tertiary">· 总任务 {performance.totalTasks} · 成功 {performance.successCount} · 失败 {performance.failedCount}</span>
+              {systemMetrics && (
+                <span className="ml-2 text-text-tertiary">· 总任务 {systemMetrics.totalTasks} · 成功 {systemMetrics.tasksCompleted} · 失败 {systemMetrics.failedTasks ?? 0}</span>
               )}
             </p>
           </div>

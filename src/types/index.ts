@@ -406,6 +406,10 @@ export interface SystemMetrics {
   totalAnswers: number
   totalTasks: number
   tasksCompleted: number
+  /** Agent task counters returned by the performance metrics source. */
+  failedTasks?: number
+  runningTasks?: number
+  taskSuccessRate?: number | null
   avgResponseTime: number
   avgCompletionTime: string
   activeSessions: number

@@ -71,5 +71,7 @@ describe('SystemTest runtime monitor', () => {
     expect(screen.getByText('暂无任务类型数据')).toBeInTheDocument()
     expect(screen.getAllByText('暂无数据').length).toBeGreaterThan(0)
     expect(screen.queryByText('重新统计')).not.toBeInTheDocument()
+    expect(agentApi.getHallucinationMetrics).not.toHaveBeenCalled()
+    expect(agentApi.getPerformanceMetrics).not.toHaveBeenCalled()
   })
 })

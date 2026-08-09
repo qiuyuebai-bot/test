@@ -1,8 +1,8 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { useStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import type { KnowledgeDoc, KnowledgeSearchResult } from '@/types'
-import { configApi, knowledgeApi } from '@/api'
+import { configApi, domainToIndustry, knowledgeApi } from '@/api'
 import type { DomainOption } from '@/api/config'
 import Card from '@/components/Card'
 import Modal from '@/components/Modal'
@@ -25,6 +25,8 @@ import {
   FileSearch,
   AlertTriangle,
   RefreshCw,
+  ChevronLeft,
+  ChevronRight,
 } from 'lucide-react'
 import EmptyState from '@/components/EmptyState'
 import ErrorState from '@/components/ErrorState'
@@ -39,6 +41,8 @@ const FALLBACK_DOMAIN_LABELS: Record<string, string> = {
   data_analysis: '数据分析',
   general: '通用',
 }
+
+const DEFAULT_PAGE_SIZE = 20
 
 function getDomainLabel(domain: string, options: DomainOption[]): string {
   return options.find(d => d.value === domain)?.label || FALLBACK_DOMAIN_LABELS[domain] || '未分类'
@@ -272,22 +276,109 @@ function UploadModal({ isOpen, onClose, onSuccess }: { isOpen: boolean; onClose:
   )
 }
 
+function KnowledgePagination({
+  page,
+  total,
+  totalPages,
+  onPageChange,
+}: {
+  page: number
+  total: number
+  totalPages: number
+  onPageChange: (page: number) => void
+}) {
+  if (totalPages <= 1) return null
+
+  const maxVisible = 5
+  let start = Math.max(1, page - Math.floor(maxVisible / 2))
+  const end = Math.min(totalPages, start + maxVisible - 1)
+  if (end - start < maxVisible - 1) start = Math.max(1, end - maxVisible + 1)
+  const pages = Array.from({ length: end - start + 1 }, (_, index) => start + index)
+
+  return (
+    <div className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 border-t border-border">
+      <span className="text-sm text-text-secondary">
+        共 <span className="font-semibold text-primary">{total}</span> 个文档，第 {page}/{totalPages} 页
+      </span>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          title="上一页"
+          aria-label="上一页"
+          onClick={() => onPageChange(page - 1)}
+          disabled={page <= 1}
+          className="p-2 rounded-lg border border-border hover:bg-bg-secondary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          <ChevronLeft className="w-4 h-4" />
+        </button>
+        {start > 1 && (
+          <>
+            <button type="button" onClick={() => onPageChange(1)} className="w-9 h-9 rounded-lg border border-border text-sm hover:bg-bg-secondary transition-colors">1</button>
+            {start > 2 && <span className="px-1 text-text-tertiary">...</span>}
+          </>
+        )}
+        {pages.map((pageNumber) => (
+          <button
+            type="button"
+            key={pageNumber}
+            onClick={() => onPageChange(pageNumber)}
+            className={`w-9 h-9 rounded-lg border text-sm transition-colors ${pageNumber === page ? 'bg-primary border-primary text-white' : 'border-border hover:bg-bg-secondary'}`}
+          >
+            {pageNumber}
+          </button>
+        ))}
+        {end < totalPages && (
+          <>
+            {end < totalPages - 1 && <span className="px-1 text-text-tertiary">...</span>}
+            <button type="button" onClick={() => onPageChange(totalPages)} className="w-9 h-9 rounded-lg border border-border text-sm hover:bg-bg-secondary transition-colors">{totalPages}</button>
+          </>
+        )}
+        <button
+          type="button"
+          title="下一页"
+          aria-label="下一页"
+          onClick={() => onPageChange(page + 1)}
+          disabled={page >= totalPages}
+          className="p-2 rounded-lg border border-border hover:bg-bg-secondary disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+        >
+          <ChevronRight className="w-4 h-4" />
+        </button>
+      </div>
+    </div>
+  )
+}
+
 export default function KnowledgeBase() {
   const user = useStore((s) => s.user)
   const canManageKnowledge = user?.role === 'admin'
-  const { knowledgeDocs, knowledgeSlices, knowledgeLoading, knowledgeError, totalKnowledgeDocs } = useStore(
+  const {
+    knowledgeDocs,
+    knowledgeSlices,
+    knowledgeLoading,
+    knowledgeError,
+    totalKnowledgeDocs,
+    totalKnowledgePages,
+    currentPage,
+    pageSize,
+    knowledgeStats,
+  } = useStore(
     useShallow((s) => ({
       knowledgeDocs: s.knowledgeDocs,
       knowledgeSlices: s.knowledgeSlices,
       knowledgeLoading: s.knowledgeLoading,
       knowledgeError: s.knowledgeError,
       totalKnowledgeDocs: s.totalKnowledgeDocs,
+      totalKnowledgePages: s.totalKnowledgePages,
+      currentPage: s.currentPage,
+      pageSize: s.pageSize,
+      knowledgeStats: s.knowledgeStats,
     }))
   )
-  const { fetchKnowledgeDocs, fetchKnowledgeSlices } = useStore(
+  const { fetchKnowledgeDocs, fetchKnowledgeSlices, fetchKnowledgeStats } = useStore(
     useShallow((s) => ({
       fetchKnowledgeDocs: s.fetchKnowledgeDocs,
       fetchKnowledgeSlices: s.fetchKnowledgeSlices,
+      fetchKnowledgeStats: s.fetchKnowledgeStats,
     }))
   )
   const [searchQuery, setSearchQuery] = useState('')
@@ -303,12 +394,38 @@ export default function KnowledgeBase() {
   const [sliceSearchLoading, setSliceSearchLoading] = useState(false)
   const [sliceSearchError, setSliceSearchError] = useState('')
   const [reindexingId, setReindexingId] = useState<number | null>(null)
+  const [recentDocs, setRecentDocs] = useState<KnowledgeDoc[]>([])
 
   const previewReqIdRef = useRef(0)
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const selectedIndustry = selectedDomain === 'all' ? undefined : domainToIndustry(selectedDomain)
+  const getListParams = (page: number) => ({
+    page,
+    pageSize: pageSize || DEFAULT_PAGE_SIZE,
+    keyword: searchQuery.trim() || undefined,
+    industry: selectedIndustry,
+  })
+
+  const refreshRecentDocs = useCallback(async () => {
+    try {
+      const result = await knowledgeApi.getList({ page: 1, pageSize: 2 })
+      setRecentDocs(result.items)
+    } catch {
+      setRecentDocs([])
+    }
+  }, [])
 
   useEffect(() => {
-    fetchKnowledgeDocs({ page: 1, pageSize: 50 })
-  }, [fetchKnowledgeDocs])
+    void Promise.all([
+      fetchKnowledgeDocs({ page: 1, pageSize: DEFAULT_PAGE_SIZE }),
+      fetchKnowledgeStats(),
+      refreshRecentDocs(),
+    ])
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    }
+  }, [fetchKnowledgeDocs, fetchKnowledgeStats, refreshRecentDocs])
 
   useEffect(() => {
     configApi.getOptions().then(opts => setDomainOptions(opts.domains)).catch(() => {})
@@ -339,20 +456,46 @@ export default function KnowledgeBase() {
     }
   }
 
-  const filteredDocs = knowledgeDocs.filter((doc) => {
-    const matchesSearch = doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-                          doc.category.toLowerCase().includes(searchQuery.toLowerCase())
-    const matchesDomain = selectedDomain === 'all' || doc.domain === selectedDomain
-    return matchesSearch && matchesDomain
-  })
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value)
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    searchTimerRef.current = setTimeout(() => {
+      void fetchKnowledgeDocs({
+        page: 1,
+        pageSize: pageSize || DEFAULT_PAGE_SIZE,
+        keyword: value.trim() || undefined,
+        industry: selectedIndustry,
+      })
+    }, 300)
+  }
+
+  const handleDomainChange = (domain: string) => {
+    setSelectedDomain(domain)
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    void fetchKnowledgeDocs({
+      page: 1,
+      pageSize: pageSize || DEFAULT_PAGE_SIZE,
+      keyword: searchQuery.trim() || undefined,
+      industry: domain === 'all' ? undefined : domainToIndustry(domain),
+    })
+  }
+
+  const handlePageChange = (page: number) => {
+    if (page < 1 || (totalKnowledgePages > 0 && page > totalKnowledgePages)) return
+    void fetchKnowledgeDocs(getListParams(page))
+  }
 
   const stats = {
-    total: knowledgeDocs.length,
-    indexed: knowledgeDocs.filter(d => d.status === 'indexed').length,
-    pending: knowledgeDocs.filter(d => d.status === 'pending').length,
-    error: knowledgeDocs.filter(d => d.status === 'error').length,
-    totalSlices: knowledgeDocs.reduce((sum, d) => sum + d.totalSlices, 0),
-    indexedSlices: knowledgeDocs.reduce((sum, d) => sum + d.indexedSlices, 0),
+    total: knowledgeStats?.totalDocs ?? totalKnowledgeDocs,
+    indexed: knowledgeStats?.indexedDocs ?? knowledgeDocs.filter(d => d.status === 'indexed').length,
+    pending: knowledgeStats?.pendingDocs ?? knowledgeDocs.filter(d => d.status === 'pending').length,
+    error: knowledgeStats?.errorDocs ?? knowledgeDocs.filter(d => d.status === 'error').length,
+    totalSlices: knowledgeStats?.totalSlices ?? knowledgeDocs.reduce((sum, d) => sum + d.totalSlices, 0),
+    indexedSlices: knowledgeStats?.indexedSlices ?? knowledgeDocs.reduce((sum, d) => sum + d.indexedSlices, 0),
+  }
+
+  const refreshDocs = (page = currentPage) => {
+    return fetchKnowledgeDocs(getListParams(Math.max(1, page)))
   }
 
   const handlePreview = async (doc: KnowledgeDoc) => {
@@ -379,7 +522,11 @@ export default function KnowledgeBase() {
         success++
       } catch { /* 跳过重复 */ }
     }
-    await fetchKnowledgeDocs({ page: 1, pageSize: 50 })
+    await Promise.all([
+      refreshDocs(1),
+      fetchKnowledgeStats(),
+      refreshRecentDocs(),
+    ])
     toast.success(`已导入 ${success}/${samples.length} 份样例文档`)
   }
 
@@ -423,7 +570,10 @@ export default function KnowledgeBase() {
       await knowledgeApi.delete(deleteTarget.id)
       setShowDeleteConfirm(false)
       setDeleteTarget(null)
-      await fetchKnowledgeDocs({ page: 1, pageSize: 50 })
+      await Promise.all([refreshDocs(), fetchKnowledgeStats(), refreshRecentDocs()])
+      if (currentPage > 1 && knowledgeDocs.length === 1) {
+        await refreshDocs(currentPage - 1)
+      }
       toast.success('文档已删除')
     } catch {
       toast.error('删除失败')
@@ -437,7 +587,7 @@ export default function KnowledgeBase() {
     setReindexingId(doc.id)
     try {
       const result = await knowledgeApi.reindex(doc.id)
-      await fetchKnowledgeDocs({ page: 1, pageSize: 50 })
+      await Promise.all([refreshDocs(), fetchKnowledgeStats(), refreshRecentDocs()])
       toast.success(`已完成索引：${result.indexedSliceCount}/${result.sliceCount} 个切片`)
     } catch (error) {
       toast.error(error instanceof Error ? error.message : '重新索引失败')
@@ -447,7 +597,7 @@ export default function KnowledgeBase() {
   }
 
   if (knowledgeLoading && knowledgeDocs.length === 0) return <PageSkeleton type="table" />
-  if (knowledgeError) return <ErrorState type="default" onRetry={() => fetchKnowledgeDocs({ page: 1, pageSize: 50 })} />
+  if (knowledgeError) return <ErrorState type="default" onRetry={() => { void refreshDocs() }} />
 
   return (
     <div className="space-y-4 animate-fade-in">
@@ -457,10 +607,12 @@ export default function KnowledgeBase() {
           <p className="text-sm text-text-secondary mt-1">支持多行业专业知识库导入、切片管理、内容检索</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={() => setShowTraceability(true)}>
-            <Link className="w-4 h-4" />
-            知识溯源
-          </Button>
+          {canManageKnowledge && (
+            <Button variant="outline" onClick={() => setShowTraceability(true)}>
+              <Link className="w-4 h-4" />
+              知识溯源
+            </Button>
+          )}
           {canManageKnowledge && (
             <>
               <Button variant="outline" onClick={handleImportSamples}>
@@ -524,7 +676,7 @@ export default function KnowledgeBase() {
                 type="text"
                 placeholder="搜索文档..."
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => handleSearchChange(e.target.value)}
                 className="w-full h-10 pl-10 pr-4 bg-bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
               />
             </div>
@@ -532,7 +684,7 @@ export default function KnowledgeBase() {
               <span className="text-xs text-text-tertiary">领域筛选：</span>
               <div className="flex gap-1">
                 <button
-                  onClick={() => setSelectedDomain('all')}
+                  onClick={() => handleDomainChange('all')}
                   className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${selectedDomain === 'all' ? 'bg-primary/10 text-primary border-primary/30' : 'bg-bg-secondary text-text-secondary border-border hover:border-primary/20'}`}
                 >
                   全部
@@ -540,7 +692,7 @@ export default function KnowledgeBase() {
                 {domainOptions.map((d) => (
                   <button
                     key={d.value}
-                    onClick={() => setSelectedDomain(d.value)}
+                    onClick={() => handleDomainChange(d.value)}
                     className={`px-3 py-1.5 rounded-lg text-xs font-medium border transition-all ${selectedDomain === d.value ? d.color + ' border-current' : 'bg-bg-secondary text-text-secondary border-border hover:border-primary/20'}`}
                   >
                     {d.label}
@@ -550,8 +702,7 @@ export default function KnowledgeBase() {
             </div>
           </div>
           <span className="text-sm text-text-secondary">
-            共 <span className="font-semibold text-primary">{filteredDocs.length}</span> 个文档
-            {totalKnowledgeDocs > 0 && <span className="text-text-tertiary ml-1">(总计 {totalKnowledgeDocs})</span>}
+            共 <span className="font-semibold text-primary">{totalKnowledgeDocs}</span> 个文档
           </span>
         </div>
       </Card>
@@ -559,11 +710,11 @@ export default function KnowledgeBase() {
       <div className="grid grid-cols-12 gap-4">
         <div className="col-span-12 lg:col-span-8">
           <Card padding="none">
-            {filteredDocs.length === 0 && !knowledgeLoading ? (
+            {knowledgeDocs.length === 0 && !knowledgeLoading ? (
               <EmptyState
                 icon={Database}
-                title="暂无知识库文档"
-                description="请上传文档或等待文档索引完成"
+                title={searchQuery.trim() || selectedDomain !== 'all' ? '未找到匹配文档' : '暂无知识库文档'}
+                description={searchQuery.trim() || selectedDomain !== 'all' ? '请调整搜索关键词或领域筛选条件' : '请上传文档或等待文档索引完成'}
               />
             ) : (
               <div className="overflow-x-auto">
@@ -578,7 +729,7 @@ export default function KnowledgeBase() {
                     </tr>
                   </thead>
                   <tbody>
-                    {filteredDocs.map((doc, index) => {
+                    {knowledgeDocs.map((doc, index) => {
                       const status = statusConfig[doc.status as keyof typeof statusConfig] || statusConfig.pending
                       const StatusIcon = status.icon
                       return (
@@ -654,6 +805,14 @@ export default function KnowledgeBase() {
                 </table>
               </div>
             )}
+            {knowledgeDocs.length > 0 && (
+              <KnowledgePagination
+                page={currentPage}
+                total={totalKnowledgeDocs}
+                totalPages={totalKnowledgePages}
+                onPageChange={handlePageChange}
+              />
+            )}
           </Card>
         </div>
 
@@ -714,21 +873,20 @@ export default function KnowledgeBase() {
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-xs font-medium text-text-primary flex items-center gap-1">
                     <Layers className="w-3 h-3" />
-                    最近切片
+                    最新文档摘要
                   </span>
-                  <Badge variant="default" size="sm">实时</Badge>
+                  <Badge variant="default" size="sm">按创建时间</Badge>
                 </div>
                 <div className="space-y-2">
-                  {knowledgeDocs.slice(0, 2).map((doc) => (
-                    doc.contentPreview ? (
-                      <div key={doc.id} className="p-2 rounded-lg bg-bg-card/50 text-xs text-text-secondary line-clamp-2">
-                        {doc.contentPreview.slice(0, 60)}...
-                      </div>
-                    ) : null
+                  {recentDocs.map((doc) => (
+                    <div key={doc.id} className="p-2 rounded-lg bg-bg-card/50 text-xs text-text-secondary">
+                      <p className="font-medium text-text-primary truncate">{doc.title}</p>
+                      {doc.contentPreview && <p className="mt-1 line-clamp-2">{doc.contentPreview.slice(0, 60)}...</p>}
+                    </div>
                   ))}
-                  {!knowledgeDocs.some(d => d.contentPreview) && (
+                  {recentDocs.length === 0 && (
                     <div className="p-2 rounded-lg bg-bg-card/50 text-xs text-text-tertiary text-center">
-                      暂无切片预览
+                      暂无文档摘要
                     </div>
                   )}
                 </div>
@@ -751,7 +909,13 @@ export default function KnowledgeBase() {
       </div>
 
       {canManageKnowledge && (
-        <UploadModal isOpen={showUpload} onClose={() => setShowUpload(false)} onSuccess={() => fetchKnowledgeDocs({ page: 1, pageSize: 50 })} />
+        <UploadModal
+          isOpen={showUpload}
+          onClose={() => setShowUpload(false)}
+          onSuccess={() => {
+            void Promise.all([refreshDocs(1), fetchKnowledgeStats(), refreshRecentDocs()])
+          }}
+        />
       )}
       <DocPreviewModal
         isOpen={showPreview}
@@ -761,7 +925,9 @@ export default function KnowledgeBase() {
         slicesLoading={slicesLoading}
         domainToLabel={domainToLabel}
       />
-      <TraceabilityModal isOpen={showTraceability} onClose={() => setShowTraceability(false)} />
+      {canManageKnowledge && (
+        <TraceabilityModal isOpen={showTraceability} onClose={() => setShowTraceability(false)} />
+      )}
 
       {/* 删除确认弹窗 */}
       {canManageKnowledge && showDeleteConfirm && deleteTarget && (

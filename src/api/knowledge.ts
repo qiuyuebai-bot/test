@@ -7,6 +7,15 @@ export interface KnowledgeListParams extends PaginationParams {
   status?: string
 }
 
+export interface KnowledgeStats {
+  totalDocs: number
+  indexedDocs: number
+  pendingDocs: number
+  errorDocs: number
+  totalSlices: number
+  indexedSlices: number
+}
+
 const industryToDomain: Record<string, string> = {
   '智能制造': 'smart_manufacturing',
   '工业互联网': 'industrial_internet',
@@ -15,6 +24,10 @@ const industryToDomain: Record<string, string> = {
   '人工智能': 'artificial_intelligence',
   '数据分析': 'data_analysis',
   '通用': 'general',
+}
+
+export function domainToIndustry(domain: string): string | undefined {
+  return Object.entries(industryToDomain).find(([, value]) => value === domain)?.[0]
 }
 
 const statusMap: Record<string, 'indexed' | 'pending' | 'error'> = {
@@ -126,7 +139,7 @@ export const knowledgeApi = {
       items: (result.items || []).map(mapDocFromApi),
       total: result.total || 0,
       page: result.page || 1,
-      pageSize: result.pageSize || 50,
+      pageSize: result.pageSize || 20,
       totalPages: result.totalPages || 0,
     }
   },
@@ -174,5 +187,9 @@ export const knowledgeApi = {
 
   getIndustryStats(): Promise<unknown> {
     return http.get('/knowledge/stats/industries')
+  },
+
+  getStats(): Promise<KnowledgeStats> {
+    return http.get<KnowledgeStats>('/knowledge/stats/summary')
   },
 }
