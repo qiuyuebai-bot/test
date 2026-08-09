@@ -16,7 +16,8 @@ config = context.config
 
 # Interpret the config file for Python logging.
 if config.config_file_name is not None:
-    fileConfig(config.config_file_name)
+    # Do not disable application loggers when migrations configure Alembic.
+    fileConfig(config.config_file_name, disable_existing_loggers=False)
 
 # 导入项目配置与模型
 from app.config import settings  # noqa: E402
