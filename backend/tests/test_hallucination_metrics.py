@@ -1,8 +1,9 @@
 """Knowledge-grounded hallucination metric regression tests."""
 
 import json
+from datetime import datetime
 
-from app.models import DebateRecord
+from app.models import DebateRecord, TestMetrics
 from app.utils.metrics import MetricsUtil
 
 
@@ -120,3 +121,38 @@ def test_report_metrics_uses_the_same_evidence_aware_source(
     assert data["evidence_gaps"] == 1
     assert data["hallucination_rate"] is None
     assert data["has_sufficient_sample"] is False
+
+
+def test_report_metrics_uses_live_index_coverage_and_flat_trends(
+    client, db_session, sample_knowledge_doc, sample_knowledge_slices
+):
+    db_session.add(TestMetrics(
+        record_date=datetime(2024, 1, 15),
+        record_period="daily",
+        hallucination_rate=2.5,
+        resource_match_accuracy=94.0,
+        knowledge_coverage_rate=96.0,
+        detailed_metrics={"knowledge_index_coverage_rate": 88.0},
+    ))
+    db_session.commit()
+
+    response = client.get("/api/v1/report/metrics")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["knowledge_coverage_rate"] == 100.0
+    assert data["knowledge_index_coverage_rate"] == 100.0
+    assert data["metrics_source"] == "realtime"
+    assert data["metrics_status"] == "ready"
+    assert data["snapshot_available"] is True
+    assert data["trends"][0]["knowledge_coverage_rate"] == 88.0
+    assert "metrics" not in data["trends"][0]
+
+
+def test_report_metrics_marks_missing_knowledge_data_as_no_data(client):
+    response = client.get("/api/v1/report/metrics")
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert data["knowledge_coverage_rate"] is None
+    assert data["metrics_status"] == "no_data"

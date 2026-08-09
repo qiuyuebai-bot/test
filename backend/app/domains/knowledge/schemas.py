@@ -2,7 +2,7 @@
 知识库相关数据验证 Schema
 """
 from pydantic import BaseModel, Field, ConfigDict
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Literal
 from datetime import datetime
 
 
@@ -61,6 +61,7 @@ class KnowledgeDocResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     indexed_at: Optional[datetime] = None
+    error_message: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -123,7 +124,9 @@ class KnowledgeSearchRequest(BaseModel):
     doc_id: Optional[int] = Field(None, description="指定文档ID")
     top_k: int = Field(default=5, ge=1, le=50, description="返回结果数量")
     min_similarity: float = Field(default=0.6, ge=0, le=1, description="最低相似度")
-    search_type: str = Field(default="hybrid", description="检索类型(vector/keyword/hybrid)")
+    search_type: Literal["vector", "keyword", "hybrid"] = Field(
+        default="hybrid", description="检索类型(vector/keyword/hybrid)"
+    )
 
 
 class KnowledgeSearchResult(BaseModel):
@@ -227,4 +230,7 @@ class KnowledgeUploadResponse(BaseModel):
     file_size: int
     status: str
     message: str
+    slice_count: int = 0
+    indexed_slice_count: int = 0
+    error_message: Optional[str] = None
     task_id: Optional[int] = None

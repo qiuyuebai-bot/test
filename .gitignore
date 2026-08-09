@@ -56,6 +56,10 @@ backend/data/chroma_db/
 backend/data/uploads/
 backend/data/resources/
 backend/data/knowledge_docs/
+data/chroma_db/
+data/uploads/
+data/resources/
+data/knowledge_docs/
 
 # ===========================================
 # 日志文件

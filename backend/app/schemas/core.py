@@ -184,8 +184,14 @@ class SystemMetricsResponse(BaseModel):
     pass_rate: Optional[float] = None
     has_sufficient_sample: bool = False
     minimum_sample_size: int = 5
-    resource_match_accuracy: float
-    knowledge_coverage_rate: float
+    resource_match_accuracy: Optional[float] = None
+    knowledge_coverage_rate: Optional[float] = None
+    knowledge_index_coverage_rate: Optional[float] = None
+    learning_blind_spot_coverage_rate: Optional[float] = None
+    metrics_status: str = "no_data"
+    metrics_source: str = "realtime"
+    snapshot_available: bool = False
+    calculated_at: Optional[str] = None
     total_learners: int
     total_resources: int
     total_answers: int

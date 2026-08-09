@@ -3,6 +3,7 @@
 实现文档管理、切片、向量索引、检索、溯源等业务逻辑
 """
 import os
+import re
 import time
 import uuid
 import threading
@@ -18,6 +19,7 @@ from app.config import settings
 from app.models import KnowledgeDoc, KnowledgeSlice, LearningResource, IndustryEnum
 from app.utils.text_slice import TextSliceUtil
 from app.utils.logger import LoggerUtil
+from app.domains.knowledge.parser import KnowledgeDocumentParser
 from app.domains.knowledge.schemas import (
     KnowledgeDocCreate,
     KnowledgeDocUpdate,
@@ -129,7 +131,9 @@ class KnowledgeService:
         )
         
         db.add(doc)
-        db.flush()
+        # 持久化上传记录后再开始解析/索引，处理失败时才能保留 error 状态供前端查看。
+        db.commit()
+        db.refresh(doc)
         
         LoggerUtil.log_api_request("POST", f"/knowledge/docs/{doc.id}", None, doc_data.model_dump())
         logger.info(f"创建知识库文档: id={doc.id}, title={doc.title}")
@@ -175,13 +179,22 @@ class KnowledgeService:
                 max_length=500,
                 overlap=50,
             )
+            if not slices or not any(item.get("content", "").strip() for item in slices):
+                raise ValueError("文档内容为空，无法建立知识索引")
             doc.slice_count = len(slices)
             doc.process_progress = 60
             db.flush()
             
             logger.info(f"文档切片完成: doc_id={doc_id}, slices={len(slices)}")
             
-            # 3. 存储切片到数据库
+            # 3. 重建数据库切片（重新索引时先清理旧切片）
+            db.query(KnowledgeSlice).filter(
+                KnowledgeSlice.doc_id == doc_id
+            ).delete(synchronize_session=False)
+            db.flush()
+
+            # 4. 存储切片到数据库
+            slice_objects = []
             for i, slice_data in enumerate(slices):
                 content = slice_data["content"]
                 content_hash = hashlib.sha256(content.encode('utf-8')).hexdigest()
@@ -199,23 +212,21 @@ class KnowledgeService:
                     is_indexed=False,
                 )
                 db.add(slice_obj)
+                slice_objects.append(slice_obj)
             
             db.flush()
             doc.process_progress = 80
             
-            # 4. 向量入库（写入 industry metadata 支持 Chroma 原生过滤）
-            try:
-                KnowledgeService._index_slices_to_chroma(doc_id, doc.industry, slices)
-                doc.indexed_slice_count = len(slices)
-                
-                # 更新切片索引状态
-                db.query(KnowledgeSlice).filter(
-                    KnowledgeSlice.doc_id == doc_id
-                ).update({KnowledgeSlice.is_indexed: True})
-                
-            except Exception as e:
-                logger.error(f"向量索引失败: doc_id={doc_id}, error={e}")
-                doc.indexed_slice_count = 0
+            # 5. 向量入库。任何失败都必须让文档进入 error，不能伪装成 ready。
+            vector_ids = KnowledgeService._index_slices_to_chroma(doc_id, doc.industry, slices)
+            for slice_obj, vector_id in zip(slice_objects, vector_ids):
+                slice_obj.vector_id = vector_id
+                slice_obj.is_indexed = True
+            doc.indexed_slice_count = len(vector_ids)
+            if len(vector_ids) != len(slice_objects):
+                raise RuntimeError(
+                    f"向量索引数量不一致: slices={len(slice_objects)}, vectors={len(vector_ids)}"
+                )
             
             # 更新文档状态
             doc.status = "ready"
@@ -237,13 +248,15 @@ class KnowledgeService:
             doc = db.query(KnowledgeDoc).filter(KnowledgeDoc.id == doc_id).first()
             if doc:
                 doc.status = "error"
+                doc.process_progress = 0
+                doc.indexed_slice_count = 0
                 doc.error_message = str(e)
                 db.commit()
             
             return False
     
     @staticmethod
-    def _index_slices_to_chroma(doc_id: int, industry: str, slices: List[Dict]) -> None:
+    def _index_slices_to_chroma(doc_id: int, industry: str, slices: List[Dict]) -> List[str]:
         """
         将切片索引到Chroma向量数据库（真实接入）
         
@@ -253,12 +266,11 @@ class KnowledgeService:
             slices: 切片列表
         """
         if not _CHROMA_AVAILABLE:
-            logger.debug(f"Chroma 未安装，跳过向量索引: doc_id={doc_id}, slices={len(slices)}")
-            return
+            raise RuntimeError("Chroma 不可用，无法建立知识索引")
         
         collection = _get_chroma_collection()
         if collection is None:
-            return
+            raise RuntimeError("Chroma 集合不可用，无法建立知识索引")
         
         # 批量构建向量入库数据
         ids = []
@@ -279,15 +291,16 @@ class KnowledgeService:
                 "title": slice_data.get("title", ""),
             })
         
-        # 批量添加（Chroma 自动使用内置 embedding 模型生成向量）
+        # 使用 upsert，保证重新索引不会因相同 vector_id 重复写入失败。
         if ids:
-            collection.add(
+            collection.upsert(
                 ids=ids,
                 documents=documents,
                 metadatas=metadatas,
             )
         
         logger.info(f"Chroma 向量索引完成: doc_id={doc_id}, slices={len(slices)}")
+        return ids
     
     @staticmethod
     def get_doc_list(
@@ -453,6 +466,40 @@ class KnowledgeService:
             return False
 
     @staticmethod
+    def reindex_doc(db: Session, doc_id: int) -> Tuple[bool, str]:
+        """Re-parse the persisted source document and rebuild its DB/vector slices."""
+        doc = db.query(KnowledgeDoc).filter(
+            KnowledgeDoc.id == doc_id,
+            KnowledgeDoc.is_enabled == True,
+        ).first()
+        if not doc:
+            return False, "文档不存在或已停用"
+
+        source_path = Path(doc.file_path or "")
+        if not source_path.is_absolute():
+            source_path = Path(settings.KNOWLEDGE_DOC_DIR) / source_path.name
+        if not source_path.exists():
+            doc.status = "error"
+            doc.error_message = "原始文档不存在，无法重新索引"
+            db.commit()
+            return False, doc.error_message
+
+        try:
+            raw_bytes = source_path.read_bytes()
+            text_content = KnowledgeDocumentParser.extract(doc.file_name, raw_bytes)
+            if not KnowledgeService._delete_vectors_for_doc(doc.id):
+                return False, "旧向量索引删除失败，请稍后重试"
+            if not KnowledgeService.process_doc(db, doc.id, text_content):
+                return False, doc.error_message or "文档处理失败，请检查日志"
+            return True, "重新索引完成"
+        except Exception as exc:
+            logger.error(f"重新索引失败: doc_id={doc_id}, error={exc}")
+            doc.status = "error"
+            doc.error_message = str(exc)
+            db.commit()
+            return False, str(exc)
+
+    @staticmethod
     def reconcile_orphaned_vectors(db: Session) -> Dict[str, int]:
         """补偿对账：扫描所有已软删的文档，重试删除其可能残留的向量索引
 
@@ -537,11 +584,15 @@ class KnowledgeService:
             filter_industry = search_request.industry
             k = search_request.top_k
             filter_doc_id = search_request.doc_id
+            min_similarity = search_request.min_similarity
+            search_type = search_request.search_type
         else:
             query_text = query
             filter_industry = industry
             k = top_k
             filter_doc_id = doc_id
+            min_similarity = 0.0
+            search_type = "hybrid"
         
         if not query_text:
             return results
@@ -551,6 +602,7 @@ class KnowledgeService:
             if db:
                 indexed_query = db.query(KnowledgeSlice.id).join(KnowledgeDoc).filter(
                     KnowledgeDoc.is_enabled == True,
+                    KnowledgeDoc.status == "ready",
                     KnowledgeSlice.is_indexed == True,
                 )
                 if filter_industry:
@@ -560,7 +612,7 @@ class KnowledgeService:
                 has_indexed_slices = indexed_query.first() is not None
 
             # 1. Chroma 向量语义检索（如果可用）
-            if _CHROMA_AVAILABLE and has_indexed_slices:
+            if search_type in ("vector", "hybrid") and _CHROMA_AVAILABLE and has_indexed_slices:
                 collection = _get_chroma_collection()
                 
                 if collection is not None:
@@ -603,6 +655,8 @@ class KnowledgeService:
                                 continue
                             distance = result_distances[i] if i < len(result_distances) else 1.0
                             similarity = max(0, 1.0 - distance)
+                            if similarity < min_similarity:
+                                continue
                             content = result_documents[i] if i < len(result_documents) else ""
                             metadata = result_metadatas[i] if i < len(result_metadatas) else {}
                             parsed_hits.append((i, slice_doc_id, slice_index, similarity, content, metadata))
@@ -629,6 +683,11 @@ class KnowledgeService:
                         for i, slice_doc_id, slice_index, similarity, content, metadata in parsed_hits:
                             doc = doc_map.get(slice_doc_id)
                             slice_obj = slice_map.get((slice_doc_id, slice_index))
+                            if doc is None or slice_obj is None:
+                                logger.warning(
+                                    f"跳过无法回填的向量: doc_id={slice_doc_id}, slice_index={slice_index}"
+                                )
+                                continue
                             keywords_raw = metadata.get("keywords", "")
                             keywords = keywords_raw.split(",") if keywords_raw else []
 
@@ -644,18 +703,19 @@ class KnowledgeService:
                                 "keywords": keywords,
                                 "highlighted_content": content[:200] + "..." if len(content) > 200 else content,
                             })
-            elif _CHROMA_AVAILABLE and db:
+            elif search_type in ("vector", "hybrid") and _CHROMA_AVAILABLE and db:
                 logger.debug("没有已索引知识切片，跳过 Chroma 检索")
-            else:
+            elif search_type == "hybrid":
                 logger.debug("Chroma 不可用，使用数据库关键词检索")
             
             # 3. 如果 Chroma 检索结果不足，fallback 到数据库关键词检索
-            if len(results) < k and db:
+            if search_type in ("keyword", "hybrid") and len(results) < k and db:
                 remaining = k - len(results)
                 existing_ids = {r["slice_id"] for r in results if r["slice_id"]}
                 
                 sql_query = db.query(KnowledgeSlice).join(KnowledgeDoc).filter(
                     KnowledgeDoc.is_enabled == True,
+                    KnowledgeDoc.status == "ready",
                 )
                 
                 if filter_industry:
@@ -665,11 +725,14 @@ class KnowledgeService:
                 if existing_ids:
                     sql_query = sql_query.filter(~KnowledgeSlice.id.in_(existing_ids))
                 
-                # 关键词模糊匹配作为补充
-                escaped_qt = _escape_like(query_text)
-                sql_query = sql_query.filter(
-                    KnowledgeSlice.content.like(f"%{escaped_qt}%", escape="\\")
-                )
+                # 关键词匹配支持完整查询和中英文词元，避免长句查询把结果全部过滤掉。
+                terms = [query_text.strip()]
+                terms.extend(re.findall(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]{2,}", query_text))
+                terms = list(dict.fromkeys(term for term in terms if term))[:12]
+                sql_query = sql_query.filter(or_(*[
+                    KnowledgeSlice.content.like(f"%{_escape_like(term)}%", escape="\\")
+                    for term in terms
+                ]))
                 
                 fallback_slices = sql_query.limit(remaining).all()
                 
@@ -701,19 +764,23 @@ class KnowledgeService:
         except Exception as e:
             logger.warning(f"Chroma 检索异常，降级为数据库检索: {e}")
             # 降级：纯数据库关键词检索
-            if db:
+            if db and search_type in ("keyword", "hybrid"):
                 sql_query = db.query(KnowledgeSlice).join(KnowledgeDoc).filter(
                     KnowledgeDoc.is_enabled == True,
+                    KnowledgeDoc.status == "ready",
                 )
                 if filter_industry:
                     sql_query = sql_query.filter(KnowledgeDoc.industry == filter_industry)
                 if filter_doc_id:
                     sql_query = sql_query.filter(KnowledgeSlice.doc_id == filter_doc_id)
                 
-                escaped_qt = _escape_like(query_text)
-                sql_query = sql_query.filter(
-                    KnowledgeSlice.content.like(f"%{escaped_qt}%", escape="\\")
-                )
+                terms = [query_text.strip()]
+                terms.extend(re.findall(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]{2,}", query_text))
+                terms = list(dict.fromkeys(term for term in terms if term))[:12]
+                sql_query = sql_query.filter(or_(*[
+                    KnowledgeSlice.content.like(f"%{_escape_like(term)}%", escape="\\")
+                    for term in terms
+                ]))
                 
                 fallback_slices = sql_query.limit(k).all()
                 

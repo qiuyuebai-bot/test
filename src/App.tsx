@@ -15,10 +15,7 @@ const KnowledgeBase = lazy(() => import('./pages/KnowledgeBase'))
 const ResourceGeneration = lazy(() => import('./pages/ResourceGeneration'))
 const LearningReport = lazy(() => import('./pages/LearningReport'))
 const AdaptiveGuidance = lazy(() => import('./pages/AdaptiveGuidance'))
-const EnterpriseTraining = lazy(() => import('./pages/EnterpriseTraining'))
-const DataPrivacy = lazy(() => import('./pages/DataPrivacy'))
 const SystemTest = lazy(() => import('./pages/SystemTest'))
-const Deployment = lazy(() => import('./pages/Deployment'))
 const MetricsDashboard = lazy(() => import('./pages/MetricsDashboard'))
 
 function PageFallback() {
@@ -72,10 +69,11 @@ function App() {
             <Route path="resources" element={<ResourceGeneration />} />
             <Route path="report" element={<LearningReport />} />
             <Route path="guidance" element={<AdaptiveGuidance />} />
-            <Route path="enterprise" element={<EnterpriseTraining />} />
-            <Route path="privacy" element={<DataPrivacy />} />
-            <Route path="test" element={<SystemTest />} />
-            <Route path="deployment" element={<Deployment />} />
+            <Route path="enterprise" element={<Navigate to="/dashboard" replace />} />
+            <Route path="privacy" element={<Navigate to="/dashboard" replace />} />
+            <Route path="monitoring" element={<SystemTest />} />
+            <Route path="test" element={<Navigate to="/monitoring" replace />} />
+            <Route path="deployment" element={<Navigate to="/dashboard" replace />} />
             <Route path="metrics" element={<MetricsDashboard />} />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />

@@ -11,12 +11,6 @@ export interface DomainOption {
   color: string
 }
 
-export interface TrainingTemplate {
-  title: string
-  duration: string
-  courses: number
-}
-
 export interface DesensitizationRule {
   field: string
   rule: string
@@ -26,7 +20,6 @@ export interface DesensitizationRule {
 export interface BusinessConfig {
   industries: IndustryOption[]
   domains: DomainOption[]
-  trainingTemplates: TrainingTemplate[]
   desensitizationRules: DesensitizationRule[]
 }
 

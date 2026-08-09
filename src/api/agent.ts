@@ -80,7 +80,7 @@ export const agentApi = {
     return http.get<HallucinationMetrics>('/agent/metrics/hallucination', undefined, options)
   },
 
-  getPerformanceMetrics(options?: { silent?: boolean }): Promise<{ totalTasks: number; successCount: number; failedCount: number; runningCount: number; successRate: number; avgDurationMs: number }> {
+  getPerformanceMetrics(options?: { silent?: boolean }): Promise<{ totalTasks: number; successCount: number; failedCount: number; runningCount: number; successRate: number | null; avgDurationMs: number }> {
     return http.get('/agent/metrics/performance', undefined, options)
   },
 }

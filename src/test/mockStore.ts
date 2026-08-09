@@ -47,6 +47,8 @@ const defaults: State = {
   setCurrentTask: () => {},
   systemMetrics: null,
   metricsLoading: false,
+  metricsError: null,
+  metricsStatus: 'idle',
   fetchSystemMetrics: () => Promise.resolve(),
   resources: [],
   resourcesTotal: 0,

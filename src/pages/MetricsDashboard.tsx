@@ -34,10 +34,12 @@ import {
 } from 'recharts'
 
 export default function MetricsDashboard() {
-  const { systemMetrics, metricsLoading } = useStore(
+  const { systemMetrics, metricsLoading, metricsError, metricsStatus } = useStore(
     useShallow((s) => ({
       systemMetrics: s.systemMetrics,
       metricsLoading: s.metricsLoading,
+      metricsError: s.metricsError,
+      metricsStatus: s.metricsStatus,
     }))
   )
   const fetchSystemMetrics = useStore((s) => s.fetchSystemMetrics)
@@ -63,12 +65,12 @@ export default function MetricsDashboard() {
   const hasSufficientHallucinationSample = systemMetrics?.hasSufficientSample === true && typeof rawHallucinationRate === 'number'
   const hallucinationRate = systemMetrics?.hasSufficientSample === true && typeof rawHallucinationRate === 'number'
     ? rawHallucinationRate
-    : 0
+    : null
   const hallucinationRateLabel = hasSufficientHallucinationSample
-    ? `${hallucinationRate.toFixed(1)}%`
+    ? `${(hallucinationRate ?? 0).toFixed(1)}%`
     : '样本不足/待审核'
-  const resourceMatchAccuracy = systemMetrics?.resourceMatchAccuracy ?? 0
-  const knowledgeCoverageRate = systemMetrics?.knowledgeCoverageRate ?? 0
+  const resourceMatchAccuracy = systemMetrics?.resourceMatchAccuracy ?? null
+  const knowledgeCoverageRate = systemMetrics?.knowledgeCoverageRate ?? null
   const trendData = systemMetrics?.trends ?? []
 
   const metricCards = [
@@ -77,11 +79,11 @@ export default function MetricsDashboard() {
       value: hallucinationRateLabel,
       isPending: !hasSufficientHallucinationSample,
       target: '< 5%',
-      isOnTarget: hasSufficientHallucinationSample && hallucinationRate < 5,
+      isOnTarget: hasSufficientHallucinationSample && (hallucinationRate ?? 0) < 5,
       icon: AlertTriangle,
       color: 'text-success',
       bgColor: 'bg-success/10',
-      progressValue: hallucinationRate,
+      progressValue: hallucinationRate ?? 0,
       progressMax: 10,
       progressVariant: 'success' as const,
       description: '衡量生成内容与知识库事实的偏离程度。通过内容审核裁判 Agent 交叉验证计算得出。',
@@ -89,13 +91,13 @@ export default function MetricsDashboard() {
     },
     {
       label: '资源匹配准确率',
-      value: `${resourceMatchAccuracy.toFixed(1)}%`,
+      value: resourceMatchAccuracy === null ? '暂无数据' : `${resourceMatchAccuracy.toFixed(1)}%`,
       target: '> 90%',
-      isOnTarget: resourceMatchAccuracy >= 90,
+      isOnTarget: resourceMatchAccuracy !== null && resourceMatchAccuracy >= 90,
       icon: Target,
       color: 'text-primary',
       bgColor: 'bg-primary/10',
-      progressValue: resourceMatchAccuracy,
+      progressValue: resourceMatchAccuracy ?? 0,
       progressMax: 100,
       progressVariant: 'default' as const,
       description: '衡量生成资源与学习者需求的匹配程度。基于用户反馈和测试结果持续优化。',
@@ -103,13 +105,13 @@ export default function MetricsDashboard() {
     },
     {
       label: '知识点覆盖率',
-      value: `${knowledgeCoverageRate.toFixed(1)}%`,
+      value: knowledgeCoverageRate === null ? '暂无数据' : `${knowledgeCoverageRate.toFixed(1)}%`,
       target: '> 85%',
-      isOnTarget: knowledgeCoverageRate >= 85,
+      isOnTarget: knowledgeCoverageRate !== null && knowledgeCoverageRate >= 85,
       icon: Brain,
       color: 'text-info',
       bgColor: 'bg-info/10',
-      progressValue: knowledgeCoverageRate,
+      progressValue: knowledgeCoverageRate ?? 0,
       progressMax: 100,
       progressVariant: 'default' as const,
       description: '衡量知识库对目标领域知识点的覆盖程度。通过知识点图谱自动分析计算。',
@@ -121,7 +123,7 @@ export default function MetricsDashboard() {
     return <PageSkeleton type="dashboard" />
   }
 
-  if (error) {
+  if (error || (metricsStatus === 'error' && !systemMetrics)) {
     return <ErrorState type="default" onRetry={() => loadMetrics()} />
   }
 
@@ -131,6 +133,11 @@ export default function MetricsDashboard() {
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {metricsError && metricsStatus === 'partial' && (
+        <div className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
+          {metricsError}，页面已显示可用数据。
+        </div>
+      )}
       {/* 核心指标卡片 */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         {metricCards.map((metric) => (

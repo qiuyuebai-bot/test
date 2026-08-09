@@ -1,5 +1,6 @@
 """LLM-backed learning-resource generation with strict response validation."""
 import json
+import re
 from typing import Any, Dict, List
 
 from app.services.ai_content_service import AIContentService
@@ -15,14 +16,31 @@ from app.utils.llm_response import (
 class LLMGenerator:
     """Generate resources from approved prompt templates and retrieved context."""
 
+    # Keep placeholder checks structural. Words such as “正确答案” and
+    # “干扰项” are valid in an explanation, so they must not be rejected by
+    # a global substring search across the whole question.
     PLACEHOLDER_MARKERS = (
-        "选项A",
-        "正确答案",
-        "干扰项",
         "basic题",
         "advanced题",
         "第1道basic",
         "第1道advanced",
+    )
+    _QUESTION_PLACEHOLDER_RE = re.compile(
+        r"^\s*(?:题干|问题|正确答案|解析|question(?:\s+stem)?|explanation|analysis)\s*$",
+        re.IGNORECASE,
+    )
+    _NUMBERED_PLACEHOLDER_RE = re.compile(
+        r"(?:第\s*\d+\s*道\s*(?:basic|advanced)(?:\s*题)?|(?:basic|advanced)\s*题)",
+        re.IGNORECASE,
+    )
+    _OPTION_PLACEHOLDER_RE = re.compile(
+        r"^\s*(?:选项\s*[A-FＡ-Ｆ1-6一二三四五六]|[A-FＡ-Ｆ])"
+        r"\s*[.。:：]?\s*(?:[（(]\s*(?:正确答案|干扰项|正确选项|错误选项)\s*[）)])?\s*$",
+        re.IGNORECASE,
+    )
+    _KNOWLEDGE_POINT_PLACEHOLDER_RE = re.compile(
+        r"^\s*知识点\s*\d*\s*$",
+        re.IGNORECASE,
     )
 
     @classmethod
@@ -196,8 +214,19 @@ class LLMGenerator:
         explanation: str,
         knowledge_points: List[str],
     ) -> None:
-        combined = "\n".join([question, explanation, *options, *knowledge_points])
-        if any(marker in combined for marker in cls.PLACEHOLDER_MARKERS):
+        if (
+            cls._QUESTION_PLACEHOLDER_RE.fullmatch(question)
+            or cls._NUMBERED_PLACEHOLDER_RE.search(question)
+        ):
+            raise LLMResponseError("question contains placeholder text")
+        if any(cls._OPTION_PLACEHOLDER_RE.fullmatch(option) for option in options):
+            raise LLMResponseError("question contains placeholder text")
+        if cls._QUESTION_PLACEHOLDER_RE.fullmatch(explanation):
+            raise LLMResponseError("question contains placeholder text")
+        if any(
+            cls._KNOWLEDGE_POINT_PLACEHOLDER_RE.fullmatch(point)
+            for point in knowledge_points
+        ):
             raise LLMResponseError("question contains placeholder text")
 
     @classmethod

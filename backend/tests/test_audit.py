@@ -30,8 +30,8 @@ class TestAuditMiddleware:
         # TestClient 不设置 request.client，ip_address 可能为 None
         assert log.duration_ms is not None
 
-    def test_write_operation_audited(self, client, admin_auth_headers, db_session, sample_admin_user):
-        """写操作（POST/PUT/DELETE）应记录审计日志"""
+    def test_write_operation_audited_with_user_info(self, client, admin_auth_headers, db_session, sample_admin_user):
+        """写操作应记录审计日志，并从Token提取用户信息"""
         response = client.post(
             "/api/v1/learners",
             json={
@@ -58,6 +58,8 @@ class TestAuditMiddleware:
         assert log.method == "POST"
         assert "/learners" in log.path
         assert log.status_code in (200, 201)
+        assert log.user_id == sample_admin_user.id
+        assert log.username == sample_admin_user.username
 
     def test_health_check_not_audited(self, client, db_session):
         """健康检查不应记录审计日志"""
@@ -80,47 +82,19 @@ class TestAuditMiddleware:
         ).all()
         assert len(logs) == 0
 
-    def test_user_info_extracted_from_token(self, client, admin_auth_headers, db_session, sample_admin_user):
-        """带Token的请求应提取用户信息"""
-        response = client.post(
-            "/api/v1/learners",
-            json={
-                "user_id": sample_admin_user.id,
-                "real_name": "Token提取测试",
-                "display_name": "TokenTest001",
-                "education_level": "bachelor",
-                "major": "软件工程",
-                "school": "测试大学",
-                "graduation_year": 2021,
-                "current_position": "后端工程师",
-                "years_of_experience": 1,
-            },
-            headers=admin_auth_headers,
-        )
-        assert response.status_code in (200, 201)
-
-        logs = db_session.query(AuditLog).filter(
-            AuditLog.action == "CREATE",
-            AuditLog.resource_type == "learner",
-        ).all()
-        assert len(logs) >= 1
-        log = logs[-1]
-        assert log.user_id == sample_admin_user.id
-        assert log.username == sample_admin_user.username
-
 
 class TestAuditQueryAPI:
     """审计日志查询API测试"""
 
-    def test_get_logs_requires_admin(self, client, auth_headers):
-        """非管理员不能查询审计日志"""
-        response = client.get("/api/v1/audit/logs", headers=auth_headers)
-        assert response.status_code == 403
-
-    def test_get_logs_requires_auth(self, client):
-        """未登录不能查询审计日志"""
-        response = client.get("/api/v1/audit/logs")
-        assert response.status_code == 401
+    @pytest.mark.parametrize("headers, expected_status", [
+        ("auth_headers", 403),
+        (None, 401),
+    ])
+    def test_get_logs_requires_permission(self, client, request, headers, expected_status):
+        """查询审计日志需要权限：非管理员返回403，未认证返回401"""
+        hdrs = request.getfixturevalue(headers) if headers else {}
+        response = client.get("/api/v1/audit/logs", headers=hdrs)
+        assert response.status_code == expected_status
 
     def test_get_logs_success(self, client, admin_auth_headers, db_session):
         """管理员可分页查询审计日志"""

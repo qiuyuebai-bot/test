@@ -280,25 +280,23 @@ class TestLearnerPermission:
 class TestLearnerProfileProperties:
     """学习者画像属性测试"""
 
-    def test_average_ability(self, sample_learner_profile: LearnerProfile):
-        """测试平均能力计算"""
+    def test_computed_properties(self, sample_learner_profile: LearnerProfile):
+        """测试计算属性：平均能力、综合能力、能力画像、学习阶段标签"""
+        # 平均能力
         avg = sample_learner_profile.average_ability
-        expected = (75 + 80 + 70 + 60 + 65 + 72) / 6
-        assert abs(avg - expected) < 0.01
+        expected_avg = (75 + 80 + 70 + 60 + 65 + 72) / 6
+        assert abs(avg - expected_avg) < 0.01
 
-    def test_comprehensive_ability(self, sample_learner_profile: LearnerProfile):
-        """测试综合能力计算"""
+        # 综合能力
         comp = sample_learner_profile.comprehensive_ability
         assert comp > 0
 
-    def test_ability_profile(self, sample_learner_profile: LearnerProfile):
-        """测试能力画像字典"""
+        # 能力画像字典
         profile = sample_learner_profile.ability_profile
         assert "theoretical_foundation" in profile
         assert "average" in profile
         assert "comprehensive" in profile
 
-    def test_learning_phase_label(self, sample_learner_profile: LearnerProfile):
-        """测试学习阶段标签"""
+        # 学习阶段标签
         label = sample_learner_profile.learning_phase_label
         assert label == "成长期"

@@ -1,5 +1,6 @@
 """Focused tests for strict LLM parsing and deterministic fallback behavior."""
 import json
+import logging
 import httpx
 import pytest
 
@@ -151,6 +152,26 @@ def test_generation_rejects_llm_placeholder_questions(monkeypatch):
     assert "basic题" not in result["content"]
 
 
+def test_generation_allows_answer_terms_in_explanation():
+    question = LLMGenerator._normalize_question({
+        "type": "single",
+        "question": "反向传播中，链式法则主要用于什么？",
+        "options": [
+            "把复合函数的梯度拆成局部梯度的乘积",
+            "把训练数据随机分成多个批次",
+            "把模型参数全部初始化为零",
+            "把连续特征转换成离散标签",
+        ],
+        "correct_answers": ["A"],
+        "difficulty_level": 3,
+        "explanation": "正确答案是 A，因为链式法则会逐层传递梯度；其他干扰项描述的是数据处理或初始化操作。",
+        "knowledge_points": ["链式法则"],
+    })
+
+    assert question["correct_answers"] == [0]
+    assert "干扰项" in question["explanation"]
+
+
 def test_diagnosis_preserves_rule_scores_without_api_key(monkeypatch):
     monkeypatch.setattr(LLMUtil, "is_available", classmethod(lambda cls: False))
     result = DiagnosisAgent().execute({"learner_profile": {"theoretical_foundation": 80}})
@@ -198,6 +219,45 @@ def test_llm_question_generation_allows_ten_questions(monkeypatch):
     assert sum(question["type"] == "multiple" for question in result) == 3
     assert result[2]["correctIndex"] == [0, 2]
     assert result[0]["generation_method"] == "deepseek"
+
+
+def test_llm_question_generation_retries_with_new_variation_seed(monkeypatch, caplog):
+    monkeypatch.setattr(LLMUtil, "is_available", classmethod(lambda cls: True))
+    calls = []
+
+    def fake_generate(cls, diagnosis, knowledge, profile, topic, **kwargs):
+        calls.append(kwargs["variation_seed"])
+        if len(calls) == 1:
+            raise LLMResponseError("question contains placeholder text")
+        return {
+            "content_json": {
+                "basic_questions": [{
+                    "type": "single",
+                    "question": "链式法则如何帮助计算深层网络的梯度？",
+                    "options": ["逐层相乘局部梯度", "随机删除参数", "改变标签格式", "跳过前向传播"],
+                    "correct_answers": [0],
+                    "difficulty": 3,
+                    "explanation": "链式法则将损失对参数的梯度拆分为各层局部梯度并逐层传递。",
+                    "knowledge_points": ["链式法则"],
+                }],
+                "advanced_questions": [],
+            }
+        }
+
+    monkeypatch.setattr(LLMGenerator, "generate_exercises", classmethod(fake_generate))
+    caplog.set_level(logging.WARNING)
+
+    result = LLMQuestionGenerator.generate_question_set(
+        topic="反向传播",
+        difficulty=3,
+        count=1,
+        variation_seed="seed-42",
+    )
+
+    assert len(result) == 1
+    assert calls[0] == "seed-42"
+    assert calls[1].startswith("seed-42-retry-")
+    assert "第 1/2 次失败" in caplog.text
 
 
 def test_llm_exercise_generation_uses_variation_and_no_cache(monkeypatch):

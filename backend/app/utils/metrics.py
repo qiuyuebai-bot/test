@@ -218,6 +218,59 @@ class MetricsUtil:
         logger.debug(f"知识点覆盖率: 总切片={total_slices}, 已索引={indexed_slices}, rate={rate}%")
         
         return round(rate, 2)
+
+    @staticmethod
+    def calculate_knowledge_index_coverage_rate(
+        db: Session,
+        industry: Optional[str] = None,
+    ) -> Optional[float]:
+        """Return the live vector-index coverage of knowledge slices.
+
+        System-level dashboards must use the same source as the readiness
+        checks.  A missing knowledge base is represented by ``None`` instead
+        of ``0`` so callers can distinguish "no data" from a failed index.
+        """
+        from app.models import KnowledgeSlice
+
+        query = db.query(KnowledgeSlice)
+        if industry:
+            query = query.filter(KnowledgeSlice.doc.has(industry=industry))
+
+        total_slices = query.count()
+        if total_slices == 0:
+            return None
+
+        indexed_slices = query.filter(KnowledgeSlice.is_indexed == True).count()
+        return round(indexed_slices / total_slices * 100, 2)
+
+    @staticmethod
+    def calculate_learning_blind_spot_coverage_rate(db: Session) -> Optional[float]:
+        """Return how many learner blind spots are covered by generated content.
+
+        This is intentionally separate from knowledge-index coverage.  The
+        two values answer different questions and must not share a field name.
+        """
+        from app.models import LearnerProfile, LearningResource
+
+        learner_rows = db.query(
+            LearnerProfile.knowledge_blind_areas,
+        ).all()
+        blind_areas = [
+            area
+            for (areas,) in learner_rows
+            for area in (areas or [])
+        ]
+        if not blind_areas:
+            return None
+
+        contents = [
+            content or ""
+            for (content,) in db.query(LearningResource.content).all()
+        ]
+        covered = sum(
+            1 for area in blind_areas if any(area in content for content in contents)
+        )
+        return round(covered / len(blind_areas) * 100, 2)
     
     @staticmethod
     def calculate_all_metrics(db: Session) -> Dict[str, float]:

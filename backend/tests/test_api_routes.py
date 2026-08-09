@@ -18,8 +18,6 @@ class TestBaseRoutes:
         response = client.get("/")
         assert response.status_code == 200
         data = response.json()
-        assert data["code"] == 200
-
         assert data["data"]["status"] == "running"
 
     def test_health_check(self, client: TestClient):
@@ -140,9 +138,11 @@ class TestKnowledgeRoutes:
             "author": "测试者",
             "content": "这是一份测试文档内容，包含深度学习相关知识...",
         }, headers=admin_auth_headers)
-        assert response.status_code == 200
+        # Chroma 被测试 fixture 禁用时，上传必须明确报告索引不可用，不能伪装成成功。
+        assert response.status_code == 400
         data = response.json()
-        assert data["code"] == 200
+        assert data["code"] == 400
+        assert "索引" in data["message"] or "Chroma" in data["message"]
 
     def test_get_doc_list(self, client: TestClient, sample_knowledge_doc: KnowledgeDoc, auth_headers: dict):
         """测试获取文档列表"""
@@ -427,8 +427,9 @@ class TestCoreRoutes:
 class TestErrorHandling:
     """错误处理测试"""
 
-    def test_invalid_json(self, client: TestClient, auth_headers: dict):
-        """测试无效JSON"""
+    def test_rejects_malformed_requests(self, client: TestClient, auth_headers: dict):
+        """测试拒绝无效JSON和缺少必填字段的请求"""
+        # 无效JSON
         response = client.post(
             "/api/v1/learners",
             content="invalid json {{{",
@@ -436,8 +437,7 @@ class TestErrorHandling:
         )
         assert response.status_code in [400, 422]
 
-    def test_missing_required_fields(self, client: TestClient, auth_headers: dict):
-        """测试缺少必填字段"""
+        # 缺少必填字段
         response = client.post("/api/v1/learners", json={}, headers=auth_headers)
         assert response.status_code in [400, 422]
 

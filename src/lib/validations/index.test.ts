@@ -17,16 +17,12 @@ describe('loginSchema', () => {
   it('accepts a valid username/password', () => {
     expect(valid(loginSchema, { username: 'alice', password: 'secret1' })).toBe(true)
   })
-  it('rejects username shorter than 2 chars', () => {
+  it('rejects invalid usernames', () => {
     expect(valid(loginSchema, { username: 'a', password: 'secret1' })).toBe(false)
-  })
-  it('rejects password shorter than 6 chars', () => {
-    expect(valid(loginSchema, { username: 'alice', password: '12345' })).toBe(false)
-  })
-  it('rejects username over 50 chars', () => {
     expect(valid(loginSchema, { username: 'a'.repeat(51), password: 'secret1' })).toBe(false)
   })
-  it('rejects missing fields', () => {
+  it('rejects invalid passwords', () => {
+    expect(valid(loginSchema, { username: 'alice', password: '12345' })).toBe(false)
     expect(valid(loginSchema, { username: '', password: '' })).toBe(false)
   })
 })
@@ -42,11 +38,8 @@ describe('registerSchema', () => {
     expect(valid(registerSchema, ok)).toBe(true)
   })
 
-  it('rejects short usernames', () => {
+  it('rejects invalid username or password', () => {
     expect(valid(registerSchema, { ...ok, username: 'ab' })).toBe(false)
-  })
-
-  it('rejects passwords without digits', () => {
     expect(valid(registerSchema, { ...ok, password: 'password', confirmPassword: 'password' })).toBe(false)
   })
 
@@ -78,16 +71,12 @@ describe('changePasswordSchema', () => {
   it('accepts matching passwords with letter+digit and >=8 chars', () => {
     expect(valid(changePasswordSchema, ok)).toBe(true)
   })
-  it('rejects when newPassword lacks a digit', () => {
+  it('rejects newPassword without required character types', () => {
     expect(valid(changePasswordSchema, { ...ok, newPassword: 'NoDigits', confirmPassword: 'NoDigits' })).toBe(false)
-  })
-  it('rejects when newPassword lacks a letter', () => {
     expect(valid(changePasswordSchema, { ...ok, newPassword: '12345678', confirmPassword: '12345678' })).toBe(false)
   })
-  it('rejects when newPassword shorter than 8', () => {
+  it('rejects mismatched or too-short passwords', () => {
     expect(valid(changePasswordSchema, { ...ok, newPassword: 'Ab1', confirmPassword: 'Ab1' })).toBe(false)
-  })
-  it('rejects when confirmPassword differs from newPassword', () => {
     expect(valid(changePasswordSchema, { ...ok, confirmPassword: 'different1' })).toBe(false)
   })
 })
@@ -115,10 +104,8 @@ describe('createLearnerSchema', () => {
     expect(valid(createLearnerSchema, { ...base, preferredDifficulty: 6 })).toBe(false)
     expect(valid(createLearnerSchema, { ...base, preferredDifficulty: 0 })).toBe(false)
   })
-  it('rejects realName shorter than 2', () => {
+  it('rejects missing or too-short fields', () => {
     expect(valid(createLearnerSchema, { ...base, realName: '张' })).toBe(false)
-  })
-  it('rejects missing targetIndustry', () => {
     expect(valid(createLearnerSchema, { realName: '张三', educationLevel: 'master', major: 'cs' })).toBe(false)
   })
 })

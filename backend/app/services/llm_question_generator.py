@@ -1,9 +1,13 @@
 """Validated dynamic tutoring questions backed by the shared LLM generator."""
+import logging
 import uuid
 from typing import Any, Dict, List
 
 from app.agents.llm_generator import LLMGenerator
 from app.utils.llm import LLMUtil
+
+
+logger = logging.getLogger(__name__)
 
 
 class LLMQuestionGenerator:
@@ -34,17 +38,35 @@ class LLMQuestionGenerator:
     ) -> List[Dict[str, Any]]:
         if not LLMUtil.is_available():
             raise RuntimeError("LLM is unavailable")
-        generated = LLMGenerator.generate_exercises(
-            {"recommended_difficulty": {"recommended_difficulty": difficulty}},
-            knowledge or [],
-            {},
-            topic,
-            question_count=count,
-            variation_seed=variation_seed,
-            excluded_questions=excluded_questions or [],
-            difficulty_standard=cls.difficulty_standard(difficulty),
-            multiple_choice_count=count // 3,
-        )
+        generated = None
+        for attempt in range(2):
+            attempt_seed = variation_seed
+            if attempt:
+                attempt_seed = f"{variation_seed or topic}-retry-{uuid.uuid4().hex[:8]}"
+            try:
+                generated = LLMGenerator.generate_exercises(
+                    {"recommended_difficulty": {"recommended_difficulty": difficulty}},
+                    knowledge or [],
+                    {},
+                    topic,
+                    question_count=count,
+                    variation_seed=attempt_seed,
+                    excluded_questions=excluded_questions or [],
+                    difficulty_standard=cls.difficulty_standard(difficulty),
+                    multiple_choice_count=count // 3,
+                )
+                break
+            except Exception as exc:
+                logger.warning(
+                    "[自适应导学] LLM 动态出题第 %d/2 次失败（主题=%s）：%s",
+                    attempt + 1,
+                    topic,
+                    exc,
+                )
+                if attempt == 1:
+                    raise
+        if generated is None:  # pragma: no cover - loop either returns or raises
+            raise RuntimeError("LLM question generation failed")
         questions = generated["content_json"].get("basic_questions", []) + generated["content_json"].get("advanced_questions", [])
         expected_multiple = count // 3
         actual_multiple = sum(question.get("type") == "multiple" for question in questions[:count])

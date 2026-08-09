@@ -29,37 +29,37 @@ from app.schemas.auth import LoginRequest, RegisterRequest, ChangePasswordReques
 class TestPasswordHashing:
     """密码哈希与验证测试"""
 
-    def test_hash_password(self):
-        """测试密码哈希"""
+    def test_hash_and_salt_uniqueness(self):
+        """测试密码哈希及相同密码加盐后的哈希唯一性"""
         password = "test_password_123"
         hashed = hash_password(password)
-        
+
+        # 哈希与原密码不同，且为bcrypt格式
         assert hashed != password
         assert hashed.startswith("$2b$")  # bcrypt格式
+
+        # 相同密码生成不同哈希（加盐）
+        same_password = "same_password"
+        hash1 = hash_password(same_password)
+        hash2 = hash_password(same_password)
+
+        assert hash1 != hash2
+        assert verify_password(same_password, hash1) is True
+        assert verify_password(same_password, hash2) is True
 
     def test_verify_password_correct(self):
         """测试正确密码验证"""
         password = "correct_password"
         hashed = hash_password(password)
-        
+
         assert verify_password(password, hashed) is True
 
     def test_verify_password_incorrect(self):
         """测试错误密码验证"""
         password = "correct_password"
         hashed = hash_password(password)
-        
-        assert verify_password("wrong_password", hashed) is False
 
-    def test_different_hashes_for_same_password(self):
-        """测试相同密码生成不同哈希（加盐）"""
-        password = "same_password"
-        hash1 = hash_password(password)
-        hash2 = hash_password(password)
-        
-        assert hash1 != hash2
-        assert verify_password(password, hash1) is True
-        assert verify_password(password, hash2) is True
+        assert verify_password("wrong_password", hashed) is False
 
 
 # ===========================================
@@ -69,22 +69,19 @@ class TestPasswordHashing:
 class TestJWTToken:
     """JWT Token生成与验证测试"""
 
-    def test_create_access_token(self):
-        """测试创建访问Token"""
+    def test_create_tokens(self):
+        """测试创建访问Token和刷新Token"""
         token_data = {"user_id": 1, "username": "test", "role": "learner"}
-        token = create_access_token(token_data)
-        
-        assert token is not None
-        assert isinstance(token, str)
-        assert len(token) > 0
 
-    def test_create_refresh_token(self):
-        """测试创建刷新Token"""
-        token_data = {"user_id": 1, "username": "test"}
-        token = create_refresh_token(token_data)
-        
-        assert token is not None
-        assert isinstance(token, str)
+        access_token = create_access_token(token_data)
+        assert access_token is not None
+        assert isinstance(access_token, str)
+        assert len(access_token) > 0
+
+        refresh_token_data = {"user_id": 1, "username": "test"}
+        refresh_token = create_refresh_token(refresh_token_data)
+        assert refresh_token is not None
+        assert isinstance(refresh_token, str)
 
     def test_decode_token(self):
         """测试解码Token"""
@@ -119,32 +116,29 @@ class TestJWTToken:
         assert payload["user_id"] == 1
         assert payload["type"] == "refresh"
 
-    def test_access_token_not_accepted_as_refresh(self):
-        """测试访问Token不被当作刷新Token"""
+    @pytest.mark.parametrize("create_func, verify_func", [
+        (create_access_token, verify_refresh_token),
+        (create_refresh_token, verify_access_token),
+    ])
+    def test_cross_type_token_rejected(self, create_func, verify_func):
+        """测试跨类型Token被拒绝（访问Token不能当刷新Token用，反之亦然）"""
         token_data = {"user_id": 1}
-        token = create_access_token(token_data)
-        payload = verify_refresh_token(token)
-        
+        token = create_func(token_data)
+        payload = verify_func(token)
+
         assert payload is None
 
-    def test_refresh_token_not_accepted_as_access(self):
-        """测试刷新Token不被当作访问Token"""
-        token_data = {"user_id": 1}
-        token = create_refresh_token(token_data)
-        payload = verify_access_token(token)
-        
-        assert payload is None
-
-    def test_invalid_token(self):
-        """测试无效Token"""
+    def test_invalid_and_empty_tokens(self):
+        """测试无效和空Token被所有验证函数拒绝"""
+        # 无效Token
         assert decode_token("invalid_token_123") is None
         assert verify_access_token("invalid_token") is None
         assert verify_refresh_token("invalid_token") is None
 
-    def test_empty_token(self):
-        """测试空Token"""
+        # 空Token
         assert decode_token("") is None
         assert verify_access_token("") is None
+        assert verify_refresh_token("") is None
 
     def test_create_tokens_for_user(self, sample_user: User):
         """测试为用户创建Token对"""
@@ -214,12 +208,6 @@ class TestAuthSchemas:
         assert req.username == "test_user"
         assert req.password == "pass123"
 
-    def test_login_request_username_too_short(self):
-        """测试用户名太短"""
-        from pydantic import ValidationError
-        with pytest.raises(ValidationError):
-            LoginRequest(username="ab", password="pass123")
-
     def test_register_request_valid(self):
         """测试注册请求验证"""
         req = RegisterRequest(
@@ -230,24 +218,16 @@ class TestAuthSchemas:
         assert req.username == "new_user"
         assert req.email == "user@example.com"
 
-    def test_register_request_invalid_username(self):
-        """测试非法用户名"""
+    @pytest.mark.parametrize("req_cls, data", [
+        (LoginRequest, {"username": "ab", "password": "pass123"}),
+        (RegisterRequest, {"username": "user name!", "password": "password123"}),
+        (RegisterRequest, {"username": "valid_user", "password": "password123", "email": "invalid-email"}),
+    ])
+    def test_register_request_rejects_invalid_input(self, req_cls, data):
+        """测试请求拒绝非法输入（登录用户名过短、注册非法用户名、注册非法邮箱）"""
         from pydantic import ValidationError
         with pytest.raises(ValidationError):
-            RegisterRequest(
-                username="user name!",
-                password="password123",
-            )
-
-    def test_register_request_invalid_email(self):
-        """测试非法邮箱"""
-        from pydantic import ValidationError
-        with pytest.raises(ValidationError):
-            RegisterRequest(
-                username="valid_user",
-                password="password123",
-                email="invalid-email",
-            )
+            req_cls(**data)
 
     def test_change_password_weak_password(self):
         """测试弱密码"""
@@ -465,29 +445,26 @@ class TestAuthEdgeCases:
         
         assert response.status_code == 401
 
-    def test_expired_token(self, client: TestClient, sample_user: User):
-        """测试过期Token"""
+    def test_invalid_token_variants_rejected(self, client: TestClient, sample_user: User):
+        """测试过期Token和格式错误Token均被拒绝（401）"""
         from datetime import timedelta
         from app.utils.auth import create_access_token
-        
+
+        # 创建已过期的Token
         token_data = {
             "user_id": sample_user.id,
             "username": sample_user.username,
             "role": "learner",
         }
-        # 创建已过期的Token
         expired_token = create_access_token(token_data, expires_delta=timedelta(seconds=-1))
-        
-        response = client.get("/api/v1/auth/me", headers={
+
+        expired_response = client.get("/api/v1/auth/me", headers={
             "Authorization": f"Bearer {expired_token}"
         })
-        
-        assert response.status_code == 401
+        assert expired_response.status_code == 401
 
-    def test_malformed_token(self, client: TestClient):
-        """测试格式错误的Token"""
-        response = client.get("/api/v1/auth/me", headers={
+        # 格式错误的Token
+        malformed_response = client.get("/api/v1/auth/me", headers={
             "Authorization": "NotBearer token"
         })
-        
-        assert response.status_code == 401
+        assert malformed_response.status_code == 401

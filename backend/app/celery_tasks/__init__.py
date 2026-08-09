@@ -7,6 +7,7 @@ from app.celery_app import (
     batch_generation_task,
     generate_resources_task,
     batch_generate_resources_task,
+    update_metrics_task,
 )
 
 __all__ = [
@@ -15,4 +16,5 @@ __all__ = [
     "batch_generation_task",
     "generate_resources_task",
     "batch_generate_resources_task",
+    "update_metrics_task",
 ]

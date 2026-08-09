@@ -9,7 +9,7 @@
 - 加载顺序：.env（基础）→ .env.{APP_ENV}（环境覆盖）→ 环境变量（最高优先级）
 """
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from pydantic import Field, field_validator, ValidationInfo
+from pydantic import Field, field_validator, ValidationInfo, model_validator
 import os
 import secrets
 from pathlib import Path
@@ -338,6 +338,35 @@ class Settings(BaseSettings):
             if not ext.startswith("."):
                 raise ValueError(f"ALLOWED_UPLOAD_EXTENSIONS 中 '{ext}' 必须以点号开头，如 '.txt,.pdf'")
         return v
+
+    @field_validator("DATABASE_URL", mode="after")
+    @classmethod
+    def resolve_sqlite_database_path(cls, value: str) -> str:
+        """Resolve relative SQLite URLs against the project root, not the process cwd."""
+        if not value.startswith("sqlite:///"):
+            return value
+        raw_path = value[len("sqlite:///"):]
+        if raw_path.startswith("./"):
+            raw_path = raw_path[2:]
+        path = Path(raw_path)
+        if not path.is_absolute():
+            path = BASE_DIR / path
+        return f"sqlite:///{path.resolve().as_posix()}"
+
+    @model_validator(mode="after")
+    def resolve_storage_paths(self):
+        """Keep all local storage paths in the same project data root."""
+        for field_name in (
+            "CHROMA_DB_PATH",
+            "UPLOAD_DIR",
+            "KNOWLEDGE_DOC_DIR",
+            "RESOURCE_OUTPUT_DIR",
+            "LOG_DIR",
+        ):
+            value = Path(getattr(self, field_name))
+            if not value.is_absolute():
+                setattr(self, field_name, str((BASE_DIR / value).resolve()))
+        return self
 
     model_config = SettingsConfigDict(
         env_file=[BACKEND_DIR / ".env", BACKEND_DIR / f".env.{_APP_ENV}"],

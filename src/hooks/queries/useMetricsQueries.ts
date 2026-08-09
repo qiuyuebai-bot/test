@@ -4,14 +4,15 @@ import type { SystemMetrics } from '../../types'
 
 type SystemMetricsRaw = Partial<SystemMetrics> & {
   hallucinationRate?: number | null
-  resourceMatchAccuracy?: number
+  resourceMatchAccuracy?: number | null
 }
 
 function normalizeMetrics(m: SystemMetricsRaw): SystemMetrics {
   return {
     ...m,
     hallucinationRate: m.hallucinationRate ?? null,
-    resourceMatchAccuracy: m.resourceMatchAccuracy ?? 0,
+    resourceMatchAccuracy: m.resourceMatchAccuracy ?? null,
+    knowledgeCoverageRate: m.knowledgeCoverageRate ?? null,
   } as SystemMetrics
 }
 

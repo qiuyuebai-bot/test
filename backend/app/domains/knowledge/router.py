@@ -8,6 +8,7 @@ from typing import Optional
 from loguru import logger
 import os
 import re
+from pathlib import Path
 
 from app.config import settings
 from app.database import get_db
@@ -24,6 +25,7 @@ from app.domains.knowledge.schemas import (
     KnowledgeUploadResponse,
 )
 from app.domains.knowledge.service import KnowledgeService
+from app.domains.knowledge.parser import KnowledgeDocumentParser
 from app.services.common import BaseService
 from app.utils.auth import require_admin, get_current_user, CurrentUser
 
@@ -61,6 +63,8 @@ async def upload_document(
     """
     try:
         content_type = request.headers.get("content-type", "")
+        raw_bytes = b""
+        supplied_text = None
         
         if "application/json" in content_type:
             body = await request.json()
@@ -72,7 +76,10 @@ async def upload_document(
             text_content = body.get("content", "")
             file_name = body.get("file_name", f"{title}.txt")
             file_type = body.get("file_type", "txt")
-            file_size = len(text_content.encode("utf-8"))
+            if not isinstance(text_content, str):
+                return bad_request("文档内容必须是文本")
+            raw_bytes = text_content.encode("utf-8")
+            supplied_text = text_content
         else:
             form = await request.form()
             file = form.get("file")
@@ -101,12 +108,15 @@ async def upload_document(
                         )
                     chunks.append(chunk)
                 file_content = b"".join(chunks)
-                text_content = file_content.decode("utf-8", errors="replace")
+                raw_bytes = file_content
             else:
                 text_content = form.get("content", "")
                 file_name = form.get("file_name", "content.txt")
                 file_type = form.get("file_type", "txt")
-                file_size = len(text_content.encode("utf-8"))
+                if not isinstance(text_content, str):
+                    return bad_request("文档内容必须是文本")
+                raw_bytes = text_content.encode("utf-8")
+                supplied_text = text_content
         
         # 文件名安全处理：移除路径遍历字符和特殊字符
         file_name = os.path.basename(file_name)
@@ -115,6 +125,9 @@ async def upload_document(
             file_name = "document.txt"
         
         # 文件大小验证
+        file_size = len(raw_bytes)
+        if file_size <= 0:
+            return bad_request("文档内容不能为空")
         if file_size > settings.MAX_UPLOAD_SIZE:
             max_size_mb = settings.MAX_UPLOAD_SIZE // (1024 * 1024)
             file_size_mb = round(file_size / (1024 * 1024), 2)
@@ -128,6 +141,15 @@ async def upload_document(
             return bad_request(
                 f"不支持的文件类型: {ext}，允许的类型: {', '.join(settings.allowed_upload_extensions_list)}"
             )
+
+        try:
+            text_content = KnowledgeDocumentParser.extract(
+                file_name,
+                raw_bytes,
+                fallback_text=supplied_text,
+            )
+        except ValueError as exc:
+            return bad_request(str(exc))
         
         # 验证行业分类
         if industry not in KnowledgeService.SUPPORTED_INDUSTRIES:
@@ -152,18 +174,29 @@ async def upload_document(
         if doc is None:
             return bad_request(result_msg)
         
+        try:
+            Path(result_msg).write_bytes(raw_bytes)
+        except OSError as exc:
+            doc.status = "error"
+            doc.error_message = "原始文档保存失败，请检查存储目录权限"
+            db.commit()
+            logger.error(f"原始文档保存失败: doc_id={doc.id}, error={exc}")
+            return bad_request(doc.error_message)
+
         # 同步处理文档（实际生产中应使用Celery异步任务）
         process_success = KnowledgeService.process_doc(db, doc.id, text_content)
         
         if not process_success:
-            return bad_request("文档处理失败，请检查日志")
+            return bad_request(doc.error_message or "文档处理失败，请检查日志")
         
         response = KnowledgeUploadResponse(
             doc_id=doc.id,
             file_name=doc.file_name,
             file_size=doc.file_size,
-            status="ready",
+            status=doc.status,
             message="文档上传并索引成功",
+            slice_count=doc.slice_count,
+            indexed_slice_count=doc.indexed_slice_count,
         )
         
         return success(response, "文档上传成功")
@@ -230,6 +263,7 @@ def get_doc_list(
             created_at=doc.created_at,
             updated_at=doc.updated_at,
             indexed_at=doc.indexed_at,
+            error_message=doc.error_message,
         ))
     
     return paged_success(
@@ -282,6 +316,7 @@ def get_doc_detail(
         created_at=doc.created_at,
         updated_at=doc.updated_at,
         indexed_at=doc.indexed_at,
+        error_message=doc.error_message,
     )
     
     return success(response, "查询成功")
@@ -469,12 +504,19 @@ def reindex_doc(
     if not doc:
         return not_found("文档不存在")
     
-    # 模拟重新索引（实际应读取文件重新处理）
-    doc.status = "processing"
-    doc.process_progress = 0
-    db.commit()
-    
-    # 此处应触发异步任务
-    # process_knowledge_doc_task.delay(doc_id)
-    
-    return success({"task_id": doc_id, "message": "重新索引任务已提交"}, "处理中")
+    reindex_success, message = KnowledgeService.reindex_doc(db, doc_id)
+    if not reindex_success:
+        return bad_request(message)
+
+    db.refresh(doc)
+    return success(
+        {
+            "task_id": doc_id,
+            "doc_id": doc_id,
+            "status": doc.status,
+            "slice_count": doc.slice_count,
+            "indexed_slice_count": doc.indexed_slice_count,
+            "message": message,
+        },
+        message,
+    )

@@ -9,10 +9,7 @@ import {
   FileText,
   BarChart3,
   GraduationCap,
-  Building2,
-  Shield,
   FlaskConical,
-  Rocket,
   TrendingUp,
   Menu,
   Moon,
@@ -36,10 +33,7 @@ const navigation = [
 ]
 
 const secondaryNav = [
-  { name: '企业内训', href: '/enterprise', icon: Building2 },
-  { name: '隐私合规', href: '/privacy', icon: Shield },
-  { name: '系统测试', href: '/test', icon: FlaskConical },
-  { name: '部署说明', href: '/deployment', icon: Rocket },
+  { name: '运行监控', href: '/monitoring', icon: FlaskConical },
 ]
 
 export default function Layout() {

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { useStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import { agentApi, knowledgeApi } from '@/api'
@@ -11,7 +11,6 @@ import { PageSkeleton } from '@/components/Skeleton'
 import { SCORE_EXCELLENT_THRESHOLD } from '@/lib/constants'
 import {
   FlaskConical,
-  Play,
   CheckCircle2,
   XCircle,
   Database,
@@ -25,7 +24,7 @@ import {
 } from 'lucide-react'
 import type { AgentStatus, AgentTask, KnowledgeDoc } from '@/types'
 
-interface TestSuite {
+interface TaskGroup {
   id: string
   name: string
   cases: number
@@ -43,53 +42,68 @@ interface KnowledgeSliceGroup {
 }
 
 const TASK_TYPE_LABEL: Record<string, string> = {
-  diagnosis: '学情诊断测试',
-  generation: '资源生成测试',
-  review: '内容审核测试',
-  full_flow: '全流程集成测试',
+  diagnosis: '学情诊断任务',
+  generation: '资源生成任务',
+  review: '内容审核任务',
+  full_flow: '全流程集成任务',
 }
 
 export default function SystemTest() {
-  const { systemMetrics, fetchSystemMetrics } = useStore(
+  const { systemMetrics, metricsError, metricsStatus, fetchSystemMetrics } = useStore(
     useShallow((s) => ({
       systemMetrics: s.systemMetrics,
+      metricsError: s.metricsError,
+      metricsStatus: s.metricsStatus,
       fetchSystemMetrics: s.fetchSystemMetrics,
     }))
   )
-  const [isRunning, setIsRunning] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [dataWarning, setDataWarning] = useState<string | null>(null)
 
   const [hallucinationRate, setHallucinationRate] = useState<number | null>(null)
-  const [performance, setPerformance] = useState<{ totalTasks: number; successCount: number; failedCount: number } | null>(null)
+  const [performance, setPerformance] = useState<{
+    totalTasks: number
+    successCount: number
+    failedCount: number
+    successRate: number | null
+  } | null>(null)
   const [agents, setAgents] = useState<AgentStatus[]>([])
-  const [testSuites, setTestSuites] = useState<TestSuite[]>([])
+  const [taskGroups, setTaskGroups] = useState<TaskGroup[]>([])
   const [recentResults, setRecentResults] = useState<AgentTask[]>([])
   const [knowledgeGroups, setKnowledgeGroups] = useState<KnowledgeSliceGroup[]>([])
-
-  const runTestsTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  useEffect(() => {
-    return () => {
-      if (runTestsTimeoutRef.current) {
-        clearTimeout(runTestsTimeoutRef.current)
-        runTestsTimeoutRef.current = null
-      }
-    }
-  }, [])
 
   const loadData = useCallback(async () => {
     setLoading(true)
     setError(null)
+    setDataWarning(null)
     try {
-      const [, hallucMetrics, perfMetrics, agentStatus, taskListResp, knowledgeResp] = await Promise.all([
-        fetchSystemMetrics().catch(() => null),
-        agentApi.getHallucinationMetrics().catch(() => null),
-        agentApi.getPerformanceMetrics().catch(() => null),
-        agentApi.getAllStatus().catch(() => ({ agents: [] as AgentStatus[], total: 0 })),
-        agentApi.getTaskList({ page: 1, pageSize: 10 }).catch(() => ({ items: [] as AgentTask[], total: 0, page: 1, pageSize: 10, totalPages: 0 })),
-        knowledgeApi.getList({ page: 1, pageSize: 100 }).catch(() => ({ items: [] as KnowledgeDoc[], total: 0, page: 1, pageSize: 100, totalPages: 0 })),
+      const results = await Promise.allSettled([
+        fetchSystemMetrics(),
+        agentApi.getHallucinationMetrics(),
+        agentApi.getPerformanceMetrics(),
+        agentApi.getAllStatus(),
+        agentApi.getTaskList({ page: 1, pageSize: 100 }),
+        knowledgeApi.getList({ page: 1, pageSize: 100 }),
       ])
+      const failedCount = results.filter((result) => result.status === 'rejected').length
+      if (failedCount === results.length) {
+        throw new Error('运行监控数据暂时不可用，请稍后重试')
+      }
+      if (failedCount > 0) {
+        setDataWarning(`${failedCount} 个运行数据源暂时不可用，当前仅显示可用数据`)
+      }
+
+      const [, hallucResult, performanceResult, agentResult, taskResult, knowledgeResult] = results
+      const hallucMetrics = hallucResult.status === 'fulfilled' ? hallucResult.value : null
+      const perfMetrics = performanceResult.status === 'fulfilled' ? performanceResult.value : null
+      const agentStatus = agentResult.status === 'fulfilled' ? agentResult.value : { agents: [] as AgentStatus[], total: 0 }
+      const taskListResp = taskResult.status === 'fulfilled'
+        ? taskResult.value
+        : { items: [] as AgentTask[], total: 0, page: 1, pageSize: 100, totalPages: 0 }
+      const knowledgeResp = knowledgeResult.status === 'fulfilled'
+        ? knowledgeResult.value
+        : { items: [] as KnowledgeDoc[], total: 0, page: 1, pageSize: 100, totalPages: 0 }
 
       // 幻觉率
       if (hallucMetrics?.hallucinationRate !== undefined) {
@@ -102,21 +116,22 @@ export default function SystemTest() {
           totalTasks: perfMetrics.totalTasks,
           successCount: perfMetrics.successCount,
           failedCount: perfMetrics.failedCount,
+          successRate: perfMetrics.successRate,
         })
       }
 
       // Agent 状态
       setAgents((agentStatus as { agents: AgentStatus[] }).agents || [])
 
-      // 任务列表作为"最近测试结果"
+      // 任务列表作为最近运行结果，不作为代码测试结果
       setRecentResults((taskListResp as { items: AgentTask[] }).items || [])
 
-      // 按 task_type 聚合测试套件
+      // 按 task_type 聚合最近任务类型，仅用于运行概览
       const taskItems = (taskListResp as { items: AgentTask[] }).items || []
-      const suitesMap = new Map<string, TestSuite>()
+      const suitesMap = new Map<string, TaskGroup>()
       taskItems.forEach((t) => {
         const key = t.taskType || 'unknown'
-        const label = TASK_TYPE_LABEL[key] || `${key} 测试`
+        const label = TASK_TYPE_LABEL[key] || `${key} 任务`
         if (!suitesMap.has(key)) {
           suitesMap.set(key, {
             id: key,
@@ -134,7 +149,7 @@ export default function SystemTest() {
         if (s.failed > 0) s.status = 'failed'
         if (t.status === 'running' || t.status === 'pending') s.status = 'pending'
       })
-      setTestSuites(Array.from(suitesMap.values()))
+      setTaskGroups(Array.from(suitesMap.values()))
 
       // 知识库切片按 industry 聚合
       const docs = (knowledgeResp as { items: KnowledgeDoc[] }).items || []
@@ -161,18 +176,9 @@ export default function SystemTest() {
     loadData()
   }, [loadData])
 
-  const totalCases = testSuites.reduce((sum, s) => sum + s.cases, 0)
-  const totalPassed = testSuites.reduce((sum, s) => sum + s.passed, 0)
-  const totalFailed = testSuites.reduce((sum, s) => sum + s.failed, 0)
-  const passRate = totalCases > 0 ? Math.round((totalPassed / totalCases) * 100) : 0
-
-  const handleRunTests = async () => {
-    setIsRunning(true)
-    // 重新拉取最新任务状态
-    await loadData()
-    if (runTestsTimeoutRef.current) clearTimeout(runTestsTimeoutRef.current)
-    runTestsTimeoutRef.current = setTimeout(() => setIsRunning(false), 800)
-  }
+  const totalPassed = performance?.successCount ?? 0
+  const totalFailed = performance?.failedCount ?? 0
+  const passRate = performance?.successRate ?? null
 
   if (loading) return <PageSkeleton type="default" />
 
@@ -183,11 +189,16 @@ export default function SystemTest() {
   // 三大核心量化指标（来自真实系统指标）
   const hallucinationSampleSufficient = systemMetrics?.hasSufficientSample === true
   const hallucinationRateValue = hallucinationRate ?? systemMetrics?.hallucinationRate ?? null
-  const resourceMatchAccuracy = systemMetrics?.resourceMatchAccuracy || 0
-  const knowledgeCoverageRate = systemMetrics?.knowledgeCoverageRate || 0
+  const resourceMatchAccuracy = systemMetrics?.resourceMatchAccuracy ?? null
+  const knowledgeCoverageRate = systemMetrics?.knowledgeCoverageRate ?? null
 
   return (
     <div className="space-y-5 animate-fade-in">
+      {(dataWarning || (metricsStatus === 'partial' && metricsError)) && (
+        <div className="rounded-lg border border-warning/30 bg-warning/10 px-4 py-3 text-sm text-warning">
+          {dataWarning || metricsError}
+        </div>
+      )}
       {/* 三大核心量化指标 */}
       <div className="grid grid-cols-3 gap-3">
         <Card padding="md" className="border-l-4 border-l-warning">
@@ -211,7 +222,9 @@ export default function SystemTest() {
               <Target className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <p className="text-xl font-semibold metric-number text-primary">{resourceMatchAccuracy.toFixed(1)}%</p>
+              <p className="text-xl font-semibold metric-number text-primary">
+                {resourceMatchAccuracy === null ? '暂无数据' : `${resourceMatchAccuracy.toFixed(1)}%`}
+              </p>
               <p className="text-xs text-text-tertiary">资源匹配准确率</p>
             </div>
           </div>
@@ -222,7 +235,9 @@ export default function SystemTest() {
               <Users className="w-5 h-5 text-success" />
             </div>
             <div>
-              <p className="text-xl font-semibold metric-number text-success">{knowledgeCoverageRate.toFixed(1)}%</p>
+              <p className="text-xl font-semibold metric-number text-success">
+                {knowledgeCoverageRate === null ? '暂无数据' : `${knowledgeCoverageRate.toFixed(1)}%`}
+              </p>
               <p className="text-xs text-text-tertiary">知识点覆盖率</p>
             </div>
           </div>
@@ -235,32 +250,19 @@ export default function SystemTest() {
           <div>
             <h2 className="text-lg font-semibold text-text-primary flex items-center gap-2">
               <FlaskConical className="w-5 h-5 text-text-secondary" />
-              系统单元测试
+              Agent 运行监控
             </h2>
             <p className="text-sm text-text-secondary mt-1">
-              基于 Agent 任务执行记录与知识库真实统计
+              展示 Agent 任务执行与知识库索引状态；此页面不执行 pytest 或前端单元测试
               {performance && (
                 <span className="ml-2 text-text-tertiary">· 总任务 {performance.totalTasks} · 成功 {performance.successCount} · 失败 {performance.failedCount}</span>
               )}
             </p>
           </div>
           <div className="flex items-center gap-2">
-            <Button variant="outline" onClick={() => loadData()}>
+            <Button variant="outline" onClick={() => void loadData()}>
               <RefreshCw className="w-4 h-4" />
-              刷新
-            </Button>
-            <Button variant="primary" onClick={handleRunTests} loading={isRunning}>
-              {isRunning ? (
-                <>
-                  <RefreshCw className="w-4 h-4 animate-spin" />
-                  运行中...
-                </>
-              ) : (
-                <>
-                  <Play className="w-4 h-4" />
-                  重新统计
-                </>
-              )}
+              刷新数据
             </Button>
           </div>
         </div>
@@ -274,8 +276,8 @@ export default function SystemTest() {
               <FlaskConical className="w-5 h-5 text-info" />
             </div>
             <div>
-              <p className="text-xl font-semibold metric-number text-text-primary">{testSuites.length}</p>
-              <p className="text-xs text-text-tertiary">测试套件</p>
+              <p className="text-xl font-semibold metric-number text-text-primary">{taskGroups.length}</p>
+              <p className="text-xs text-text-tertiary">任务类型</p>
             </div>
           </div>
         </Card>
@@ -285,8 +287,8 @@ export default function SystemTest() {
               <Zap className="w-5 h-5 text-text-secondary" />
             </div>
             <div>
-              <p className="text-xl font-semibold metric-number text-text-primary">{totalCases}</p>
-              <p className="text-xs text-text-tertiary">总测试用例</p>
+              <p className="text-xl font-semibold metric-number text-text-primary">{recentResults.length}</p>
+              <p className="text-xs text-text-tertiary">最近任务数</p>
             </div>
           </div>
         </Card>
@@ -307,8 +309,8 @@ export default function SystemTest() {
               <Zap className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <p className="text-xl font-semibold metric-number text-primary">{passRate}%</p>
-              <p className="text-xs text-text-tertiary">通过率</p>
+              <p className="text-xl font-semibold metric-number text-primary">{passRate === null ? '暂无数据' : `${passRate}%`}</p>
+              <p className="text-xs text-text-tertiary">任务成功率</p>
             </div>
           </div>
         </Card>
@@ -316,7 +318,7 @@ export default function SystemTest() {
 
       {/* 主内容区 */}
       <div className="grid grid-cols-12 gap-4">
-        {/* 左侧：知识库切片管理 & 测试套件 */}
+        {/* 左侧：知识库切片管理 & 任务类型 */}
         <div className="col-span-12 lg:col-span-8 space-y-4">
           {/* 知识库切片管理 */}
           <Card padding="none">
@@ -374,18 +376,18 @@ export default function SystemTest() {
             )}
           </Card>
 
-          {/* 测试套件列表 */}
+          {/* 任务类型概览 */}
           <Card padding="none">
             <div className="p-4 border-b border-border">
-              <h3 className="text-sm font-semibold text-text-primary">测试套件（按任务类型聚合）</h3>
+              <h3 className="text-sm font-semibold text-text-primary">任务类型概览（最近100条）</h3>
             </div>
-            {testSuites.length === 0 ? (
+            {taskGroups.length === 0 ? (
               <div className="p-6">
-                <EmptyState type="default" title="暂无测试套件" description="系统运行 Agent 任务后将自动统计测试结果" />
+                <EmptyState type="default" title="暂无任务类型数据" description="运行 Agent 任务后将显示统计结果" />
               </div>
             ) : (
               <div className="divide-y divide-border/30">
-                {testSuites.map((suite) => (
+                {taskGroups.map((suite) => (
                   <div key={suite.id} className="p-4 hover:bg-bg-secondary/30 transition-colors flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className={`w-9 h-9 rounded-lg flex items-center justify-center ${
@@ -402,7 +404,7 @@ export default function SystemTest() {
                       <div>
                         <p className="text-sm font-medium text-text-primary">{suite.name}</p>
                         <p className="text-xs text-text-tertiary">
-                          {suite.cases} 用例 · {suite.passed} 通过
+                          {suite.cases} 条任务 · {suite.passed} 成功
                           {suite.failed > 0 && ` · ${suite.failed} 失败`}
                         </p>
                       </div>

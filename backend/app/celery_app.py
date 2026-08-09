@@ -3,6 +3,7 @@ Celery 异步任务配置
 处理大批量多用户Agent协同任务，支持后台长时间运行
 """
 from celery import Celery
+from celery.schedules import crontab
 from loguru import logger
 from typing import Optional
 
@@ -29,10 +30,25 @@ celery_app.conf.update(
     worker_max_tasks_per_child=1000,
     task_acks_late=True,
     result_expires=86400,
+    beat_schedule={
+        "update-daily-metrics": {
+            "task": "agent_tasks.update_metrics",
+            "schedule": crontab(hour=0, minute=5),
+        },
+    },
 )
 
 # 自动发现任务
 celery_app.autodiscover_tasks(["app.celery_tasks"])
+
+
+@celery_app.task(name="agent_tasks.update_metrics")
+def update_metrics_task():
+    """Refresh the daily metrics snapshot for trend reporting."""
+    from app.services.report_service import ReportService
+
+    ReportService.update_metrics_periodically()
+    return {"status": "success"}
 
 
 @celery_app.task(

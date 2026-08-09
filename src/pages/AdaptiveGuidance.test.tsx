@@ -35,7 +35,7 @@ vi.mock('@/api', () => ({
     getResourceList: vi.fn(),
     getSystemMetrics: vi.fn(),
   },
-  authApi: {}, learnerApi: {}, knowledgeApi: {}, agentApi: {}, trainingApi: {}, privacyApi: {},
+  authApi: {}, learnerApi: {}, knowledgeApi: {}, agentApi: {}, privacyApi: {},
 }))
 vi.mock('@/hooks', () => ({
   useTaskSSE: () => ({
@@ -175,7 +175,7 @@ describe('AdaptiveGuidance page', () => {
     expect(await screen.findByText('Generated next question')).toBeInTheDocument()
   })
 
-  it('blocks invalid values without sending a generation request', async () => {
+  it('rejects invalid form values without sending a generation request', async () => {
     const user = userEvent.setup()
     vi.mocked(coreApi.getTutoringQuestions).mockResolvedValue([])
     const { default: Page } = await import('./AdaptiveGuidance')
@@ -183,26 +183,21 @@ describe('AdaptiveGuidance page', () => {
 
     const topic = await screen.findByLabelText('主题关键词')
     const difficulty = screen.getByLabelText('目标难度（1–5，可留空）')
+    const count = screen.getByLabelText('题量（1–10）')
+
     await user.type(topic, '反向传播')
     await user.type(difficulty, '6')
     await user.click(screen.getByRole('button', { name: '生成导学题目' }))
-
     expect(await screen.findByRole('alert')).toHaveTextContent('目标难度必须是 1–5 的整数')
     expect(coreApi.generateTutoringQuestions).not.toHaveBeenCalled()
-  })
 
-  it('requires a topic and a question count from 1 to 10', async () => {
-    const user = userEvent.setup()
-    vi.mocked(coreApi.getTutoringQuestions).mockResolvedValue([])
-    const { default: Page } = await import('./AdaptiveGuidance')
-    renderWithRouter(<Page />)
-
-    await screen.findByLabelText('主题关键词')
+    await user.clear(topic)
+    await user.clear(difficulty)
     await user.click(screen.getByRole('button', { name: '生成导学题目' }))
     expect(await screen.findByRole('alert')).toHaveTextContent('请输入主题关键词')
+    expect(coreApi.generateTutoringQuestions).not.toHaveBeenCalled()
 
-    await user.type(screen.getByLabelText('主题关键词'), 'REST API')
-    const count = screen.getByLabelText('题量（1–10）')
+    await user.type(topic, 'REST API')
     await user.clear(count)
     await user.type(count, '11')
     await user.click(screen.getByRole('button', { name: '生成导学题目' }))

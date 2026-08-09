@@ -24,11 +24,10 @@ export default {
     },
   },
   optimizeDeps: {
-    // This project is route-split already. Eagerly pre-bundling every heavy
-    // feature dependency delays the login page and fails on Windows hosts
-    // whose parent directories cannot be scanned by esbuild.
-    noDiscovery: true,
-    include: [],
+    // Keep the entrypoint dependencies explicit while allowing Vite to find
+    // CommonJS modules used by lazy-loaded routes (for example lodash in
+    // Recharts) and apply the required ESM interop in dev mode.
+    include: ['react', 'react-dom', 'react-dom/client', 'zustand'],
   },
   resolve: {
     alias: {
@@ -39,6 +38,20 @@ export default {
     host: '0.0.0.0',
     port: 5173,
     strictPort: true,
+    // The workspace also contains backend virtualenvs and runtime caches.
+    // Watching those directories blocks the first request on Windows.
+    watch: {
+      ignored: [
+        '**/.venv/**',
+        '**/venv/**',
+        '**/.pnpm-store/**',
+        '**/.uv-cache/**',
+        '**/backend/**',
+        '**/data/**',
+        '**/coverage/**',
+        '**/playwright-report/**',
+      ],
+    },
     proxy: {
       '/api': {
         target: 'http://127.0.0.1:8000',

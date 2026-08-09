@@ -17,7 +17,7 @@ type AgentTaskRaw = Partial<AgentTask> & {
 
 type SystemMetricsRaw = Partial<SystemMetrics> & {
   hallucinationRate?: number | null
-  resourceMatchAccuracy?: number
+  resourceMatchAccuracy?: number | null
 }
 
 export interface AgentSlice {
@@ -37,6 +37,8 @@ export interface AgentSlice {
 export interface MetricsSlice {
   systemMetrics: SystemMetrics | null
   metricsLoading: boolean
+  metricsError: string | null
+  metricsStatus: 'idle' | 'ready' | 'partial' | 'error'
   fetchSystemMetrics: (options?: { silent?: boolean }) => Promise<void>
 }
 
@@ -167,15 +169,27 @@ export const createAgentSlice: StateCreator<AppState, [], [], AgentSlice> = (set
 export const createMetricsSlice: StateCreator<AppState, [], [], MetricsSlice> = (set) => ({
   systemMetrics: null,
   metricsLoading: false,
+  metricsError: null,
+  metricsStatus: 'idle',
 
   fetchSystemMetrics: async (options) => {
-    set({ metricsLoading: true })
+    set({ metricsLoading: true, metricsError: null })
     try {
-      const [sysMetrics, perfMetrics, hallucMetrics] = await Promise.all([
-        coreApi.getSystemMetrics(options).catch(() => null),
-        agentApi.getPerformanceMetrics(options).catch(() => null),
-        agentApi.getHallucinationMetrics(options).catch(() => null),
+      const results = await Promise.allSettled([
+        coreApi.getSystemMetrics(options),
+        agentApi.getPerformanceMetrics(options),
+        agentApi.getHallucinationMetrics(options),
       ])
+      const [sysResult, perfResult, hallucResult] = results
+      const sysMetrics = sysResult.status === 'fulfilled' ? sysResult.value : null
+      const perfMetrics = perfResult.status === 'fulfilled' ? perfResult.value : null
+      const hallucMetrics = hallucResult.status === 'fulfilled' ? hallucResult.value : null
+      const failedSources = results.filter((result) => result.status === 'rejected').length
+
+      if (!sysMetrics && !perfMetrics && !hallucMetrics) {
+        throw new Error('指标服务暂时不可用，请稍后重试')
+      }
+
       const sysAny = sysMetrics as SystemMetricsRaw | null
       const metrics: SystemMetrics = {
         hallucinationRate: hallucMetrics
@@ -189,8 +203,14 @@ export const createMetricsSlice: StateCreator<AppState, [], [], MetricsSlice> = 
         passRate: hallucMetrics?.passRate ?? sysAny?.passRate ?? null,
         hasSufficientSample: hallucMetrics?.hasSufficientSample ?? sysAny?.hasSufficientSample ?? false,
         minimumSampleSize: hallucMetrics?.minimumSampleSize ?? sysAny?.minimumSampleSize ?? 5,
-        resourceMatchAccuracy: sysAny?.resourceMatchAccuracy ?? 0,
-        knowledgeCoverageRate: sysAny?.knowledgeCoverageRate ?? 0,
+        resourceMatchAccuracy: sysAny?.resourceMatchAccuracy ?? null,
+        knowledgeCoverageRate: sysAny?.knowledgeCoverageRate ?? null,
+        knowledgeIndexCoverageRate: sysAny?.knowledgeIndexCoverageRate ?? sysAny?.knowledgeCoverageRate ?? null,
+        learningBlindSpotCoverageRate: sysAny?.learningBlindSpotCoverageRate ?? null,
+        metricsStatus: sysAny?.metricsStatus ?? (sysAny?.knowledgeCoverageRate == null ? 'no_data' : 'ready'),
+        metricsSource: sysAny?.metricsSource ?? 'realtime',
+        snapshotAvailable: sysAny?.snapshotAvailable ?? false,
+        calculatedAt: sysAny?.calculatedAt,
         totalLearners: sysAny?.totalLearners ?? 0,
         totalResources: sysAny?.totalResources ?? 0,
         totalAnswers: sysAny?.totalAnswers ?? 0,
@@ -202,12 +222,22 @@ export const createMetricsSlice: StateCreator<AppState, [], [], MetricsSlice> = 
         satisfactionScore: sysAny?.satisfactionScore ?? 0,
         trends: (sysAny?.trends ?? []) as SystemMetrics['trends'],
       }
-      set({ systemMetrics: metrics, metricsLoading: false })
+      set({
+        systemMetrics: metrics,
+        metricsLoading: false,
+        metricsStatus: failedSources > 0 ? 'partial' : 'ready',
+        metricsError: failedSources > 0 ? `${failedSources} 个指标数据源暂时不可用` : null,
+      })
     } catch (err) {
       if (!options?.silent) {
         console.error('fetchSystemMetrics failed:', err)
       }
-      set({ metricsLoading: false })
+      set({
+        metricsLoading: false,
+        metricsStatus: 'error',
+        metricsError: err instanceof Error ? err.message : '指标加载失败',
+      })
+      throw err
     }
   },
 })

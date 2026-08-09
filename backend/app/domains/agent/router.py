@@ -744,7 +744,7 @@ def get_agent_performance(
             "success_count": success_count,
             "failed_count": failed_count,
             "running_count": running_count,
-            "success_rate": round(success_count / total * 100, 2) if total > 0 else 0,
+            "success_rate": round(success_count / total * 100, 2) if total > 0 else None,
             "avg_duration_ms": round(float(avg_duration or 0), 2),
         })
     except Exception as e:

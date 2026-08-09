@@ -32,7 +32,7 @@ export function CardSkeleton({ lines = 3 }: { lines?: number }) {
   )
 }
 
-/** 表格骨架（用于 LearnerProfile、EnterpriseTraining 等） */
+/** 表格骨架（用于学习者画像等页面） */
 export function TableSkeleton({ rows = 5, cols = 4 }: { rows?: number; cols?: number }) {
   return (
     <div className="rounded-lg border border-border overflow-hidden">

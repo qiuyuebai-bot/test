@@ -77,6 +77,7 @@ export interface KnowledgeDoc {
   createdAt?: string
   updatedAt?: string
   indexedAt?: string
+  errorMessage?: string
 }
 
 export interface KnowledgeSlice {
@@ -100,12 +101,15 @@ export interface KnowledgeSearchResult {
   sliceId: number
   docId: number
   docTitle: string
+  industry?: string
+  title?: string
   sliceIndex: number
   content: string
-  contentType: string
+  contentType?: string
   similarity: number
   keywords: string[]
-  isKeyPoint: boolean
+  highlightedContent?: string
+  isKeyPoint?: boolean
 }
 
 export interface KnowledgeSearchResponse {
@@ -389,8 +393,14 @@ export interface SystemMetrics {
   passRate?: number | null
   hasSufficientSample?: boolean
   minimumSampleSize?: number
-  resourceMatchAccuracy: number
-  knowledgeCoverageRate: number
+  resourceMatchAccuracy: number | null
+  knowledgeCoverageRate: number | null
+  knowledgeIndexCoverageRate?: number | null
+  learningBlindSpotCoverageRate?: number | null
+  metricsStatus?: 'ready' | 'no_data' | 'degraded'
+  metricsSource?: string
+  snapshotAvailable?: boolean
+  calculatedAt?: string
   totalLearners: number
   totalResources: number
   totalAnswers: number
@@ -405,9 +415,9 @@ export interface SystemMetrics {
 
 export interface MetricTrend {
   date: string
-  hallucinationRate: number
-  resourceMatchAccuracy: number
-  knowledgeCoverageRate: number
+  hallucinationRate: number | null
+  resourceMatchAccuracy: number | null
+  knowledgeCoverageRate: number | null
 }
 
 export interface PaginationParams {
@@ -421,85 +431,6 @@ export interface PagedResult<T> {
   page: number
   pageSize: number
   totalPages: number
-}
-
-export type TrainingStatus = 'planning' | 'ongoing' | 'completed' | 'cancelled'
-export type TrainingType = 'standard' | 'transfer'
-
-export interface TrainingProject {
-  id: number
-  companyName: string
-  trainingName: string
-  trainingType: TrainingType
-  description?: string
-  industry?: string
-  modules: string[]
-  participantCount: number
-  participants: number[]
-  responsiblePerson?: string
-  startDate?: string
-  endDate?: string
-  estimatedDuration: number
-  status: TrainingStatus
-  progressPercentage: number
-  completedModules: number
-  isTransferTraining: boolean
-  transferFromPosition?: string
-  transferToPosition?: string
-  skillGapAnalysis?: Record<string, unknown>
-  passRate: number
-  averageScore: number
-  satisfactionRate: number
-  totalResourcesUsed: number
-  totalTasksCompleted: number
-  createdAt?: string
-  updatedAt?: string
-}
-
-export interface TrainingStats {
-  companies: number
-  learners: number
-  passRate: number
-  avgScore: number
-  totalTrainings: number
-  ongoingTrainings: number
-  completedTrainings: number
-}
-
-export interface TransferRecord {
-  id: number
-  name: string
-  from: string
-  to: string
-  company: string
-  completion: number
-  skillGap: number
-}
-
-export interface SkillGapItem {
-  skill: string
-  current: number
-  required: number
-  gap: number
-}
-
-export interface CreateTrainingData {
-  companyName: string
-  trainingName: string
-  trainingType?: TrainingType
-  description?: string
-  industry?: string
-  modules?: string[]
-  participantCount?: number
-  participants?: number[]
-  responsiblePerson?: string
-  startDate?: string
-  endDate?: string
-  estimatedDuration?: number
-  isTransferTraining?: boolean
-  transferFromPosition?: string
-  transferToPosition?: string
-  skillGapAnalysis?: Record<string, unknown>
 }
 
 // ===========================================

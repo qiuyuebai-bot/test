@@ -7,13 +7,10 @@ describe('toCamelCase', () => {
     expect(toCamelCase('first_name')).toBe('firstName')
   })
 
-  it('leaves non-snake strings unchanged', () => {
-    expect(toCamelCase('name')).toBe('name')
-    expect(toCamelCase('already')).toBe('already')
-  })
-
   it('handles consecutive underscores by converting each', () => {
     expect(toCamelCase('a_b_c')).toBe('aBC')
+    expect(toCamelCase('name')).toBe('name')
+    expect(toCamelCase('already')).toBe('already')
   })
 })
 
@@ -44,12 +41,9 @@ describe('keysToCamel', () => {
     expect(keysToCamel(input)).toEqual([{ userId: 1 }, { userId: 2 }])
   })
 
-  it('returns null/undefined unchanged', () => {
+  it('returns null/undefined/primitives unchanged', () => {
     expect(keysToCamel(null)).toBeNull()
     expect(keysToCamel(undefined)).toBeUndefined()
-  })
-
-  it('returns primitives unchanged', () => {
     expect(keysToCamel(42)).toBe(42)
     expect(keysToCamel('str')).toBe('str')
   })
@@ -66,12 +60,11 @@ describe('keysToSnake', () => {
     expect(keysToSnake(input)).toEqual({ outer_key: { inner_key: 'v' } })
   })
 
-  it('converts keys inside arrays element-wise', () => {
-    const input = [{ userId: 1 }, { userId: 2 }]
-    expect(keysToSnake(input)).toEqual([{ user_id: 1 }, { user_id: 2 }])
-  })
+  it('round-trips camel -> snake -> camel including arrays', () => {
+    const arr = [{ userId: 1 }, { userId: 2 }]
+    expect(keysToSnake(arr)).toEqual([{ user_id: 1 }, { user_id: 2 }])
+    expect(keysToCamel(keysToSnake(arr))).toEqual(arr)
 
-  it('round-trips camel -> snake -> camel', () => {
     const original = { userId: 1, profile: { firstName: 'a' } }
     const snake = keysToSnake(original)
     const back = keysToCamel(snake)

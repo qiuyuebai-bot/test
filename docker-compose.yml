@@ -139,6 +139,35 @@ services:
     profiles:
       - full
 
+  # ---- Celery Beat（每日指标快照调度） ----
+  celery-beat:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: knowledge-celery-beat
+    env_file:
+      - ./backend/.env.development
+    command: celery -A app.celery_app beat --loglevel=info
+    environment:
+      - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:password@postgres:5432/knowledge_system}
+      - REDIS_URL=redis://redis:6379/0
+      - CELERY_BROKER_URL=redis://redis:6379/1
+      - CELERY_RESULT_BACKEND=redis://redis:6379/2
+      - SECRET_KEY=${SECRET_KEY:-}
+    volumes:
+      - backend-data:/app/data
+      - backend-logs:/app/logs
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - knowledge-network
+    profiles:
+      - full
+
   # ---- Chroma 向量数据库（完整模式） ----
   chroma:
     image: chromadb/chroma:latest

@@ -12,6 +12,8 @@ from app.config import settings
 from app.database import SessionLocal
 from app.schemas.response import success
 from app.middleware import prometheus_metrics_endpoint
+from app.domains.knowledge.models import KnowledgeDoc, KnowledgeSlice
+from app.utils.datetime import utcnow_naive
 
 
 router = APIRouter(tags=["运维"])
@@ -58,12 +60,32 @@ async def health_readiness(request: Request):
 
     # 1. 数据库检查
     db_latency_ms = 0
+    knowledge_counts = {
+        "enabled_docs": 0,
+        "ready_docs": 0,
+        "db_slices": 0,
+        "db_indexed_slices": 0,
+        "declared_slices": 0,
+    }
     try:
         db_start = time.time()
         db = SessionLocal()
         try:
             db.execute(text("SELECT 1"))
             db_latency_ms = round((time.time() - db_start) * 1000, 1)
+            enabled_docs = db.query(KnowledgeDoc).filter(KnowledgeDoc.is_enabled == True).all()
+            knowledge_counts = {
+                "enabled_docs": len(enabled_docs),
+                "ready_docs": sum(1 for doc in enabled_docs if doc.status == "ready"),
+                "db_slices": db.query(KnowledgeSlice).join(KnowledgeDoc).filter(
+                    KnowledgeDoc.is_enabled == True
+                ).count(),
+                "db_indexed_slices": db.query(KnowledgeSlice).join(KnowledgeDoc).filter(
+                    KnowledgeDoc.is_enabled == True,
+                    KnowledgeSlice.is_indexed == True,
+                ).count(),
+                "declared_slices": sum((doc.slice_count or 0) for doc in enabled_docs),
+            }
         finally:
             db.close()
     except Exception as e:
@@ -71,15 +93,35 @@ async def health_readiness(request: Request):
         overall_status = "not_ready"
         http_status = 503
     else:
-        checks["database"] = {"status": "up", "latency_ms": db_latency_ms}
+        checks["database"] = {
+            "status": "up",
+            "latency_ms": db_latency_ms,
+            "knowledge": knowledge_counts,
+        }
 
     # 2. Chroma 向量库检查
     try:
         from app.domains.knowledge.service import _get_chroma_collection
         collection = _get_chroma_collection()
         if collection is not None:
-            collection.count()
-            checks["chroma"] = {"status": "up"}
+            vector_count = collection.count()
+            expected_count = knowledge_counts["db_indexed_slices"]
+            chroma_status = "up" if vector_count == expected_count else "degraded"
+            note = None
+            if vector_count != expected_count:
+                note = f"向量数量与数据库已索引切片不一致: vectors={vector_count}, db={expected_count}"
+            elif (
+                knowledge_counts["ready_docs"] > 0
+                and (vector_count == 0 or knowledge_counts["declared_slices"] != knowledge_counts["db_slices"])
+            ):
+                chroma_status = "degraded"
+                note = "存在已就绪文档但没有可检索切片，请执行重新索引"
+            checks["chroma"] = {
+                "status": chroma_status,
+                "vector_count": vector_count,
+                "db_indexed_slice_count": expected_count,
+                **({"note": note} if note else {}),
+            }
         else:
             checks["chroma"] = {"status": "fallback", "note": "Chroma不可用，使用数据库关键词检索降级模式"}
     except Exception as e:
@@ -179,7 +221,7 @@ async def get_core_metrics():
         ).one()
         total_resources = total_resources or 0
         active_learners = active_learners or 0
-        resource_match_accuracy = round(float(avg_match or 0), 1)
+        resource_match_accuracy = round(float(avg_match), 1) if avg_match is not None else None
 
         total_tasks, completed_tasks = db.query(
             func.count(AgentTask.id),
@@ -202,15 +244,8 @@ async def get_core_metrics():
         )
         hallucination_rate = hallucination_metrics["hallucination_rate"]
 
-        total_slices, indexed_slices = db.query(
-            func.count(KnowledgeSlice.id),
-            func.coalesce(
-                func.sum(case((KnowledgeSlice.is_indexed == True, 1), else_=0)), 0
-            ),
-        ).one()
-        knowledge_coverage_rate = (
-            round(indexed_slices / total_slices * 100, 1) if total_slices > 0 else 0
-        )
+        knowledge_coverage_rate = MetricsUtil.calculate_knowledge_index_coverage_rate(db)
+        learning_blind_spot_coverage_rate = MetricsUtil.calculate_learning_blind_spot_coverage_rate(db)
 
         return success({
             "hallucination_rate": hallucination_rate,
@@ -222,19 +257,17 @@ async def get_core_metrics():
             "has_sufficient_sample": hallucination_metrics["has_sufficient_sample"],
             "resource_match_accuracy": resource_match_accuracy,
             "knowledge_coverage_rate": knowledge_coverage_rate,
+            "knowledge_index_coverage_rate": knowledge_coverage_rate,
+            "learning_blind_spot_coverage_rate": learning_blind_spot_coverage_rate,
+            "metrics_status": "ready" if knowledge_coverage_rate is not None else "no_data",
+            "metrics_source": "realtime",
+            "calculated_at": utcnow_naive().isoformat(),
             "agent_success_rate": agent_success_rate,
             "total_resources": total_resources,
             "active_learners": active_learners,
         })
     except Exception as e:
-        logger.warning(f"获取核心指标失败，返回默认值: {e}")
-        return success({
-            "hallucination_rate": 0,
-            "resource_match_accuracy": 0,
-            "knowledge_coverage_rate": 0,
-            "agent_success_rate": 0,
-            "total_resources": 0,
-            "active_learners": 0,
-        })
+        logger.exception(f"获取核心指标失败: {e}")
+        raise
     finally:
         db.close()

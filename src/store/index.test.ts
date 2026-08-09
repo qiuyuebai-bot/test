@@ -32,7 +32,6 @@ vi.mock('../api', () => ({
     getResourceList: vi.fn(),
     generateResources: vi.fn(),
   },
-  trainingApi: {},
   privacyApi: {},
 }))
 
@@ -150,29 +149,20 @@ describe('store learner state', () => {
     expect(learnerApi.getList).toHaveBeenCalled()
   })
 
-  it('addLearner delegates to createLearner (flagged as redundant)', async () => {
-    vi.mocked(learnerApi.create).mockResolvedValue({ id: 7 })
-    vi.mocked(learnerApi.getList).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20, totalPages: 0 })
-    const useStore = await freshStore()
-    const res = await useStore.getState().addLearner({ realName: 'y', educationLevel: 'bachelor', major: 'cs' } as never)
-    expect(res).toEqual({ id: 7 })
-    expect(learnerApi.create).toHaveBeenCalledTimes(1)
-  })
-
-  it('updateLearner refreshes currentLearner when it matches the updated id', async () => {
+  it('updateLearner conditionally refreshes currentLearner based on id match', async () => {
     vi.mocked(learnerApi.update).mockResolvedValue({ id: 5 })
     vi.mocked(learnerApi.getById).mockResolvedValue({ id: 5, realName: 'updated' } as never)
     vi.mocked(learnerApi.getList).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20, totalPages: 0 })
     const useStore = await freshStore()
+
+    // matching-id case: currentLearner should be refreshed
     useStore.setState({ currentLearner: { id: 5 } as never })
     await useStore.getState().updateLearner(5, { realName: 'updated' } as never)
     expect(useStore.getState().currentLearner).toEqual({ id: 5, realName: 'updated' })
-  })
 
-  it('updateLearner does not touch currentLearner when id differs', async () => {
-    vi.mocked(learnerApi.update).mockResolvedValue({ id: 5 })
-    vi.mocked(learnerApi.getList).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20, totalPages: 0 })
-    const useStore = await freshStore()
+    vi.mocked(learnerApi.getById).mockClear()
+
+    // non-matching case: currentLearner should be untouched and getById not called
     const current = { id: 99 } as never
     useStore.setState({ currentLearner: current })
     await useStore.getState().updateLearner(5, {})
@@ -311,6 +301,39 @@ describe('store metrics state', () => {
     expect(m?.tasksCompleted).toBe(8)
     expect(m?.avgResponseTime).toBe(200)
     expect(useStore.getState().metricsLoading).toBe(false)
+    expect(useStore.getState().metricsStatus).toBe('ready')
+  })
+
+  it('surfaces an error when every metrics source fails', async () => {
+    vi.mocked(coreApi.getSystemMetrics).mockRejectedValue(new Error('metrics unavailable'))
+    vi.mocked(agentApi.getPerformanceMetrics).mockRejectedValue(new Error('performance unavailable'))
+    vi.mocked(agentApi.getHallucinationMetrics).mockRejectedValue(new Error('hallucination unavailable'))
+    const useStore = await freshStore()
+
+    await expect(useStore.getState().fetchSystemMetrics()).rejects.toThrow('指标服务暂时不可用')
+    expect(useStore.getState().systemMetrics).toBeNull()
+    expect(useStore.getState().metricsStatus).toBe('error')
+    expect(useStore.getState().metricsError).toContain('指标服务暂时不可用')
+    expect(useStore.getState().metricsLoading).toBe(false)
+  })
+
+  it('marks partially available metrics instead of filling failed sources with zeros', async () => {
+    vi.mocked(coreApi.getSystemMetrics).mockResolvedValue({
+      knowledgeCoverageRate: null,
+      resourceMatchAccuracy: null,
+    } as never)
+    vi.mocked(agentApi.getPerformanceMetrics).mockRejectedValue(new Error('performance unavailable'))
+    vi.mocked(agentApi.getHallucinationMetrics).mockResolvedValue({
+      hallucinationRate: null,
+      hasSufficientSample: false,
+    } as never)
+    const useStore = await freshStore()
+
+    await useStore.getState().fetchSystemMetrics()
+    expect(useStore.getState().metricsStatus).toBe('partial')
+    expect(useStore.getState().systemMetrics?.resourceMatchAccuracy).toBeNull()
+    expect(useStore.getState().systemMetrics?.knowledgeCoverageRate).toBeNull()
+    expect(useStore.getState().metricsError).toContain('1 个指标数据源')
   })
 })
 

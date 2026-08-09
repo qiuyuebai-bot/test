@@ -22,6 +22,7 @@ from app.services.common import (
 from app.services.path_planner import PathPlanner
 from app.utils.llm import LLMUtil
 from app.utils.metrics import MetricsUtil
+from app.utils.datetime import utcnow_naive
 
 
 class ReportService(BaseService):
@@ -412,12 +413,6 @@ class ReportService(BaseService):
 
         try:
             with get_db_context() as db:
-                # 仅查询需要的字段，避免全表加载整个模型
-                learner_rows = (
-                    db.query(LearnerProfile.id, LearnerProfile.knowledge_blind_areas)
-                    .all()
-                )
-
                 # 单查询：按 learner_id 聚合平均 match_score（避免 N+1）
                 per_learner_avg = (
                     db.query(
@@ -437,35 +432,22 @@ class ReportService(BaseService):
                 MetricsServiceHelper.init_metrics_fields(metrics)
                 metrics.resource_match_accuracy = overall_match_accuracy
 
-                # 单查询：所有资源的 (learner_id, content)，按 learner_id 分组后在内存做 substring 匹配
-                total_blind = sum(len(r.knowledge_blind_areas or []) for r in learner_rows)
-                all_resources = (
-                    db.query(LearningResource.learner_id, LearningResource.content)
-                    .all()
-                )
-                resources_by_learner: Dict[int, List[str]] = {}
-                for lid, content in all_resources:
-                    resources_by_learner.setdefault(lid, []).append(content or "")
-
-                total_covered = 0
-                for lid, blind_areas in learner_rows:
-                    if not blind_areas:
-                        continue
-                    learner_contents = resources_by_learner.get(lid, [])
-                    for content in learner_contents:
-                        for blind in blind_areas:
-                            if blind in content:
-                                total_covered += 1
-                                break
-
-                metrics.knowledge_coverage_rate = (
-                    total_covered / total_blind * 100 if total_blind > 0 else 0
-                )
+                # 系统覆盖率统一使用知识库切片索引覆盖率。学习者盲区覆盖率
+                # 单独记录，避免两个不同算法共用 knowledge_coverage_rate。
+                knowledge_index_coverage_rate = MetricsUtil.calculate_knowledge_index_coverage_rate(db)
+                learning_blind_spot_coverage_rate = MetricsUtil.calculate_learning_blind_spot_coverage_rate(db)
+                metrics.knowledge_coverage_rate = knowledge_index_coverage_rate
+                metrics.detailed_metrics = {
+                    **(metrics.detailed_metrics or {}),
+                    "knowledge_index_coverage_rate": knowledge_index_coverage_rate,
+                    "learning_blind_spot_coverage_rate": learning_blind_spot_coverage_rate,
+                }
 
                 db.commit()
 
                 logger.info(
-                    f"[报告服务] 指标更新完成: 匹配准确率={overall_match_accuracy:.2f}"
+                    f"[报告服务] 指标更新完成: 匹配准确率={overall_match_accuracy:.2f}, "
+                    f"知识库索引覆盖率={knowledge_index_coverage_rate}"
                 )
 
         except Exception as e:
@@ -493,20 +475,30 @@ class ReportService(BaseService):
             resource_count = db.query(LearningResource).count()
             answer_count = db.query(AnswerRecord).count()
             
-            latest = metrics[0] if metrics else None
-            
-            trends = [
-                {
-                    "date": m.record_date,
-                    "metrics": {
-                        "hallucinationRate": m.hallucination_rate or 0,
-                        "resourceMatchAccuracy": m.resource_match_accuracy or 0,
-                        "knowledgeCoverage": m.knowledge_coverage_rate or 0,
-                    },
-                }
-                for m in reversed(metrics)
-            ]
-            
+            # 当前卡片指标使用实时数据；快照只用于趋势，避免无快照时
+            # 把 0 当成真实结果。覆盖率口径固定为知识库切片索引覆盖率。
+            knowledge_index_coverage_rate = MetricsUtil.calculate_knowledge_index_coverage_rate(db)
+            learning_blind_spot_coverage_rate = MetricsUtil.calculate_learning_blind_spot_coverage_rate(db)
+            resource_match_accuracy = db.query(func.avg(LearningResource.match_score)).scalar()
+            resource_match_accuracy = (
+                round(float(resource_match_accuracy), 2)
+                if resource_match_accuracy is not None
+                else None
+            )
+
+            trends = []
+            for metric in reversed(metrics):
+                detailed = metric.detailed_metrics or {}
+                trends.append({
+                    "date": metric.record_date,
+                    "hallucination_rate": metric.hallucination_rate,
+                    "resource_match_accuracy": metric.resource_match_accuracy,
+                    "knowledge_coverage_rate": detailed.get(
+                        "knowledge_index_coverage_rate",
+                        metric.knowledge_coverage_rate,
+                    ),
+                })
+
             return {
                 "hallucination_rate": hallucination_metrics["hallucination_rate"],
                 "total_checks": hallucination_metrics["total_checks"],
@@ -517,8 +509,14 @@ class ReportService(BaseService):
                 "pass_rate": hallucination_metrics["pass_rate"],
                 "has_sufficient_sample": hallucination_metrics["has_sufficient_sample"],
                 "minimum_sample_size": hallucination_metrics["minimum_sample_size"],
-                "resource_match_accuracy": latest.resource_match_accuracy if latest else 0,
-                "knowledge_coverage_rate": latest.knowledge_coverage_rate if latest else 0,
+                "resource_match_accuracy": resource_match_accuracy,
+                "knowledge_coverage_rate": knowledge_index_coverage_rate,
+                "knowledge_index_coverage_rate": knowledge_index_coverage_rate,
+                "learning_blind_spot_coverage_rate": learning_blind_spot_coverage_rate,
+                "metrics_status": "ready" if knowledge_index_coverage_rate is not None else "no_data",
+                "metrics_source": "realtime",
+                "snapshot_available": bool(metrics),
+                "calculated_at": utcnow_naive().isoformat(),
                 "total_learners": learner_count,
                 "total_resources": resource_count,
                 "total_answers": answer_count,

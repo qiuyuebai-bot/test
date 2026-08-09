@@ -47,6 +47,7 @@ interface RawDoc {
   createdAt?: string
   updatedAt?: string
   indexedAt?: string
+  errorMessage?: string
 }
 
 interface RawSlice {
@@ -71,7 +72,7 @@ function mapDocFromApi(raw: RawDoc): KnowledgeDoc {
     id: raw.id,
     title: raw.title,
     domain,
-    category: raw.industry,
+    category: raw.category || raw.industry,
     totalSlices: raw.sliceCount || 0,
     indexedSlices: raw.indexedSliceCount || 0,
     status: statusMap[rawStatus] || 'pending',
@@ -90,6 +91,7 @@ function mapDocFromApi(raw: RawDoc): KnowledgeDoc {
     createdAt: raw.createdAt,
     updatedAt: raw.updatedAt,
     indexedAt: raw.indexedAt,
+    errorMessage: raw.errorMessage,
   }
 }
 
@@ -142,7 +144,7 @@ export const knowledgeApi = {
     return (result.slices || []).map(mapSliceFromApi)
   },
 
-  uploadText(data: { title: string; industry: string; content: string; category?: string; source?: string; author?: string }): Promise<{ docId: number; fileName: string; fileSize: number; status: string; message: string }> {
+  uploadText(data: { title: string; industry: string; content: string; category?: string; source?: string; author?: string }): Promise<{ docId: number; fileName: string; fileSize: number; status: string; message: string; sliceCount: number; indexedSliceCount: number; errorMessage?: string }> {
     return http.post('/knowledge/upload', data)
   },
 
@@ -154,8 +156,12 @@ export const knowledgeApi = {
     return http.delete<null>(`/knowledge/docs/${id}`)
   },
 
-  search(data: { query: string; industry?: string; docId?: number; topK?: number; minSimilarity?: number }): Promise<KnowledgeSearchResponse> {
+  search(data: { query: string; industry?: string; docId?: number; topK?: number; minSimilarity?: number; searchType?: 'vector' | 'keyword' | 'hybrid' }): Promise<KnowledgeSearchResponse> {
     return http.post<KnowledgeSearchResponse>('/knowledge/search', data)
+  },
+
+  reindex(id: number): Promise<{ docId: number; status: string; sliceCount: number; indexedSliceCount: number; message: string }> {
+    return http.post(`/knowledge/docs/${id}/reindex`)
   },
 
   getPreview(id: number, params?: { sliceStart?: number; sliceCount?: number }): Promise<unknown> {

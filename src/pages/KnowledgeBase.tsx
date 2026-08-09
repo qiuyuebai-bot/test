@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
-import type { KnowledgeDoc } from '@/types'
+import type { KnowledgeDoc, KnowledgeSearchResult } from '@/types'
 import { configApi, knowledgeApi } from '@/api'
 import type { DomainOption } from '@/api/config'
 import Card from '@/components/Card'
@@ -24,6 +24,7 @@ import {
   BookOpen,
   FileSearch,
   AlertTriangle,
+  RefreshCw,
 } from 'lucide-react'
 import EmptyState from '@/components/EmptyState'
 import ErrorState from '@/components/ErrorState'
@@ -282,6 +283,11 @@ export default function KnowledgeBase() {
   const [selectedDoc, setSelectedDoc] = useState<KnowledgeDoc>()
   const [slicesLoading, setSlicesLoading] = useState(false)
   const [domainOptions, setDomainOptions] = useState<DomainOption[]>([])
+  const [sliceSearchQuery, setSliceSearchQuery] = useState('')
+  const [sliceSearchResults, setSliceSearchResults] = useState<KnowledgeSearchResult[]>([])
+  const [sliceSearchLoading, setSliceSearchLoading] = useState(false)
+  const [sliceSearchError, setSliceSearchError] = useState('')
+  const [reindexingId, setReindexingId] = useState<number | null>(null)
 
   const previewReqIdRef = useRef(0)
 
@@ -296,6 +302,26 @@ export default function KnowledgeBase() {
   const domainToLabel: Record<string, string> = Object.fromEntries(
     domainOptions.map(d => [d.value, d.label])
   )
+
+  const handleSliceSearch = async () => {
+    const query = sliceSearchQuery.trim()
+    if (!query) {
+      setSliceSearchResults([])
+      setSliceSearchError('')
+      return
+    }
+    setSliceSearchLoading(true)
+    setSliceSearchError('')
+    try {
+      const response = await knowledgeApi.search({ query, topK: 5, searchType: 'hybrid' })
+      setSliceSearchResults(response.results || [])
+    } catch (error) {
+      setSliceSearchResults([])
+      setSliceSearchError(error instanceof Error ? error.message : '检索失败，请稍后重试')
+    } finally {
+      setSliceSearchLoading(false)
+    }
+  }
 
   const filteredDocs = knowledgeDocs.filter((doc) => {
     const matchesSearch = doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -384,6 +410,19 @@ export default function KnowledgeBase() {
       toast.error('删除失败')
     } finally {
       setDeleting(false)
+    }
+  }
+
+  const handleReindex = async (doc: KnowledgeDoc) => {
+    setReindexingId(doc.id)
+    try {
+      const result = await knowledgeApi.reindex(doc.id)
+      await fetchKnowledgeDocs({ page: 1, pageSize: 50 })
+      toast.success(`已完成索引：${result.indexedSliceCount}/${result.sliceCount} 个切片`)
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '重新索引失败')
+    } finally {
+      setReindexingId(null)
     }
   }
 
@@ -542,13 +581,23 @@ export default function KnowledgeBase() {
                             <span className="text-xs text-text-tertiary ml-1">切片</span>
                           </td>
                           <td className="px-5 py-3">
-                            <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${status.color}`}>
+                            <span title={doc.errorMessage || undefined} className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium border ${status.color}`}>
                               <StatusIcon className="w-3 h-3" />
                               {status.label}
                             </span>
                           </td>
                           <td className="px-5 py-3">
                             <div className="flex items-center justify-end gap-1">
+                              {(doc.status === 'error' || doc.status === 'pending') && (
+                                <button
+                                  onClick={() => void handleReindex(doc)}
+                                  disabled={reindexingId === doc.id}
+                                  className="p-2 rounded-lg hover:bg-bg-secondary transition-colors disabled:opacity-50"
+                                  title="重新索引"
+                                >
+                                  <RefreshCw className={`w-4 h-4 text-text-tertiary ${reindexingId === doc.id ? 'animate-spin' : ''}`} />
+                                </button>
+                              )}
                               <button
                                 onClick={() => handlePreview(doc)}
                                 className="p-2 rounded-lg hover:bg-bg-secondary transition-colors"
@@ -595,11 +644,44 @@ export default function KnowledgeBase() {
                   <BookOpen className="w-3 h-3 text-primary" />
                   <span className="text-xs font-medium text-text-primary">关键词检索</span>
                 </div>
-                <input
-                  type="text"
-                  placeholder="输入关键词搜索切片..."
-                  className="w-full h-9 px-3 bg-bg-card border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
-                />
+                <form
+                  className="flex items-center gap-2"
+                  onSubmit={(event) => { event.preventDefault(); void handleSliceSearch() }}
+                >
+                  <input
+                    type="search"
+                    value={sliceSearchQuery}
+                    onChange={(event) => setSliceSearchQuery(event.target.value)}
+                    placeholder="输入关键词搜索切片..."
+                    className="min-w-0 flex-1 h-9 px-3 bg-bg-card border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  />
+                  <button
+                    type="submit"
+                    disabled={sliceSearchLoading}
+                    title="搜索知识切片"
+                    className="h-9 w-9 shrink-0 rounded-lg border border-border bg-bg-card flex items-center justify-center hover:border-primary/40 disabled:opacity-50"
+                  >
+                    <Search className="w-4 h-4 text-text-secondary" />
+                  </button>
+                </form>
+                {sliceSearchLoading && <p className="text-xs text-text-tertiary mt-2">正在检索...</p>}
+                {sliceSearchError && <p className="text-xs text-error mt-2">{sliceSearchError}</p>}
+                {!sliceSearchLoading && !sliceSearchError && sliceSearchQuery.trim() && sliceSearchResults.length === 0 && (
+                  <p className="text-xs text-text-tertiary mt-2">未找到匹配切片</p>
+                )}
+                {sliceSearchResults.length > 0 && (
+                  <div className="mt-3 space-y-2 max-h-64 overflow-y-auto">
+                    {sliceSearchResults.map((result) => (
+                      <div key={`${result.docId}-${result.sliceIndex}`} className="p-2 rounded-lg bg-bg-card/50 border border-border/50">
+                        <div className="flex items-center justify-between gap-2 mb-1">
+                          <span className="text-xs font-medium text-text-primary truncate">{result.docTitle}</span>
+                          <span className="text-[11px] text-text-tertiary shrink-0">{Math.round(result.similarity * 100)}%</span>
+                        </div>
+                        <p className="text-xs text-text-secondary line-clamp-3">{result.highlightedContent || result.content}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
 
               <div className="p-3 rounded-xl bg-bg-secondary/50 border border-border/50">

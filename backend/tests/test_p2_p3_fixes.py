@@ -348,63 +348,29 @@ class TestP3_10_SliceMetadataColumnRename:
         assert "slice_metadata" in column_names
         assert "metadata" not in column_names
 
-    def test_slice_metadata_attribute_writable(
+    def test_slice_metadata_persistence(
         self, db_session: Session, sample_knowledge_doc: KnowledgeDoc
     ):
-        """Python 属性 slice_metadata 可正常写入"""
-        meta = {"source": "test", "chunk_size": 512}
-        s = KnowledgeSlice(
-            doc_id=sample_knowledge_doc.id,
-            slice_index=0,
-            slice_type="paragraph",
-            content="测试切片内容",
-            content_hash="hash_p3_10_a",
-            word_count=10,
-            is_indexed=False,
-            slice_metadata=meta,
-        )
-        db_session.add(s)
-        db_session.commit()
-        db_session.refresh(s)
-
-        assert s.slice_metadata == meta
-
-    def test_slice_metadata_default_empty_dict(
-        self, db_session: Session, sample_knowledge_doc: KnowledgeDoc
-    ):
-        """未指定 slice_metadata 时默认为空 dict"""
-        s = KnowledgeSlice(
-            doc_id=sample_knowledge_doc.id,
-            slice_index=1,
-            slice_type="paragraph",
-            content="默认值测试",
-            content_hash="hash_p3_10_b",
-            word_count=5,
-            is_indexed=False,
-        )
-        db_session.add(s)
-        db_session.commit()
-        db_session.refresh(s)
-
-        assert s.slice_metadata == {}
-
-    def test_slice_metadata_persisted_and_reloadable(
-        self, db_session: Session, sample_knowledge_doc: KnowledgeDoc
-    ):
-        """slice_metadata 写入 DB 后能重新查询读取"""
+        """slice_metadata 可写入、默认 {}、持久化并能重新加载"""
+        # 1) 显式 metadata：验证写入 + 持久化 + 重新加载
         meta = {"key": "value", "nested": {"a": 1}, "list": [1, 2, 3]}
         s = KnowledgeSlice(
             doc_id=sample_knowledge_doc.id,
-            slice_index=2,
+            slice_index=0,
             slice_type="section",
             content="持久化测试",
-            content_hash="hash_p3_10_c",
+            content_hash="hash_p3_10_a",
             word_count=4,
             is_indexed=True,
             slice_metadata=meta,
         )
         db_session.add(s)
         db_session.commit()
+        db_session.refresh(s)
+
+        # 写入后即可读取（可写性）
+        assert s.slice_metadata == meta
+
         slice_id = s.id
 
         # 清除 ORM 身份映射，强制重新查询
@@ -417,3 +383,31 @@ class TestP3_10_SliceMetadataColumnRename:
 
         assert retrieved is not None
         assert retrieved.slice_metadata == meta
+
+        # 2) 未指定 metadata：验证默认值为空 dict 且可持久化
+        s_default = KnowledgeSlice(
+            doc_id=sample_knowledge_doc.id,
+            slice_index=1,
+            slice_type="paragraph",
+            content="默认值测试",
+            content_hash="hash_p3_10_b",
+            word_count=5,
+            is_indexed=False,
+        )
+        db_session.add(s_default)
+        db_session.commit()
+        db_session.refresh(s_default)
+
+        assert s_default.slice_metadata == {}
+
+        default_id = s_default.id
+
+        db_session.expire_all()
+        retrieved_default = (
+            db_session.query(KnowledgeSlice)
+            .filter(KnowledgeSlice.id == default_id)
+            .first()
+        )
+
+        assert retrieved_default is not None
+        assert retrieved_default.slice_metadata == {}
