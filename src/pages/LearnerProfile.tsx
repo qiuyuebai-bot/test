@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import type { LearnerProfile } from '@/types'
@@ -143,8 +144,8 @@ function LearnerCard({
   learner: LearnerProfile
   isSelected: boolean
   onClick: () => void
-  onEdit: () => void
-  onDelete: () => void
+  onEdit?: () => void
+  onDelete?: () => void
 }) {
   const radarData = getRadarData(learner)
   const avgAbility = learner.averageAbility || Math.round(
@@ -168,20 +169,28 @@ function LearnerCard({
             <p className="text-sm text-text-secondary">{learner.educationLevel || '-'} · {learner.major || '-'}</p>
           </div>
         </div>
-        <div className="flex items-center gap-1">
-          <button
-            onClick={(e) => { e.stopPropagation(); onEdit() }}
-            className="p-2 rounded-lg hover:bg-bg-secondary transition-colors"
-          >
-            <Edit2 className="w-4 h-4 text-text-tertiary" />
-          </button>
-          <button
-            onClick={(e) => { e.stopPropagation(); onDelete() }}
-            className="p-2 rounded-lg hover:bg-error-light transition-colors"
-          >
-            <Trash2 className="w-4 h-4 text-error" />
-          </button>
-        </div>
+        {(onEdit || onDelete) && (
+          <div className="flex items-center gap-1">
+            {onEdit && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onEdit() }}
+                className="p-2 rounded-lg hover:bg-bg-secondary transition-colors"
+                title="编辑画像"
+              >
+                <Edit2 className="w-4 h-4 text-text-tertiary" />
+              </button>
+            )}
+            {onDelete && (
+              <button
+                onClick={(e) => { e.stopPropagation(); onDelete() }}
+                className="p-2 rounded-lg hover:bg-error-light transition-colors"
+                title="删除画像"
+              >
+                <Trash2 className="w-4 h-4 text-error" />
+              </button>
+            )}
+          </div>
+        )}
       </div>
 
       <div className="grid grid-cols-2 gap-4 mb-4">
@@ -570,11 +579,14 @@ function Pagination({
 }
 
 export default function LearnerProfilePage() {
-  const { learners, learnerLoading, learnersLoading, pagination, currentLearner } = useStore(
+  const navigate = useNavigate()
+  const { user, learners, learnerLoading, learnersLoading, learnerError, pagination, currentLearner } = useStore(
     useShallow((s) => ({
+      user: s.user,
       learners: s.learners,
       learnerLoading: s.learnerLoading,
       learnersLoading: s.learnersLoading,
+      learnerError: s.learnerError,
       pagination: s.pagination,
       currentLearner: s.currentLearner,
     }))
@@ -595,6 +607,8 @@ export default function LearnerProfilePage() {
   const [error, setError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const isAdmin = user?.role === 'admin'
+  const canEditLearners = isAdmin || user?.role === 'learner'
 
   const loading = learnerLoading || learnersLoading
 
@@ -682,6 +696,19 @@ export default function LearnerProfilePage() {
 
   if (loading && learners.length === 0) return <PageSkeleton type="table" />
   if (error) return <ErrorState type="default" onRetry={() => { setError(null); fetchLearners({ page: currentPage, pageSize: pagination.pageSize }) }} />
+  if (learnerError && user?.role === 'learner') {
+    return (
+      <EmptyState
+        type="users"
+        title="请先完成学习者画像"
+        description="完成画像设置后，才能使用导学、资源生成和学情报告。"
+        action={<Button variant="outline" onClick={() => navigate('/onboarding/name')}>开始设置</Button>}
+      />
+    )
+  }
+  if (learnerError) {
+    return <ErrorState type="default" details={learnerError} onRetry={() => { void fetchLearners({ page: currentPage, pageSize: pagination.pageSize }) }} />
+  }
 
   const currentRadarData = currentLearner ? getRadarData(currentLearner) : []
   const currentAvgAbility = currentLearner
@@ -700,14 +727,18 @@ export default function LearnerProfilePage() {
           <p className="text-sm text-text-secondary mt-1">录入/读取学习者背景数据，生成标准化用户学情画像</p>
         </div>
         <div className="flex items-center gap-3">
-          <Button variant="outline" onClick={() => setShowDesensitization(true)}>
-            <Shield className="w-4 h-4" />
-            脱敏设置
-          </Button>
-          <Button variant="primary" onClick={() => { setEditingLearner(undefined); setShowEditModal(true) }}>
-            <UserPlus className="w-4 h-4" />
-            新建画像
-          </Button>
+          {isAdmin && (
+            <>
+              <Button variant="outline" onClick={() => setShowDesensitization(true)}>
+                <Shield className="w-4 h-4" />
+                脱敏设置
+              </Button>
+              <Button variant="primary" onClick={() => { setEditingLearner(undefined); setShowEditModal(true) }}>
+                <UserPlus className="w-4 h-4" />
+                新建画像
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -738,8 +769,8 @@ export default function LearnerProfilePage() {
                 learner={learner}
                 isSelected={currentLearner?.id === learner.id}
                 onClick={() => setCurrentLearner(learner)}
-                onEdit={() => handleEdit(learner)}
-                onDelete={() => handleDelete(learner)}
+                onEdit={canEditLearners ? () => handleEdit(learner) : undefined}
+                onDelete={isAdmin ? () => handleDelete(learner) : undefined}
               />
             ))}
           </div>
@@ -834,13 +865,17 @@ export default function LearnerProfilePage() {
 
                 <div className="p-5 border-t border-border bg-bg-secondary/30">
                   <div className="flex gap-2">
-                    <Button variant="outline" className="flex-1" onClick={() => handleEdit(currentLearner)}>
-                      <Edit2 className="w-4 h-4" />
-                      编辑
-                    </Button>
-                    <Button variant="outline" className="text-error hover:bg-error-light hover:border-error/30" onClick={() => handleDelete(currentLearner)}>
-                      <Trash2 className="w-4 h-4" />
-                    </Button>
+                    {canEditLearners && (
+                      <Button variant="outline" className="flex-1" onClick={() => handleEdit(currentLearner)}>
+                        <Edit2 className="w-4 h-4" />
+                        编辑
+                      </Button>
+                    )}
+                    {isAdmin && (
+                      <Button variant="outline" className="text-error hover:bg-error-light hover:border-error/30" onClick={() => handleDelete(currentLearner)}>
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </>

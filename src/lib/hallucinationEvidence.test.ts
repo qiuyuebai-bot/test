@@ -23,5 +23,16 @@ describe('hallucination evidence adapter', () => {
     expect(report.knowledgeGap.entities).toContain('Aurora')
     expect(report.knowledgeGap.uploadPrompt).toBeTruthy()
   })
-})
 
+  it('translates the legacy English upload prompt', () => {
+    const report = normalizeHallucinationReport({
+      credibility: 'no_evidence',
+      knowledge_gap: {
+        present: true,
+        upload_prompt: 'Upload relevant materials to improve evidence coverage.',
+      },
+    })
+
+    expect(report.knowledgeGap.uploadPrompt).toBe('上传相关资料以提升证据覆盖率。')
+  })
+})

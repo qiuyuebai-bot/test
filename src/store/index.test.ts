@@ -7,6 +7,7 @@ vi.mock('../api', () => ({
     logout: vi.fn(),
   },
   learnerApi: {
+    getCurrent: vi.fn(),
     getList: vi.fn(),
     getById: vi.fn(),
     create: vi.fn(),
@@ -131,12 +132,27 @@ describe('store learner state', () => {
     expect(useStore.getState().learnersLoading).toBe(false)
   })
 
+  it('loads only the current profile for learner accounts', async () => {
+    const currentLearner = { id: 7, realName: '我的画像' }
+    vi.mocked(learnerApi.getCurrent).mockResolvedValue(currentLearner as never)
+    const useStore = await freshStore()
+    useStore.setState({ user: { id: 7, role: 'learner' } as never })
+
+    await useStore.getState().fetchLearners()
+
+    expect(learnerApi.getCurrent).toHaveBeenCalledTimes(1)
+    expect(learnerApi.getList).not.toHaveBeenCalled()
+    expect(useStore.getState().currentLearner).toEqual(currentLearner)
+    expect(useStore.getState().learners).toEqual([currentLearner])
+  })
+
   it('fetchLearners swallows errors and clears loading flags', async () => {
     vi.mocked(learnerApi.getList).mockRejectedValue(new Error('net'))
     const useStore = await freshStore()
     await useStore.getState().fetchLearners()
     expect(useStore.getState().learnersLoading).toBe(false)
     expect(useStore.getState().learners).toEqual([])
+    expect(useStore.getState().learnerError).toBe('net')
   })
 
   it('createLearner calls api and refreshes list', async () => {

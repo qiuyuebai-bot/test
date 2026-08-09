@@ -273,6 +273,8 @@ function UploadModal({ isOpen, onClose, onSuccess }: { isOpen: boolean; onClose:
 }
 
 export default function KnowledgeBase() {
+  const user = useStore((s) => s.user)
+  const canManageKnowledge = user?.role === 'admin'
   const { knowledgeDocs, knowledgeSlices, knowledgeLoading, knowledgeError, totalKnowledgeDocs } = useStore(
     useShallow((s) => ({
       knowledgeDocs: s.knowledgeDocs,
@@ -364,6 +366,7 @@ export default function KnowledgeBase() {
   }
 
   const handleImportSamples = async () => {
+    if (!canManageKnowledge) return
     const samples = [
       { title: '反向传播算法基础', industry: '人工智能训练', category: '深度学习', content: '反向传播（Backpropagation）是训练人工神经网络的核心算法。它通过链式法则计算损失函数相对于每个参数的梯度，然后使用梯度下降法更新参数。\n\n核心步骤：\n1. 前向传播：输入数据通过网络，计算每一层的输出和最终预测值\n2. 计算损失：使用损失函数比较预测值与真实标签\n3. 反向传播：从输出层向输入层逐层计算梯度\n4. 参数更新：根据梯度和学习率调整权重和偏置\n\n学习率是重要的超参数：过大导致震荡不收敛，过小收敛缓慢。常用优化器包括 SGD、Adam、RMSProp 等。' },
       { title: 'RESTful API 设计规范', industry: '软件开发', category: '后端开发', content: 'REST（Representational State Transfer）是一组软件架构原则，用于设计网络服务。\n\n核心原则：\n1. 资源导向：每个 URL 代表一个资源，名词复数形式\n2. HTTP 方法语义：GET 查询、POST 创建、PUT 全量更新、PATCH 部分更新、DELETE 删除\n3. 无状态：每个请求包含所有必要信息，服务端不保存客户端会话\n4. 统一接口：一致的响应格式和错误处理\n\n最佳实践：\n- 使用 JSON 作为数据格式\n- API 版本化（/api/v1/）\n- 适当的 HTTP 状态码（200/201/400/404/500）\n- 分页、过滤、排序支持\n- 认证使用 Bearer Token 或 OAuth 2.0\n- 限流防止滥用' },
@@ -381,6 +384,7 @@ export default function KnowledgeBase() {
   }
 
   const handleUpload = () => {
+    if (!canManageKnowledge) return
     setShowUpload(true)
   }
 
@@ -407,12 +411,13 @@ export default function KnowledgeBase() {
   }
 
   const handleDeleteClick = (doc: KnowledgeDoc) => {
+    if (!canManageKnowledge) return
     setDeleteTarget(doc)
     setShowDeleteConfirm(true)
   }
 
   const handleDeleteConfirm = async () => {
-    if (!deleteTarget) return
+    if (!deleteTarget || !canManageKnowledge) return
     setDeleting(true)
     try {
       await knowledgeApi.delete(deleteTarget.id)
@@ -428,6 +433,7 @@ export default function KnowledgeBase() {
   }
 
   const handleReindex = async (doc: KnowledgeDoc) => {
+    if (!canManageKnowledge) return
     setReindexingId(doc.id)
     try {
       const result = await knowledgeApi.reindex(doc.id)
@@ -455,14 +461,18 @@ export default function KnowledgeBase() {
             <Link className="w-4 h-4" />
             知识溯源
           </Button>
-          <Button variant="outline" onClick={handleImportSamples}>
-            <Download className="w-4 h-4" />
-            导入样例
-          </Button>
-          <Button variant="primary" onClick={handleUpload}>
-            <Upload className="w-4 h-4" />
-            上传文档
-          </Button>
+          {canManageKnowledge && (
+            <>
+              <Button variant="outline" onClick={handleImportSamples}>
+                <Download className="w-4 h-4" />
+                导入样例
+              </Button>
+              <Button variant="primary" onClick={handleUpload}>
+                <Upload className="w-4 h-4" />
+                上传文档
+              </Button>
+            </>
+          )}
         </div>
       </div>
 
@@ -602,7 +612,7 @@ export default function KnowledgeBase() {
                           </td>
                           <td className="px-5 py-3">
                             <div className="flex items-center justify-end gap-1">
-                              {(doc.status === 'error' || doc.status === 'pending') && (
+                              {canManageKnowledge && (doc.status === 'error' || doc.status === 'pending') && (
                                 <button
                                   onClick={() => void handleReindex(doc)}
                                   disabled={reindexingId === doc.id}
@@ -626,13 +636,15 @@ export default function KnowledgeBase() {
                               >
                                 <Download className="w-4 h-4 text-text-tertiary" />
                               </button>
-                              <button
-                                onClick={() => handleDeleteClick(doc)}
-                                className="p-2 rounded-lg hover:bg-error-light transition-colors"
-                                title="删除"
-                              >
-                                <Trash2 className="w-4 h-4 text-text-tertiary" />
-                              </button>
+                              {canManageKnowledge && (
+                                <button
+                                  onClick={() => handleDeleteClick(doc)}
+                                  className="p-2 rounded-lg hover:bg-error-light transition-colors"
+                                  title="删除"
+                                >
+                                  <Trash2 className="w-4 h-4 text-text-tertiary" />
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -738,7 +750,9 @@ export default function KnowledgeBase() {
         </div>
       </div>
 
-      <UploadModal isOpen={showUpload} onClose={() => setShowUpload(false)} onSuccess={() => fetchKnowledgeDocs({ page: 1, pageSize: 50 })} />
+      {canManageKnowledge && (
+        <UploadModal isOpen={showUpload} onClose={() => setShowUpload(false)} onSuccess={() => fetchKnowledgeDocs({ page: 1, pageSize: 50 })} />
+      )}
       <DocPreviewModal
         isOpen={showPreview}
         onClose={() => { setShowPreview(false); setSelectedDoc(undefined) }}
@@ -750,7 +764,7 @@ export default function KnowledgeBase() {
       <TraceabilityModal isOpen={showTraceability} onClose={() => setShowTraceability(false)} />
 
       {/* 删除确认弹窗 */}
-      {showDeleteConfirm && deleteTarget && (
+      {canManageKnowledge && showDeleteConfirm && deleteTarget && (
         <Modal isOpen={showDeleteConfirm} onClose={() => { setShowDeleteConfirm(false); setDeleteTarget(null) }} maxWidth="max-w-sm" className="p-8">
           <div className="text-center">
             <div className="w-12 h-12 rounded-full bg-error/10 flex items-center justify-center mx-auto mb-4">

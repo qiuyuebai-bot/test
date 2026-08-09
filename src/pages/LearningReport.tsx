@@ -126,10 +126,13 @@ interface RoundSummary {
 
 export default function LearningReport() {
   const navigate = useNavigate()
-  const { currentLearner, learners } = useStore(
+  const { currentLearner, learners, fetchLearners, learnersLoading, learnerError } = useStore(
     useShallow((s) => ({
       currentLearner: s.currentLearner,
       learners: s.learners,
+      fetchLearners: s.fetchLearners,
+      learnersLoading: s.learnersLoading,
+      learnerError: s.learnerError,
     }))
   )
   const learner = currentLearner || learners[0]
@@ -144,6 +147,12 @@ export default function LearningReport() {
   const [pdfExporting, setPdfExporting] = useState(false)
   const [pdfError, setPdfError] = useState<string | null>(null)
   const cancelledRef = useRef(false)
+
+  useEffect(() => {
+    if (!learner && !learnersLoading && !learnerError) {
+      void fetchLearners({ page: 1, pageSize: 1 })
+    }
+  }, [fetchLearners, learner, learnersLoading, learnerError])
 
   const loadReport = useCallback(async () => {
     if (!learner?.id) {
@@ -189,8 +198,20 @@ export default function LearningReport() {
     }
   }, [loadReport])
 
-  if (loading) return <PageSkeleton type="dashboard" />
+  if (loading || (!learner && learnersLoading)) return <PageSkeleton type="dashboard" />
   if (error) return <ErrorState type="default" onRetry={() => { setError(null); loadReport() }} />
+  if (!learner && learnerError) {
+    return (
+      <ErrorState
+        type="default"
+        title="学习者画像加载失败"
+        description="当前账号无法读取学习者画像，请完成画像设置后再查看学情报告。"
+        details={learnerError}
+        onRetry={() => { void fetchLearners({ page: 1, pageSize: 1 }) }}
+        onGoHome={() => navigate('/onboarding/name')}
+      />
+    )
+  }
   if (!learner) return <EmptyState type="default" title="暂无报告数据" description="请先选择学习者以生成报告" />
 
   // 衍生数据

@@ -13,6 +13,7 @@ export default function OnboardingName() {
   const navigate = useNavigate()
   const location = useLocation()
   const user = useStore((s) => s.user)
+  const fetchLearnerById = useStore((s) => s.fetchLearnerById)
   const [name, setName] = useState('')
   const [error, setError] = useState('')
   const [isSaving, setIsSaving] = useState(false)
@@ -38,7 +39,8 @@ export default function OnboardingName() {
     setIsSaving(true)
 
     try {
-      await authApi.setOnboardingName({ name: parsed.data.name })
+      const result = await authApi.setOnboardingName({ name: parsed.data.name })
+      await fetchLearnerById(result.id)
       toast.success('设置成功', `欢迎你，${parsed.data.name}`)
       enterApp()
     } catch (err: unknown) {
@@ -93,13 +95,6 @@ export default function OnboardingName() {
             </Button>
           </div>
 
-          <button
-            type="button"
-            onClick={enterApp}
-            className="mt-10 text-sm font-medium text-slate-500 transition hover:text-slate-900"
-          >
-            跳过
-          </button>
         </form>
       </section>
     </main>

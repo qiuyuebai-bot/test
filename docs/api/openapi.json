@@ -783,6 +783,34 @@
         }
       }
     },
+    "/api/v1/learners/me": {
+      "get": {
+        "tags": [
+          "学习者画像"
+        ],
+        "summary": "获取当前用户的学习者画像",
+        "description": "仅返回当前登录用户所属的学习者画像。",
+        "operationId": "get_current_learner_api_v1_learners_me_get",
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ]
+      }
+    },
     "/api/v1/learners/{learner_id}": {
       "get": {
         "tags": [

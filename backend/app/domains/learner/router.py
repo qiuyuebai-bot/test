@@ -141,6 +141,44 @@ def get_learner_list(
 # 3. 学习者详情
 # ===========================================
 
+@router.get("/me", summary="获取当前用户的学习者画像")
+def get_current_learner(
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+):
+    """仅返回当前登录用户所属的学习者画像。"""
+    learner = LearnerService.get_learner_by_user_id(db, current_user.user_id)
+    if not learner:
+        return not_found("当前用户尚未创建学习者画像")
+
+    response = LearnerProfileResponse(
+        id=learner.id,
+        user_id=learner.user_id,
+        real_name=learner.real_name,
+        education_level=learner.education_level,
+        major=learner.major,
+        graduation_year=learner.graduation_year,
+        current_position=learner.current_position,
+        learning_style=learner.learning_style,
+        preferred_difficulty=learner.preferred_difficulty,
+        daily_study_time=learner.daily_study_time,
+        target_industry=learner.target_industry,
+        target_position=learner.target_position,
+        learning_goal=learner.learning_goal,
+        theoretical_foundation=learner.theoretical_foundation,
+        programming_ability=learner.programming_ability,
+        algorithm_design=learner.algorithm_design,
+        system_architecture=learner.system_architecture,
+        data_analysis=learner.data_analysis,
+        engineering_practice=learner.engineering_practice,
+        average_ability=learner.average_ability,
+        knowledge_blind_areas=learner.knowledge_blind_areas or [],
+        is_data_anonymized=learner.is_data_anonymized,
+        created_at=learner.created_at,
+        updated_at=learner.updated_at,
+    )
+    return success(response, "查询成功")
+
 @router.get("/{learner_id}", summary="获取学习者详情")
 def get_learner_detail(
     learner_id: int,

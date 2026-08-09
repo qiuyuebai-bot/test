@@ -32,6 +32,10 @@ export interface CreateLearnerData {
 }
 
 export const learnerApi = {
+  getCurrent(): Promise<LearnerProfile> {
+    return http.get<LearnerProfile>('/learners/me')
+  },
+
   getList(params?: LearnerListParams): Promise<PagedData<LearnerProfile>> {
     return http.get<PagedData<LearnerProfile>>('/learners', params as Record<string, string | number | boolean | undefined>)
   },

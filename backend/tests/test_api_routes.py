@@ -70,6 +70,19 @@ class TestLearnerRoutes:
         assert data["code"] == 200
         assert "items" in data["data"] or isinstance(data["data"], (list, dict))
 
+    def test_get_current_learner(self, client: TestClient, sample_learner_profile: LearnerProfile, auth_headers: dict):
+        response = client.get("/api/v1/learners/me", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["code"] == 200
+        assert data["data"]["id"] == sample_learner_profile.id
+        assert data["data"]["user_id"] == sample_learner_profile.user_id
+
+    def test_get_current_learner_requires_a_profile(self, client: TestClient, auth_headers: dict):
+        response = client.get("/api/v1/learners/me", headers=auth_headers)
+        assert response.status_code == 404
+        assert response.json()["code"] == 404
+
     def test_get_learner_detail(self, client: TestClient, sample_learner_profile: LearnerProfile, auth_headers: dict):
         """测试获取学习者详情"""
         response = client.get(f"/api/v1/learners/{sample_learner_profile.id}", headers=auth_headers)

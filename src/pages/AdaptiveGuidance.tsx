@@ -242,13 +242,14 @@ function mapHistoryRecord(r: InteractionHistoryRecord): HistoryRecord {
 
 export default function AdaptiveGuidance() {
   const navigate = useNavigate()
-  const { currentLearner, learners, fetchLearners, setCurrentLearner, learnersLoading } = useStore(
+  const { currentLearner, learners, fetchLearners, setCurrentLearner, learnersLoading, learnerError } = useStore(
     useShallow((s) => ({
       currentLearner: s.currentLearner,
       learners: s.learners,
       fetchLearners: s.fetchLearners,
       setCurrentLearner: s.setCurrentLearner,
       learnersLoading: s.learnersLoading,
+      learnerError: s.learnerError,
     }))
   )
   const availableLearners = useMemo(() => {
@@ -306,9 +307,9 @@ export default function AdaptiveGuidance() {
   }, [])
 
   useEffect(() => {
-    if (learner?.id || learners.length > 0 || learnersLoading) return
+    if (learner?.id || learners.length > 0 || learnersLoading || learnerError) return
     void fetchLearners({ page: 1, pageSize: 20 })
-  }, [fetchLearners, learner?.id, learners.length, learnersLoading])
+  }, [fetchLearners, learner?.id, learners.length, learnersLoading, learnerError])
 
   const loadData = useCallback(async () => {
     if (!learner?.id) {
@@ -764,6 +765,19 @@ export default function AdaptiveGuidance() {
   }
 
   if (loading || (!learner && learnersLoading)) return <PageSkeleton type="default" />
+
+  if (!learner && learnerError) {
+    return (
+      <ErrorState
+        type="default"
+        title="学习者画像加载失败"
+        description="当前账号无法读取学习者画像，请完成画像设置后再继续。"
+        details={learnerError}
+        onRetry={() => { void fetchLearners({ page: 1, pageSize: 20 }) }}
+        onGoHome={() => navigate('/onboarding/name')}
+      />
+    )
+  }
 
   if (!learner) {
     return (

@@ -64,4 +64,16 @@ describe('KnowledgeBase domain labels', () => {
     expect(await screen.findAllByText('数据分析', { exact: true })).not.toHaveLength(0)
     expect(screen.queryByText('data_analysis', { exact: true })).not.toBeInTheDocument()
   })
+
+  it('hides administrator-only document actions for learners', async () => {
+    setMockStore({ user: { id: 2, username: 'learner', role: 'learner' } })
+    const { default: Page } = await import('./KnowledgeBase')
+
+    render(<Page />)
+
+    await screen.findAllByText('数据分析', { exact: true })
+    expect(screen.queryByRole('button', { name: '上传文档' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '导入样例' })).not.toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '删除' })).not.toBeInTheDocument()
+  })
 })

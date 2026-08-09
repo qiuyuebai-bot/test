@@ -16,6 +16,7 @@ const defaults: State = {
   currentLearner: null,
   learnersLoading: false,
   learnerLoading: false,
+  learnerError: null,
   learnersTotal: 0,
   pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 },
   fetchLearners: () => Promise.resolve(),

@@ -8,6 +8,7 @@ export interface LearnerSlice {
   currentLearner: LearnerProfile | null
   learnersLoading: boolean
   learnerLoading: boolean
+  learnerError: string | null
   learnersTotal: number
   pagination: { page: number; pageSize: number; total: number; totalPages: number }
   fetchLearners: (params?: { page?: number; pageSize?: number; keyword?: string }) => Promise<void>
@@ -26,12 +27,29 @@ export const createLearnerSlice: StateCreator<AppState, [], [], LearnerSlice> = 
   currentLearner: null,
   learnersLoading: false,
   learnerLoading: false,
+  learnerError: null,
   learnersTotal: 0,
   pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 },
 
   fetchLearners: async (params) => {
-    set({ learnersLoading: true, learnerLoading: true })
+    set({ learnersLoading: true, learnerLoading: true, learnerError: null })
     try {
+      const user = get().user
+      const canReadLearnerList = user?.role === 'admin' || user?.role === 'teacher'
+
+      if (!canReadLearnerList && user) {
+        const learner = await learnerApi.getCurrent()
+        set({
+          learners: [learner],
+          currentLearner: learner,
+          learnersTotal: 1,
+          learnersLoading: false,
+          learnerLoading: false,
+          pagination: { page: 1, pageSize: 1, total: 1, totalPages: 1 },
+        })
+        return
+      }
+
       const result = await learnerApi.getList({
         page: 1,
         pageSize: 20,
@@ -51,7 +69,11 @@ export const createLearnerSlice: StateCreator<AppState, [], [], LearnerSlice> = 
       })
     } catch (err) {
       console.error('fetchLearners failed:', err)
-      set({ learnersLoading: false, learnerLoading: false })
+      set({
+        learnersLoading: false,
+        learnerLoading: false,
+        learnerError: err instanceof Error ? err.message : '学习者画像加载失败',
+      })
     }
   },
 
@@ -59,7 +81,7 @@ export const createLearnerSlice: StateCreator<AppState, [], [], LearnerSlice> = 
     const reqId = ++_latestLearnerReqId
     const learner = await learnerApi.getById(id)
     if (reqId !== _latestLearnerReqId) return learner
-    set({ currentLearner: learner })
+    set({ currentLearner: learner, learnerError: null })
     return learner
   },
 
