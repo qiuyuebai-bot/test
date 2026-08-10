@@ -18,6 +18,15 @@ export interface LoginRequest {
   password: string
 }
 
+export interface AbilityAssessment {
+  status: 'estimated' | 'insufficient_evidence' | string
+  estimatedScore: number | null
+  confidence: number
+  answeredCount: number
+  manualAdjustment?: number
+  lastAssessedAt?: string
+}
+
 export interface LoginResponse {
   userId: number
   username: string
@@ -48,6 +57,9 @@ export interface LearnerProfile {
   dataAnalysis: number
   engineeringPractice: number
   averageAbility: number
+  abilityAssessments?: Record<string, AbilityAssessment>
+  diagnosticStatus?: 'not_started' | 'in_progress' | 'completed' | 'failed' | string
+  diagnosticCompletedAt?: string
   knowledgeBlindAreas: string[]
   isDataAnonymized: boolean
   createdAt?: string

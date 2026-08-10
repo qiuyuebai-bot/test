@@ -74,6 +74,7 @@ TAGS_METADATA = [
     {"name": "运维", "description": "健康检查、存活/就绪探针、Prometheus 指标采集"},
     {"name": "基础", "description": "系统根路径信息与应用元数据"},
     {"name": "指标", "description": "系统运行指标与核心业务指标查询"},
+    {"name": "角色自适应 Dashboard", "description": "按角色聚合学习工作台、培训管理台和引导状态"},
 ]
 
 app = FastAPI(
@@ -177,6 +178,10 @@ app.include_router(report_router, prefix=settings.API_PREFIX)
 from app.domains.tutoring.router import router as tutoring_router
 app.include_router(tutoring_router, prefix=settings.API_PREFIX)
 
+# 能力诊断路由
+from app.domains.diagnostic.router import router as diagnostic_router
+app.include_router(diagnostic_router, prefix=settings.API_PREFIX)
+
 # 业务配置选项路由（从 core.py 拆分）
 from app.routers.config import router as config_router
 app.include_router(config_router, prefix=settings.API_PREFIX)
@@ -184,6 +189,10 @@ app.include_router(config_router, prefix=settings.API_PREFIX)
 # 企业培训任务路由
 from app.domains.training.router import router as training_router
 app.include_router(training_router, prefix=settings.API_PREFIX)
+
+# 角色自适应 Dashboard 路由
+from app.domains.dashboard.router import router as dashboard_router
+app.include_router(dashboard_router, prefix=settings.API_PREFIX)
 
 # 数据隐私与合规路由
 from app.routers.privacy import router as privacy_router

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { useStore } from '@/store'
 import type { LearnerProfile } from '@/types'
@@ -13,8 +13,21 @@ import GuidanceSessionSummary from '@/features/guidance/GuidanceSessionSummary'
 import GuidanceHistoryDrawer from '@/features/guidance/GuidanceHistoryDrawer'
 import { useGuidanceSession } from '@/features/guidance/useGuidanceSession'
 
+const dimensionTopics: Record<string, string> = {
+  theoretical_foundation: 'theory fundamentals',
+  programming_ability: 'programming fundamentals',
+  algorithm_design: 'algorithm design',
+  system_architecture: 'system architecture',
+  data_analysis: 'data analysis',
+  engineering_practice: 'engineering practice',
+}
+
 export default function AdaptiveGuidance() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const requestedDimension = searchParams.get('dimension') || ''
+  const requestedTopic = dimensionTopics[requestedDimension] || searchParams.get('topic') || ''
+  const requestedLearnerId = Number(searchParams.get('learnerId')) || null
   const {
     currentLearner,
     learners,
@@ -36,16 +49,19 @@ export default function AdaptiveGuidance() {
     const source = currentLearner ? [currentLearner, ...learners] : learners
     return source.filter((learner, index, all) => all.findIndex((candidate) => candidate.id === learner.id) === index)
   }, [currentLearner, learners])
-  const [selectedLearnerId, setSelectedLearnerId] = useState<number | null>(null)
-  const [launcherDefaults, setLauncherDefaults] = useState({ topic: '', difficulty: '', questionCount: '5' })
+  const [selectedLearnerId, setSelectedLearnerId] = useState<number | null>(requestedLearnerId)
+  const [launcherDefaults, setLauncherDefaults] = useState({ topic: requestedTopic, difficulty: '', questionCount: '5' })
   const learner = availableLearners.find((item) => item.id === selectedLearnerId) ?? currentLearner ?? availableLearners[0]
   const session = useGuidanceSession(learner?.id ?? null)
 
   useEffect(() => {
     if (!selectedLearnerId || !availableLearners.some((item) => item.id === selectedLearnerId)) {
-      setSelectedLearnerId(currentLearner?.id ?? availableLearners[0]?.id ?? null)
+      const requestedLearner = requestedLearnerId && availableLearners.some((item) => item.id === requestedLearnerId)
+        ? requestedLearnerId
+        : null
+      setSelectedLearnerId(requestedLearner ?? currentLearner?.id ?? availableLearners[0]?.id ?? null)
     }
-  }, [availableLearners, currentLearner?.id, selectedLearnerId])
+  }, [availableLearners, currentLearner?.id, requestedLearnerId, selectedLearnerId])
 
   useEffect(() => {
     if (learner?.id || learners.length > 0 || learnersLoading || learnerError) return
@@ -58,14 +74,15 @@ export default function AdaptiveGuidance() {
   }
 
   const handleStart = (options?: { topic?: string; difficulty?: number; questionCount?: number }) => {
-    if (options) {
+    const resolvedOptions = options || (launcherDefaults.topic ? { topic: launcherDefaults.topic } : undefined)
+    if (resolvedOptions) {
       setLauncherDefaults((previous) => ({
-        topic: options.topic ?? previous.topic,
-        difficulty: options.difficulty === undefined ? '' : String(options.difficulty),
-        questionCount: options.questionCount === undefined ? previous.questionCount : String(options.questionCount),
+        topic: resolvedOptions.topic ?? previous.topic,
+        difficulty: resolvedOptions.difficulty === undefined ? '' : String(resolvedOptions.difficulty),
+        questionCount: resolvedOptions.questionCount === undefined ? previous.questionCount : String(resolvedOptions.questionCount),
       }))
     }
-    return session.startSession(options)
+    return session.startSession(resolvedOptions)
   }
 
   const isLoading = session.state.phase === 'initializing' || (!learner && learnersLoading)

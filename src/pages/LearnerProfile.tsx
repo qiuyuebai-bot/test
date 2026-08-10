@@ -40,21 +40,7 @@ import {
 import EmptyState from '@/components/EmptyState'
 import ErrorState from '@/components/ErrorState'
 import { PageSkeleton } from '@/components/Skeleton'
-
-const educationOptions = [
-  { value: '高中', label: '高中' },
-  { value: '大专', label: '大专' },
-  { value: '本科', label: '本科' },
-  { value: '硕士', label: '硕士研究生' },
-  { value: '博士', label: '博士研究生' },
-]
-
-const learningStyleOptions: { value: 'visual' | 'auditory' | 'reading' | 'kinesthetic'; label: string }[] = [
-  { value: 'visual', label: '视觉型' },
-  { value: 'auditory', label: '听觉型' },
-  { value: 'reading', label: '阅读型' },
-  { value: 'kinesthetic', label: '动觉型' },
-]
+import LearnerProfileWizard from '@/components/LearnerProfileWizard'
 
 const learningStyleMap: Record<string, string> = {
   visual: '视觉型',
@@ -65,12 +51,12 @@ const learningStyleMap: Record<string, string> = {
 
 function getRadarData(learner: LearnerProfile) {
   return [
-    { subject: '理论基础', score: learner.theoreticalFoundation || 0 },
-    { subject: '编程能力', score: learner.programmingAbility || 0 },
-    { subject: '算法设计', score: learner.algorithmDesign || 0 },
-    { subject: '系统架构', score: learner.systemArchitecture || 0 },
-    { subject: '数据分析', score: learner.dataAnalysis || 0 },
-    { subject: '工程实践', score: learner.engineeringPractice || 0 },
+    { dimension: 'theoretical_foundation', subject: '理论基础', score: learner.theoreticalFoundation || 0 },
+    { dimension: 'programming_ability', subject: '编程能力', score: learner.programmingAbility || 0 },
+    { dimension: 'algorithm_design', subject: '算法设计', score: learner.algorithmDesign || 0 },
+    { dimension: 'system_architecture', subject: '系统架构', score: learner.systemArchitecture || 0 },
+    { dimension: 'data_analysis', subject: '数据分析', score: learner.dataAnalysis || 0 },
+    { dimension: 'engineering_practice', subject: '工程实践', score: learner.engineeringPractice || 0 },
   ]
 }
 
@@ -84,10 +70,21 @@ function formatDate(dateStr?: string) {
   }
 }
 
-function RadarChartCard({ data }: { data: Array<{ subject: string; score: number }> }) {
+function RadarChartCard({
+  data,
+  onDimensionClick,
+}: {
+  data: Array<{ dimension: string; subject: string; score: number }>
+  onDimensionClick?: (dimension: string) => void
+}) {
+  const handleChartClick = (state: { activePayload?: Array<{ payload?: { dimension?: string } }> }) => {
+    const dimension = state.activePayload?.[0]?.payload?.dimension
+    if (dimension) onDimensionClick?.(dimension)
+  }
+
   return (
     <ResponsiveContainer width="100%" height={200}>
-      <RadarChart cx="50%" cy="50%" outerRadius="70%" data={data}>
+      <RadarChart cx="50%" cy="50%" outerRadius="70%" data={data} onClick={handleChartClick}>
         <PolarGrid stroke={CHART_COLORS.grid} strokeWidth={1} />
         <PolarAngleAxis
           dataKey="subject"
@@ -140,12 +137,14 @@ function LearnerCard({
   onClick,
   onEdit,
   onDelete,
+  onDimensionClick,
 }: {
   learner: LearnerProfile
   isSelected: boolean
   onClick: () => void
   onEdit?: () => void
   onDelete?: () => void
+  onDimensionClick?: (dimension: string) => void
 }) {
   const radarData = getRadarData(learner)
   const avgAbility = learner.averageAbility || Math.round(
@@ -219,7 +218,7 @@ function LearnerCard({
       </div>
 
       <div className="mb-4">
-        <RadarChartCard data={radarData} />
+        <RadarChartCard data={radarData} onDimensionClick={onDimensionClick} />
       </div>
 
       <div className="pt-3 border-t border-border">
@@ -241,196 +240,6 @@ function LearnerCard({
         </span>
       </div>
     </Card>
-  )
-}
-
-function EditModal({
-  isOpen,
-  onClose,
-  learner,
-  onSave,
-}: {
-  isOpen: boolean
-  onClose: () => void
-  learner?: LearnerProfile
-  onSave: (data: Partial<LearnerProfile>) => void
-}) {
-  const [formData, setFormData] = useState({
-    realName: learner?.realName || '',
-    educationLevel: educationOptions.find(e => e.value === learner?.educationLevel)?.value || '本科',
-    major: learner?.major || '',
-    averageAbility: learner?.averageAbility || learner?.theoreticalFoundation || 50,
-    theoreticalFoundation: learner?.theoreticalFoundation || 50,
-    programmingAbility: learner?.programmingAbility || 50,
-    algorithmDesign: learner?.algorithmDesign || 50,
-    systemArchitecture: learner?.systemArchitecture || 50,
-    dataAnalysis: learner?.dataAnalysis || 50,
-    engineeringPractice: learner?.engineeringPractice || 50,
-    learningStyle: (learner?.learningStyle as 'visual' | 'auditory' | 'reading' | 'kinesthetic') || 'visual',
-    knowledgeBlindAreas: (learner?.knowledgeBlindAreas || []).join(', '),
-  })
-
-  useEffect(() => {
-    if (isOpen) {
-      setFormData({
-        realName: learner?.realName || '',
-        educationLevel: educationOptions.find(e => e.value === learner?.educationLevel)?.value || '本科',
-        major: learner?.major || '',
-        averageAbility: learner?.averageAbility || learner?.theoreticalFoundation || 50,
-        theoreticalFoundation: learner?.theoreticalFoundation || 50,
-        programmingAbility: learner?.programmingAbility || 50,
-        algorithmDesign: learner?.algorithmDesign || 50,
-        systemArchitecture: learner?.systemArchitecture || 50,
-        dataAnalysis: learner?.dataAnalysis || 50,
-        engineeringPractice: learner?.engineeringPractice || 50,
-        learningStyle: (learner?.learningStyle as 'visual' | 'auditory' | 'reading' | 'kinesthetic') || 'visual',
-        knowledgeBlindAreas: (learner?.knowledgeBlindAreas || []).join(', '),
-      })
-    }
-  }, [isOpen, learner])
-
-  if (!isOpen) return null
-
-  const handleSave = () => {
-    const blindAreas = formData.knowledgeBlindAreas
-      .split(/[,，]/)
-      .map(s => s.trim())
-      .filter(Boolean)
-    const avgScore = Math.round(
-      (formData.theoreticalFoundation + formData.programmingAbility + formData.algorithmDesign +
-        formData.systemArchitecture + formData.dataAnalysis + formData.engineeringPractice) / 6
-    )
-    onSave({
-      realName: formData.realName,
-      educationLevel: formData.educationLevel,
-      major: formData.major,
-      learningStyle: formData.learningStyle,
-      theoreticalFoundation: formData.theoreticalFoundation,
-      programmingAbility: formData.programmingAbility,
-      algorithmDesign: formData.algorithmDesign,
-      systemArchitecture: formData.systemArchitecture,
-      dataAnalysis: formData.dataAnalysis,
-      engineeringPractice: formData.engineeringPractice,
-      averageAbility: avgScore,
-      knowledgeBlindAreas: blindAreas,
-    })
-  }
-
-  return (
-    <Modal isOpen={isOpen} onClose={onClose} maxWidth="max-w-lg" className="p-8 max-h-[90vh] overflow-y-auto">
-        <div className="flex items-center justify-between mb-5">
-          <h3 className="text-lg font-semibold text-text-primary flex items-center gap-2">
-            <Edit2 className="w-5 h-5 text-text-secondary" />
-            {learner ? '编辑画像' : '新建画像'}
-          </h3>
-        </div>
-
-        <div className="space-y-4">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-text-primary mb-1.5">姓名</label>
-              <input
-                type="text"
-                value={formData.realName}
-                onChange={(e) => setFormData({ ...formData, realName: e.target.value })}
-                className="w-full h-10 px-3 bg-bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-                placeholder="请输入姓名"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-text-primary mb-1.5">学历</label>
-              <select
-                value={formData.educationLevel}
-                onChange={(e) => setFormData({ ...formData, educationLevel: e.target.value })}
-                className="w-full h-10 px-3 bg-bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-              >
-                {educationOptions.map((e) => (
-                  <option key={e.value} value={e.value}>{e.label}</option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-text-primary mb-1.5">专业</label>
-            <input
-              type="text"
-              value={formData.major}
-              onChange={(e) => setFormData({ ...formData, major: e.target.value })}
-              className="w-full h-10 px-3 bg-bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-              placeholder="请输入专业方向"
-            />
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-text-primary mb-1.5">学习风格</label>
-            <div className="grid grid-cols-4 gap-2">
-              {learningStyleOptions.map((s) => (
-                <button
-                  key={s.value}
-                  onClick={() => setFormData({ ...formData, learningStyle: s.value })}
-                  className={`p-2.5 rounded-lg border text-sm font-medium transition-all ${
-                    formData.learningStyle === s.value
-                      ? 'border-primary bg-primary/5 text-primary'
-                      : 'border-border text-text-secondary hover:border-primary/30'
-                  }`}
-                >
-                  {s.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-text-primary mb-2">六维能力评分</label>
-            <div className="space-y-3 p-3 bg-bg-secondary/50 rounded-lg">
-              {[
-                { key: 'theoreticalFoundation', label: '理论基础' },
-                { key: 'programmingAbility', label: '编程能力' },
-                { key: 'algorithmDesign', label: '算法设计' },
-                { key: 'systemArchitecture', label: '系统架构' },
-                { key: 'dataAnalysis', label: '数据分析' },
-                { key: 'engineeringPractice', label: '工程实践' },
-              ].map((dim) => (
-                <div key={dim.key}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-text-secondary">{dim.label}</span>
-                    <span className="text-xs font-semibold text-primary">
-                      {formData[dim.key as keyof typeof formData] as number}
-                    </span>
-                  </div>
-                  <input
-                    type="range"
-                    min="0"
-                    max="100"
-                    value={formData[dim.key as keyof typeof formData] as number}
-                    onChange={(e) => setFormData({ ...formData, [dim.key]: Number(e.target.value) })}
-                    className="w-full h-1.5 bg-bg-tertiary rounded-full appearance-none cursor-pointer accent-primary"
-                  />
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-sm font-medium text-text-primary mb-1.5">知识盲区（逗号分隔）</label>
-            <input
-              type="text"
-              value={formData.knowledgeBlindAreas}
-              onChange={(e) => setFormData({ ...formData, knowledgeBlindAreas: e.target.value })}
-              className="w-full h-10 px-3 bg-bg-secondary border border-border rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
-              placeholder="例如：模型蒸馏, 分布式训练, 超参数调优"
-            />
-          </div>
-        </div>
-
-        <div className="flex justify-end gap-3 mt-6">
-          <Button variant="outline" onClick={onClose}>取消</Button>
-          <Button variant="primary" onClick={handleSave}>
-            {learner ? '保存修改' : '创建画像'}
-          </Button>
-        </div>
-    </Modal>
   )
 }
 
@@ -591,9 +400,10 @@ export default function LearnerProfilePage() {
       currentLearner: s.currentLearner,
     }))
   )
-  const { fetchLearners, addLearner, updateLearner, deleteLearner, setCurrentLearner } = useStore(
+  const { fetchLearners, fetchLearnerById, addLearner, updateLearner, deleteLearner, setCurrentLearner } = useStore(
     useShallow((s) => ({
       fetchLearners: s.fetchLearners,
+      fetchLearnerById: s.fetchLearnerById,
       addLearner: s.addLearner,
       updateLearner: s.updateLearner,
       deleteLearner: s.deleteLearner,
@@ -658,6 +468,10 @@ export default function LearnerProfilePage() {
     setShowEditModal(true)
   }
 
+  const handleDimensionClick = (learnerId: number, dimension: string) => {
+    navigate(`/guidance?dimension=${encodeURIComponent(dimension)}&learnerId=${learnerId}`)
+  }
+
   const handleDelete = async (learner: LearnerProfile) => {
     if (window.confirm(`确定要删除学习者「${learner.realName}」的画像吗？`)) {
       try {
@@ -668,12 +482,17 @@ export default function LearnerProfilePage() {
     }
   }
 
-  const handleSave = async (data: Partial<LearnerProfile>) => {
+  const handleSave = async (
+    data: Partial<LearnerProfile> & { manualAbilityAdjustments?: Record<string, number> },
+    options: { close?: boolean } = {},
+  ): Promise<LearnerProfile | undefined> => {
     try {
+      let savedLearner: LearnerProfile
       if (editingLearner) {
         await updateLearner(editingLearner.id, data)
+        savedLearner = await fetchLearnerById(editingLearner.id)
       } else {
-        await addLearner({
+        const result = await addLearner({
           realName: data.realName || '',
           educationLevel: data.educationLevel || '本科',
           major: data.major || '',
@@ -685,12 +504,25 @@ export default function LearnerProfilePage() {
           dataAnalysis: data.dataAnalysis || 0,
           engineeringPractice: data.engineeringPractice || 0,
           knowledgeBlindAreas: data.knowledgeBlindAreas || [],
+          manualAbilityAdjustments: data.manualAbilityAdjustments,
         })
+        savedLearner = await fetchLearnerById(result.id)
       }
-      setShowEditModal(false)
-      setEditingLearner(undefined)
-    } catch {
-      setError(editingLearner ? '更新失败，请重试' : '创建失败，请重试')
+      if (options.close !== false) {
+        setShowEditModal(false)
+        setEditingLearner(undefined)
+      } else {
+        setEditingLearner(savedLearner)
+      }
+      return savedLearner
+    } catch (err) {
+      throw new Error(
+        err instanceof Error
+          ? err.message
+          : editingLearner
+            ? '更新失败，请重试'
+            : '创建失败，请重试',
+      )
     }
   }
 
@@ -771,6 +603,7 @@ export default function LearnerProfilePage() {
                 onClick={() => setCurrentLearner(learner)}
                 onEdit={canEditLearners ? () => handleEdit(learner) : undefined}
                 onDelete={isAdmin ? () => handleDelete(learner) : undefined}
+                onDimensionClick={(dimension) => handleDimensionClick(learner.id, dimension)}
               />
             ))}
           </div>
@@ -819,7 +652,10 @@ export default function LearnerProfilePage() {
                       </div>
                       <span className="metric-number text-lg font-bold text-primary">{currentAvgAbility.toFixed(2)}</span>
                     </div>
-                    <RadarChartCard data={currentRadarData} />
+                    <RadarChartCard
+                      data={currentRadarData}
+                      onDimensionClick={(dimension) => handleDimensionClick(currentLearner.id, dimension)}
+                    />
                   </div>
 
                   <div className="pt-4 border-t border-border">
@@ -829,7 +665,13 @@ export default function LearnerProfilePage() {
                     </h4>
                     <div className="space-y-2">
                       {currentRadarData.map((dim) => (
-                        <div key={dim.subject} className="flex items-center justify-between">
+                        <button
+                          key={dim.subject}
+                          type="button"
+                          onClick={() => handleDimensionClick(currentLearner.id, dim.dimension)}
+                          aria-label={`进入${dim.subject}导学练习`}
+                          className="group flex w-full items-center justify-between rounded-lg px-2 py-1 text-left transition-colors hover:bg-bg-secondary focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        >
                           <span className="text-xs text-text-secondary">{dim.subject}</span>
                           <div className="flex items-center gap-2">
                             <div className="w-24 h-1.5 bg-bg-tertiary rounded-full overflow-hidden">
@@ -841,8 +683,9 @@ export default function LearnerProfilePage() {
                             <span className={`text-xs font-semibold w-8 text-right ${dim.score >= SCORE_EXCELLENT_THRESHOLD ? 'text-success' : dim.score >= SCORE_GOOD_THRESHOLD ? 'text-primary' : 'text-warning'}`}>
                               {dim.score}
                             </span>
+                            <ChevronRight className="h-3.5 w-3.5 text-text-tertiary transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
                           </div>
-                        </div>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -891,7 +734,7 @@ export default function LearnerProfilePage() {
         </div>
       </div>
 
-      <EditModal
+      <LearnerProfileWizard
         isOpen={showEditModal}
         onClose={() => { setShowEditModal(false); setEditingLearner(undefined) }}
         learner={editingLearner}

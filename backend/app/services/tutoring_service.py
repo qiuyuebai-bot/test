@@ -284,6 +284,9 @@ class AdaptiveTutoringService(BaseService):
             "difficulty": question.difficulty,
             "knowledgePoints": question.knowledge_points or [],
             "generationMethod": question.generation_method,
+            "assessmentMode": question.assessment_mode or "practice",
+            "abilityDimension": question.ability_dimension,
+            "diagnosticSessionId": question.diagnostic_session_id,
         }
 
     @classmethod
@@ -367,6 +370,9 @@ class AdaptiveTutoringService(BaseService):
         difficulty: Optional[int],
         question_count: int,
         replace_pending: bool = False,
+        assessment_mode: str = "practice",
+        ability_dimension: Optional[str] = None,
+        diagnostic_session_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Issue server-owned questions; answer keys never leave this service."""
         learner = cls.get_learner(learner_id)
@@ -487,6 +493,9 @@ class AdaptiveTutoringService(BaseService):
             knowledge,
             topic=normalized_topic,
             replace_pending=replace_pending,
+            assessment_mode=assessment_mode,
+            ability_dimension=ability_dimension or cls._infer_ability_dimension(normalized_topic),
+            diagnostic_session_id=diagnostic_session_id,
         )
 
     @classmethod
@@ -498,6 +507,9 @@ class AdaptiveTutoringService(BaseService):
         knowledge: List[Dict[str, Any]],
         topic: str = "",
         replace_pending: bool = False,
+        assessment_mode: str = "practice",
+        ability_dimension: Optional[str] = None,
+        diagnostic_session_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Persist server-only keys and return only the public question payload."""
         public_questions = []
@@ -537,6 +549,9 @@ class AdaptiveTutoringService(BaseService):
                     source_slice_ids=source_slice_ids,
                     source_doc_ids=source_doc_ids,
                     generation_method=question.get("generation_method", "deterministic_fallback"),
+                    assessment_mode=assessment_mode,
+                    ability_dimension=ability_dimension or cls._infer_ability_dimension(question_topic),
+                    diagnostic_session_id=diagnostic_session_id,
                 )
                 db.add(issued)
                 db.flush()
@@ -568,6 +583,8 @@ class AdaptiveTutoringService(BaseService):
             ).first()
             if not issued_question:
                 return {"success": False, "error": "题目不存在、无权限或已提交"}
+            if issued_question.assessment_mode == "diagnostic":
+                return {"success": False, "error": "诊断题请通过诊断会话提交"}
 
             normalized_answer = user_answer if isinstance(user_answer, list) else str(user_answer).split(",")
             normalized_answer = sorted(str(value).strip().upper() for value in normalized_answer)
@@ -578,6 +595,7 @@ class AdaptiveTutoringService(BaseService):
             question_difficulty = issued_question.difficulty
             question_content = issued_question.content
             correct_answer = issued_question.answer_key
+            ability_dimension = issued_question.ability_dimension
             score = 100.0 if is_correct else 0.0
             issued_question_id = issued_question.id
 
@@ -657,7 +675,14 @@ class AdaptiveTutoringService(BaseService):
                     sequence_index=sequence_index,
                     db=db,
                 )
-                cls._update_learner_profile(learner, question_topic, score, is_correct, db=db)
+                cls._update_learner_profile(
+                    learner,
+                    question_topic,
+                    score,
+                    is_correct,
+                    ability_dimension=ability_dimension,
+                    db=db,
+                )
                 pending_question.status = "answered"
                 pending_question.answered_at = datetime.utcnow()
                 db.flush()
@@ -1146,6 +1171,7 @@ class AdaptiveTutoringService(BaseService):
         topic: str,
         score: float,
         is_correct: bool,
+        ability_dimension: Optional[str] = None,
         db=None,
     ) -> None:
         """更新学习者画像"""
@@ -1160,7 +1186,14 @@ class AdaptiveTutoringService(BaseService):
         
         if db is None:
             with get_db_context() as managed_db:
-                cls._update_learner_profile(learner, topic, score, is_correct, db=managed_db)
+                cls._update_learner_profile(
+                    learner,
+                    topic,
+                    score,
+                    is_correct,
+                    ability_dimension=ability_dimension,
+                    db=managed_db,
+                )
             return
 
         attached = db.query(LearnerProfile).filter(
@@ -1168,13 +1201,48 @@ class AdaptiveTutoringService(BaseService):
         ).first()
         if not attached:
             return
-        for keyword, dimension in topic_dimension_map.items():
-            if keyword in topic:
-                current = getattr(attached, dimension, 0) or 0
-                change = 2 if is_correct else -1
-                new_value = max(0, min(100, current + change))
-                setattr(attached, dimension, new_value)
-                break
+        dimension = ability_dimension or cls._infer_ability_dimension(topic)
+        if dimension not in topic_dimension_map.values():
+            for keyword, candidate in topic_dimension_map.items():
+                if keyword in topic:
+                    dimension = candidate
+                    break
+        if dimension not in topic_dimension_map.values():
+            return
+
+        assessments = dict(attached.ability_assessments or {})
+        entry = dict(assessments.get(dimension) or {})
+        raw_estimated = entry.get("estimatedScore")
+        estimated = float(raw_estimated) if raw_estimated is not None else float(getattr(attached, dimension, 0) or 0)
+        change = 2 if is_correct else -1
+        new_estimated = max(0.0, min(100.0, estimated + change))
+        adjustment = float(entry.get("manualAdjustment", 0) or 0)
+        entry.update({
+            "estimatedScore": new_estimated,
+            "confidence": round(min(0.95, 0.35 + (int(entry.get("answeredCount", 0) or 0) + 1) * 0.03), 2),
+            "answeredCount": int(entry.get("answeredCount", 0) or 0) + 1,
+            "status": "estimated",
+            "lastAssessedAt": datetime.utcnow().isoformat(),
+        })
+        assessments[dimension] = entry
+        attached.ability_assessments = assessments
+        setattr(attached, dimension, max(0.0, min(100.0, new_estimated + adjustment)))
+
+    @classmethod
+    def _infer_ability_dimension(cls, topic: str) -> Optional[str]:
+        value = str(topic or "").casefold()
+        aliases = {
+            "theoretical_foundation": ("理论", "theor", "foundation"),
+            "programming_ability": ("编程", "program", "python", "代码"),
+            "algorithm_design": ("算法", "algorithm"),
+            "system_architecture": ("架构", "系统", "architecture", "system"),
+            "data_analysis": ("数据", "分析", "data", "analysis"),
+            "engineering_practice": ("工程", "实践", "engineering", "practice"),
+        }
+        for dimension, keywords in aliases.items():
+            if any(keyword.casefold() in value for keyword in keywords):
+                return dimension
+        return None
     
     @classmethod
     def _extract_key_points(cls, topic: str) -> List[str]:
