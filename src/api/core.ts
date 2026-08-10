@@ -140,6 +140,20 @@ export const coreApi = {
     return http.get<TutoringQuestion[]>('/tutoring/questions', { learnerId })
   },
 
+  getGuidanceRecommendations(learnerId: number): Promise<{
+    primaryTopic: string | null
+    alternatives: Array<{
+      topic: string
+      reason: string
+      source: 'blind_spot' | 'recent_resource' | 'recent_wrong_answer' | 'target_position' | 'fallback'
+    }>
+    recommendedDifficulty: number | null
+    reason: string
+    source: 'blind_spot' | 'recent_resource' | 'recent_wrong_answer' | 'target_position' | 'fallback'
+  }> {
+    return http.get(`/tutoring/recommendations/${learnerId}`)
+  },
+
   generateTutoringQuestions(data: GenerateTutoringQuestionsRequest): Promise<GenerateTutoringQuestionsResponse> {
     return http.post<GenerateTutoringQuestionsResponse>('/tutoring/questions/generate', data, {
       timeout: 120000,

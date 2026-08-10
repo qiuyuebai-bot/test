@@ -397,6 +397,7 @@ describe('AdaptiveGuidance page', () => {
     const { default: Page } = await import('./AdaptiveGuidance')
     renderWithRouter(<Page />)
 
+    await user.click(await screen.findByRole('button', { name: '查看历史记录' }))
     await user.click(await screen.findByRole('button', { name: /反向传播算法/ }))
     expect(await screen.findByText('题目回放：')).toBeInTheDocument()
     expect(screen.getByText('反向传播中链式法则的作用是什么？')).toBeInTheDocument()
@@ -441,6 +442,8 @@ describe('AdaptiveGuidance page', () => {
     const { default: Page } = await import('./AdaptiveGuidance')
     renderWithRouter(<Page />)
 
+    const user = userEvent.setup()
+    await user.click(await screen.findByRole('button', { name: '查看历史记录' }))
     const roundLabels = await screen.findAllByText(/^第 \d 轮$/)
     expect(roundLabels.map((element) => element.textContent)).toEqual(['第 3 轮', '第 2 轮', '第 1 轮'])
   })
@@ -514,6 +517,7 @@ describe('AdaptiveGuidance page', () => {
     const { default: Page } = await import('./AdaptiveGuidance')
     const { container } = renderWithRouter(<Page />)
 
+    await user.click(await screen.findByRole('button', { name: '查看历史记录' }))
     expect(await screen.findByText('第 1 轮')).toBeInTheDocument()
     expect(container.querySelector('.max-h-\\[420px\\]')).toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: '删除第1题记录' }))

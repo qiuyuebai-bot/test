@@ -44,6 +44,24 @@ def get_tutoring_questions(
         return error(message=f"获取题库失败: {str(e)}")
 
 
+@router.get("/tutoring/recommendations/{learner_id}", summary="获取导学主题推荐")
+def get_tutoring_recommendations(
+    learner_id: int,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> BaseResponse:
+    """Return an explainable topic recommendation for the selected learner."""
+    if not current_user.is_admin and not LearnerService.check_data_permission(db, current_user.user_id, learner_id):
+        return unauthorized("无权限查看该学习者导学推荐")
+    try:
+        return success(data=AdaptiveTutoringService.get_recommendations(learner_id))
+    except ValueError as exc:
+        return not_found(message=str(exc))
+    except Exception as exc:
+        LoggerUtil.log_error("获取导学推荐失败", exc)
+        return error(message="获取导学推荐失败，请稍后重试")
+
+
 @router.post("/tutoring/questions/generate", summary="动态生成练习题")
 def generate_tutoring_questions(
     request: GenerateTutoringQuestionsRequest,

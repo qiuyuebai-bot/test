@@ -54,6 +54,75 @@ class AdaptiveTutoringService(BaseService):
         return _QUESTION_BANK
 
     @classmethod
+    def get_recommendations(cls, learner_id: int) -> Dict[str, Any]:
+        """Build a small, explainable topic recommendation without an LLM call."""
+        learner = cls.get_learner(learner_id)
+        if not learner:
+            raise ValueError("学习者不存在")
+
+        options: List[Dict[str, Any]] = []
+        seen_topics = set()
+
+        def add_option(topic: Any, reason: str, source: str) -> None:
+            normalized = cls._normalize_topic(str(topic or ""))
+            key = normalized.casefold()
+            if not normalized or key in seen_topics:
+                return
+            seen_topics.add(key)
+            options.append({"topic": normalized, "reason": reason, "source": source})
+
+        blind_areas = learner.knowledge_blind_areas or []
+        if isinstance(blind_areas, str):
+            blind_areas = [blind_areas]
+        for area in blind_areas:
+            add_option(area, "来自尚未解决的知识盲区", "blind_spot")
+
+        with get_db_context() as db:
+            recent_resource = (
+                db.query(LearningResource)
+                .filter(
+                    LearningResource.learner_id == learner_id,
+                    LearningResource.resource_type == "exercise",
+                    LearningResource.validation_passed.is_(True),
+                    LearningResource.status == "ready",
+                    LearningResource.knowledge_topic.is_not(None),
+                )
+                .order_by(LearningResource.created_at.desc(), LearningResource.id.desc())
+                .first()
+            )
+            if recent_resource:
+                add_option(recent_resource.knowledge_topic, "来自最近生成的分阶测试资源", "recent_resource")
+
+            recent_wrong = (
+                db.query(AnswerRecord)
+                .filter(
+                    AnswerRecord.learner_id == learner_id,
+                    AnswerRecord.result == "wrong",
+                    AnswerRecord.question_topic.is_not(None),
+                )
+                .order_by(AnswerRecord.created_at.desc(), AnswerRecord.id.desc())
+                .first()
+            )
+            if recent_wrong:
+                add_option(recent_wrong.question_topic, "来自最近一次答错的主题", "recent_wrong_answer")
+
+        add_option(learner.target_position, "结合你的目标岗位知识点", "target_position")
+        if not options:
+            fallback_topic = next((str(item.get("topic", "")).strip() for item in _QUESTION_BANK if item.get("topic")), "基础知识复习")
+            add_option(fallback_topic, "暂未找到近期学习事实，先从基础题开始", "fallback")
+
+        primary = options[0]
+        preferred_difficulty = learner.preferred_difficulty or 3
+        recommended_difficulty = max(1, min(5, int(preferred_difficulty)))
+        return {
+            "primary_topic": primary["topic"],
+            "alternatives": options[1:],
+            "recommended_difficulty": recommended_difficulty,
+            "reason": primary["reason"],
+            "source": primary["source"],
+        }
+
+    @classmethod
     def _normalize_topic(cls, topic: str) -> str:
         normalized = " ".join(str(topic or "").strip().split())
         if not normalized:

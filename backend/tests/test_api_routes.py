@@ -385,6 +385,29 @@ class TestCoreRoutes:
         response = client.get(f"/api/v1/tutoring/history/{sample_learner_profile.id}?page=1&page_size=10", headers=auth_headers)
         assert response.status_code == 200
 
+    def test_get_tutoring_recommendations_prioritizes_blind_spot(
+        self,
+        client: TestClient,
+        db_session: Session,
+        sample_learner_profile: LearnerProfile,
+        auth_headers: dict,
+    ):
+        sample_learner_profile.knowledge_blind_areas = ["分布式训练", "反向传播算法"]
+        sample_learner_profile.preferred_difficulty = 4
+        db_session.commit()
+
+        response = client.get(
+            f"/api/v1/tutoring/recommendations/{sample_learner_profile.id}",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        data = response.json()["data"]
+        assert data["primary_topic"] == "分布式训练"
+        assert data["source"] == "blind_spot"
+        assert data["recommended_difficulty"] == 4
+        assert data["alternatives"][0]["topic"] == "反向传播算法"
+
     def test_delete_tutoring_history_record(
         self,
         client: TestClient,
