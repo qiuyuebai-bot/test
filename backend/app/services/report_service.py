@@ -17,9 +17,9 @@ from app.models import (
 from app.services.common import (
     BaseService,
     LearnerServiceHelper,
-    MetricsServiceHelper,
 )
 from app.services.path_planner import PathPlanner
+from app.services.metric_service import MetricService
 from app.utils.llm import LLMUtil
 from app.utils.metrics import MetricsUtil
 from app.utils.datetime import utcnow_naive
@@ -347,10 +347,20 @@ class ReportService(BaseService):
                 correct_answers / total_answers * 100 if total_answers > 0 else 0
             )
 
+            standard_metrics = MetricService.calculate_metrics(
+                db,
+                scope="learner",
+                scope_id=learner_id,
+            )
+
         return {
             "resource_match_accuracy": round(resource_match_accuracy, 2),
             "knowledge_coverage_rate": round(knowledge_coverage_rate, 2),
             "answer_accuracy": round(answer_accuracy, 2),
+            # Standard results are the source of truth for new consumers. The
+            # legacy scalar fields stay available for existing PDF/report code.
+            "metrics": standard_metrics,
+            "metric_results": standard_metrics,
         }
     
     @classmethod
@@ -408,118 +418,113 @@ class ReportService(BaseService):
     
     @classmethod
     def update_metrics_periodically(cls) -> None:
-        """定时更新指标统计"""
-        logger.info("[报告服务] 定时更新指标统计")
-
+        """Refresh the canonical daily snapshot without coercing NULL to zero."""
+        logger.info("[ReportService] refreshing daily metrics")
         try:
             with get_db_context() as db:
-                # 单查询：按 learner_id 聚合平均 match_score（避免 N+1）
-                per_learner_avg = (
-                    db.query(
-                        LearningResource.learner_id,
-                        func.avg(LearningResource.match_score).label("avg_match"),
-                    )
-                    .group_by(LearningResource.learner_id)
-                    .all()
-                )
-                valid_avgs = [row.avg_match for row in per_learner_avg if row.avg_match is not None]
-                overall_match_accuracy = (
-                    sum(valid_avgs) / len(valid_avgs) if valid_avgs else 0
-                )
-
-                # 更新指标表
-                metrics = MetricsServiceHelper.get_or_create_daily_metrics(db)
-                MetricsServiceHelper.init_metrics_fields(metrics)
-                metrics.resource_match_accuracy = overall_match_accuracy
-
-                # 系统覆盖率统一使用知识库切片索引覆盖率。学习者盲区覆盖率
-                # 单独记录，避免两个不同算法共用 knowledge_coverage_rate。
-                knowledge_index_coverage_rate = MetricsUtil.calculate_knowledge_index_coverage_rate(db)
-                learning_blind_spot_coverage_rate = MetricsUtil.calculate_learning_blind_spot_coverage_rate(db)
-                metrics.knowledge_coverage_rate = knowledge_index_coverage_rate
-                metrics.detailed_metrics = {
-                    **(metrics.detailed_metrics or {}),
-                    "knowledge_index_coverage_rate": knowledge_index_coverage_rate,
-                    "learning_blind_spot_coverage_rate": learning_blind_spot_coverage_rate,
-                }
-
-                db.commit()
-
-                logger.info(
-                    f"[报告服务] 指标更新完成: 匹配准确率={overall_match_accuracy:.2f}, "
-                    f"知识库索引覆盖率={knowledge_index_coverage_rate}"
-                )
-
+                results = MetricService.calculate_metrics(db, scope="global")
+                MetricService.persist_daily_snapshot(db, results)
         except Exception as e:
-            logger.error(f"[报告服务] 指标更新失败: {e}")
-            cls.log_error("指标更新失败", e)
-    
+            logger.error(f"[ReportService] metric refresh failed: {e}")
+            cls.log_error("Metric refresh failed", e)
+
+    @staticmethod
+    def _snapshot_metric_value(snapshot: TestMetrics, metric_id: str, legacy_field: str):
+        detailed = snapshot.detailed_metrics or {}
+        results = detailed.get("metric_results") or []
+        for result in results:
+            if result.get("metric_id") == metric_id:
+                return result.get("value")
+        legacy_detail_keys = {
+            "knowledge_index_coverage": "knowledge_index_coverage_rate",
+            "blind_spot_resource_coverage": "learning_blind_spot_coverage_rate",
+        }
+        detail_key = legacy_detail_keys.get(metric_id)
+        if detail_key and detail_key in detailed:
+            return detailed.get(detail_key)
+        return getattr(snapshot, legacy_field, None)
+
     @classmethod
     def get_system_metrics(cls) -> Dict[str, Any]:
-        """获取系统级指标"""
+        """Return the canonical metric array plus legacy dashboard aliases."""
         with get_db_context() as db:
-            hallucination_metrics = MetricsUtil.calculate_hallucination_metrics(db)
-            # 获取最近7天指标趋势
-            metrics = (
+            metric_results = MetricService.calculate_metrics(db, scope="global")
+            by_id = MetricService.by_id(metric_results)
+            hallucination_result = by_id.get("hallucination_rate", {})
+            hallucination_metadata = hallucination_result.get("metadata") or {}
+            snapshots = (
                 db.query(TestMetrics)
                 .filter(TestMetrics.record_period == "daily")
                 .order_by(TestMetrics.record_date.desc())
                 .limit(7)
                 .all()
             )
-            
-            # 统计数据
-            from app.models import LearnerProfile, LearningResource, AnswerRecord
-            
+
+            trends = []
+            for snapshot in reversed(snapshots):
+                score = cls._snapshot_metric_value(snapshot, "resource_match_score", "resource_match_accuracy")
+                effectiveness = cls._snapshot_metric_value(
+                    snapshot, "resource_match_effectiveness", ""
+                )
+                knowledge = cls._snapshot_metric_value(
+                    snapshot, "knowledge_index_coverage", "knowledge_coverage_rate"
+                )
+                trends.append({
+                    "date": snapshot.record_date.isoformat() if snapshot.record_date else None,
+                    "hallucination_rate": cls._snapshot_metric_value(
+                        snapshot, "hallucination_rate", "hallucination_rate"
+                    ),
+                    "resource_match_accuracy": score,
+                    "resource_match_score": score,
+                    "resource_match_effectiveness": effectiveness,
+                    "knowledge_coverage_rate": knowledge,
+                    "knowledge_index_coverage": knowledge,
+                })
+
             learner_count = db.query(LearnerProfile).count()
             resource_count = db.query(LearningResource).count()
             answer_count = db.query(AnswerRecord).count()
-            
-            # 当前卡片指标使用实时数据；快照只用于趋势，避免无快照时
-            # 把 0 当成真实结果。覆盖率口径固定为知识库切片索引覆盖率。
-            knowledge_index_coverage_rate = MetricsUtil.calculate_knowledge_index_coverage_rate(db)
-            learning_blind_spot_coverage_rate = MetricsUtil.calculate_learning_blind_spot_coverage_rate(db)
-            resource_match_accuracy = db.query(func.avg(LearningResource.match_score)).scalar()
-            resource_match_accuracy = (
-                round(float(resource_match_accuracy), 2)
-                if resource_match_accuracy is not None
-                else None
-            )
-
-            trends = []
-            for metric in reversed(metrics):
-                detailed = metric.detailed_metrics or {}
-                trends.append({
-                    "date": metric.record_date,
-                    "hallucination_rate": metric.hallucination_rate,
-                    "resource_match_accuracy": metric.resource_match_accuracy,
-                    "knowledge_coverage_rate": detailed.get(
-                        "knowledge_index_coverage_rate",
-                        metric.knowledge_coverage_rate,
-                    ),
-                })
+            performance = MetricsUtil.calculate_agent_performance(db)
+            statuses = {result.get("status") for result in metric_results}
+            if "error" in statuses or "collecting" in statuses or "stale" in statuses:
+                metrics_status = "degraded"
+            elif statuses and statuses.issubset({"no_data", "not_applicable"}):
+                metrics_status = "no_data"
+            else:
+                metrics_status = "ready"
 
             return {
-                "hallucination_rate": hallucination_metrics["hallucination_rate"],
-                "total_checks": hallucination_metrics["total_checks"],
-                "evaluated_checks": hallucination_metrics["evaluated_checks"],
-                "pending_checks": hallucination_metrics["pending_checks"],
-                "confirmed_hallucinations": hallucination_metrics["confirmed_hallucinations"],
-                "evidence_gaps": hallucination_metrics["evidence_gaps"],
-                "pass_rate": hallucination_metrics["pass_rate"],
-                "has_sufficient_sample": hallucination_metrics["has_sufficient_sample"],
-                "minimum_sample_size": hallucination_metrics["minimum_sample_size"],
-                "resource_match_accuracy": resource_match_accuracy,
-                "knowledge_coverage_rate": knowledge_index_coverage_rate,
-                "knowledge_index_coverage_rate": knowledge_index_coverage_rate,
-                "learning_blind_spot_coverage_rate": learning_blind_spot_coverage_rate,
-                "metrics_status": "ready" if knowledge_index_coverage_rate is not None else "no_data",
+                "metrics": metric_results,
+                "metric_registry": MetricService.registry(),
+                "hallucination_rate": hallucination_result.get("value"),
+                "total_checks": hallucination_metadata.get("total_checks", 0),
+                "evaluated_checks": hallucination_metadata.get("evaluated_checks", 0),
+                "pending_checks": hallucination_metadata.get("pending_checks", 0),
+                "confirmed_hallucinations": hallucination_metadata.get("confirmed_hallucinations", 0),
+                "evidence_gaps": hallucination_metadata.get("evidence_gaps", 0),
+                "pass_rate": hallucination_metadata.get("pass_rate"),
+                "has_sufficient_sample": hallucination_result.get("status") == "ready",
+                "minimum_sample_size": hallucination_result.get("minimum_sample_size", 5),
+                "resource_match_accuracy": by_id.get("resource_match_score", {}).get("value"),
+                "resource_match_score": by_id.get("resource_match_score", {}).get("value"),
+                "resource_match_effectiveness": by_id.get("resource_match_effectiveness", {}).get("value"),
+                "answer_accuracy": by_id.get("answer_accuracy", {}).get("value"),
+                "knowledge_coverage_rate": by_id.get("knowledge_index_coverage", {}).get("value"),
+                "knowledge_index_coverage_rate": by_id.get("knowledge_index_coverage", {}).get("value"),
+                "learning_blind_spot_coverage_rate": by_id.get("blind_spot_resource_coverage", {}).get("value"),
+                "metrics_status": metrics_status,
                 "metrics_source": "realtime",
-                "snapshot_available": bool(metrics),
+                "snapshot_available": bool(snapshots),
                 "calculated_at": utcnow_naive().isoformat(),
                 "total_learners": learner_count,
                 "total_resources": resource_count,
                 "total_answers": answer_count,
+                "total_tasks": performance.get("total_tasks", 0),
+                "tasks_completed": performance.get("success_tasks", 0),
+                "failed_tasks": performance.get("failed_tasks", 0),
+                "running_tasks": performance.get("running_tasks", 0),
+                "task_success_rate": performance.get("success_rate"),
+                "avg_response_time": performance.get("avg_duration_ms", 0),
                 "active_sessions": 0,
                 "avg_completion_time": "-",
                 "satisfaction_score": 0,

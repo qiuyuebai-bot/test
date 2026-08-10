@@ -147,6 +147,7 @@ class AgentOrchestrator:
                 task_id, learner_id, diagnosis_result, knowledge_results, target_topic, resource_type
             )
             self._update_running_task(task_id, generation_result=generation_result)
+            initial_content = generation_result.get("content", "")
 
             # 阶段4：初次审核
             self._update_task_stage(task_id, "judge_first", 70, "初次审核中...")
@@ -175,6 +176,22 @@ class AgentOrchestrator:
                 generation_result["_debate_corrected"] = True
                 generation_result["_debate_rounds"] = len(debate_results)
 
+            evidence_snapshot = {
+                "initial_content": initial_content,
+                "initial_audit": audit_result,
+                "final_audit": final_audit,
+                "diagnosis": diagnosis_result,
+                "knowledge": [
+                    {
+                        "slice_id": item.get("slice_id"),
+                        "doc_id": item.get("doc_id"),
+                        "similarity": item.get("similarity"),
+                        "title": item.get("title"),
+                    }
+                    for item in knowledge_results
+                ],
+            }
+
             # Validate once more at the orchestration boundary before any
             # repository writes or follow-up question publication.
             generation_result["content"] = normalize_resource_content(
@@ -183,7 +200,12 @@ class AgentOrchestrator:
             generation_result["word_count"] = len(generation_result["content"])
 
             final_result = self.task_repo.save_resource_and_complete(
-                task_id, learner_id, generation_result, final_audit, len(debate_results)
+                task_id,
+                learner_id,
+                generation_result,
+                final_audit,
+                len(debate_results),
+                evidence_snapshot=evidence_snapshot,
             )
             self._update_running_task(task_id, final_result=final_result)
 
@@ -296,6 +318,7 @@ class AgentOrchestrator:
 
         while current_round <= max_rounds:
             debate_progress = 70 + int(current_round / max_rounds * 15)
+            original_content = current_content
             self.event_bus.broadcast(task_id, "debate_round", {
                 "task_id": task_id, "round": current_round, "max_rounds": max_rounds,
                 "action": "questioning", "description": f"裁判Agent第{current_round}轮质疑中...",
@@ -308,6 +331,7 @@ class AgentOrchestrator:
                 previous_debates=debate_records,
                 max_rounds=max_rounds,
             )
+            debate_result["original_content"] = original_content
             debate_records.append(debate_result)
 
             corrections_count = len(debate_result.get("corrections", []))

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { useStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import type { LearningResource } from '@/types'
@@ -95,6 +96,8 @@ const stageToStepIndex: Record<string, number> = {
 }
 
 export default function ResourceGeneration() {
+  const [searchParams] = useSearchParams()
+  const requestedResourceId = Number(searchParams.get('resourceId'))
   const { learners, currentLearner, resources, resourceLoading, resourcesTotal } = useStore(
     useShallow((s) => ({
       learners: s.learners,
@@ -218,6 +221,11 @@ export default function ResourceGeneration() {
     [activeTab, resources],
   )
 
+  useEffect(() => {
+    if (!Number.isInteger(requestedResourceId) || requestedResourceId <= 0) return
+    void selectResourceById(requestedResourceId)
+  }, [requestedResourceId, selectResourceById])
+
   const sse = useTaskSSE(sseTaskId, {
     onEvent: handleSSEEvent,
     onComplete: (data) => {
@@ -306,13 +314,14 @@ export default function ResourceGeneration() {
   }, [])
 
   useEffect(() => {
+    if (requestedResourceId > 0) return
     if (resources.length > 0 && !selectedResource) {
       const filtered = resources.filter((r) => r.resourceType === activeTab)
       if (filtered.length > 0) {
         void handleSelectResource(filtered[0])
       }
     }
-  }, [resources, activeTab, selectedResource, handleSelectResource])
+  }, [resources, activeTab, selectedResource, handleSelectResource, requestedResourceId])
 
   const handleGenerate = useCallback(async () => {
     if (!selectedLearner) {

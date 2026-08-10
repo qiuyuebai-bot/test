@@ -188,6 +188,107 @@ export interface DebateRecord {
   resolvedAt?: string
 }
 
+export type EvidenceDecision = 'approved' | 'revised_approved' | 'rejected' | 'insufficient_evidence'
+
+export interface EvidenceConfidenceBreakdown {
+  key: string
+  label: string
+  weight: number
+  score: number
+}
+
+export interface TaskEvidenceDebate {
+  round: number
+  debateType?: string
+  hasConflict: boolean
+  conflictType?: string
+  conflictSeverity?: string
+  isHallucination: boolean
+  hallucinationScore?: number
+  judgeStandpoint: Record<string, unknown>
+  generationCounterargument: Record<string, unknown>
+  conflictPoints: Array<string | Record<string, unknown>>
+  corrections: Array<string | Record<string, unknown>>
+  resolutionStatus?: string
+  judgeDecision?: string
+  judgeConfidence?: number
+  originalContent?: string
+  correctedContent?: string
+  correctionReason?: string
+  createdAt?: string
+  resolvedAt?: string
+}
+
+export interface TaskEvidence {
+  task: AgentTask & { resourceId?: number }
+  learner: {
+    id?: number
+    name?: string | null
+    diagnosis?: Record<string, unknown> | null
+  }
+  summary: {
+    finalDecision: EvidenceDecision
+    confidence: number | null
+    credibility?: string
+    hasSufficientEvidence: boolean
+    stats: {
+      debateRounds: number
+      issuesFound: number
+      correctionsApplied: number
+      sourceCount: number
+    }
+    keyCorrection?: {
+      original: string
+      revised: string
+      description: string
+      reason: string
+    } | null
+    confidenceBreakdown: EvidenceConfidenceBreakdown[]
+  }
+  timeline: Array<{
+    stage: string
+    label: string
+    status: 'completed' | 'active' | 'pending'
+    progress: number
+    description?: string
+    timestamp?: string
+  }>
+  debateRecords: TaskEvidenceDebate[]
+  knowledgeEvidence: Array<{
+    sliceId: number
+    docId: number
+    docTitle: string
+    title?: string
+    content: string
+    sliceIndex: number
+    similarity?: number | null
+    qualityScore?: number | null
+    relation: string
+  }>
+  sourceDocuments: Array<{
+    id: number
+    title: string
+    industry?: string
+    source?: string
+    version?: string
+    status?: string
+    isEnabled?: boolean
+  }>
+  initialGeneration: { content: string }
+  finalGeneration: { content: string; title?: string | null; resourceType?: string | null }
+  revisionComparison: {
+    originalContent: string
+    finalContent: string
+    corrections: Array<string | Record<string, unknown>>
+    hasChanges: boolean
+  }
+  decision: {
+    releaseReason: string
+    unresolvedRisks: string[]
+    reviewRules: string[]
+  }
+}
+
 export interface LearningResource {
   id: number
   title: string
@@ -343,6 +444,10 @@ export interface LearnerReportCoreMetrics {
   resourceMatchAccuracy: number
   knowledgeCoverageRate: number
   answerAccuracy: number
+  resourceMatchScore?: number | null
+  resourceMatchEffectiveness?: number | null
+  metrics?: MetricResult[]
+  metricResults?: MetricResult[]
 }
 
 export interface LearnerReportStatistics {
@@ -383,7 +488,41 @@ export interface InteractionHistoryResponse {
   pageSize: number
 }
 
+export type MetricStatus = 'ready' | 'collecting' | 'no_data' | 'not_applicable' | 'stale' | 'error'
+
+export interface MetricResult {
+  metricId: string
+  displayName: string
+  scope: 'global' | 'learner' | string
+  scopeId: number | null
+  value: number | null
+  unit: string
+  status: MetricStatus
+  numerator: number
+  denominator: number
+  sampleCount: number
+  minimumSampleSize: number
+  formula: string
+  source: string[]
+  calculatedAt: string
+  message?: string | null
+  metadata?: Record<string, unknown> | null
+}
+
+export interface MetricDefinition {
+  metricId: string
+  displayName: string
+  unit: string
+  formula: string
+  source: string[]
+  scopes: string[]
+  minimumSampleSize: number
+  freshnessSeconds?: number | null
+}
+
 export interface SystemMetrics {
+  metrics?: MetricResult[]
+  metricRegistry?: MetricDefinition[]
   hallucinationRate: number | null
   totalChecks?: number
   evaluatedChecks?: number
@@ -397,6 +536,9 @@ export interface SystemMetrics {
   knowledgeCoverageRate: number | null
   knowledgeIndexCoverageRate?: number | null
   learningBlindSpotCoverageRate?: number | null
+  resourceMatchScore?: number | null
+  resourceMatchEffectiveness?: number | null
+  answerAccuracy?: number | null
   metricsStatus?: 'ready' | 'no_data' | 'degraded'
   metricsSource?: string
   snapshotAvailable?: boolean
@@ -422,6 +564,9 @@ export interface MetricTrend {
   hallucinationRate: number | null
   resourceMatchAccuracy: number | null
   knowledgeCoverageRate: number | null
+  resourceMatchScore?: number | null
+  resourceMatchEffectiveness?: number | null
+  knowledgeIndexCoverage?: number | null
 }
 
 export interface PaginationParams {

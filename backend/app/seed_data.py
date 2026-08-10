@@ -102,11 +102,28 @@ def init_learner_seed_data():
         db.close()
 
 
+def init_metrics_seed_data():
+    """Materialize a standard snapshot from the current demo facts."""
+    from app.services.metric_service import MetricService
+
+    db = SessionLocal()
+    try:
+        results = MetricService.calculate_metrics(db, scope="global")
+        MetricService.persist_daily_snapshot(db, results)
+        logger.info("Metric demo snapshot initialized")
+    except Exception as e:
+        logger.warning(f"Metric demo snapshot initialization failed: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
 def seed_all():
     """初始化全部种子数据（管理员 + 培训 + 学习者）"""
     init_default_admin()
     init_training_seed_data()
     init_learner_seed_data()
+    init_metrics_seed_data()
 
 
 if __name__ == "__main__":
@@ -117,6 +134,7 @@ if __name__ == "__main__":
         print("  --admin-only  仅初始化默认管理员")
         print("  --training    仅初始化企业培训数据")
         print("  --learners    仅初始化学习者画像数据")
+        print("  --metrics     根据当前事实生成标准指标快照")
         sys.exit(0)
 
     if "--admin-only" in args:
@@ -125,6 +143,8 @@ if __name__ == "__main__":
         init_training_seed_data()
     elif "--learners" in args:
         init_learner_seed_data()
+    elif "--metrics" in args:
+        init_metrics_seed_data()
     else:
         seed_all()
 

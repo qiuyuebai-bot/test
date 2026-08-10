@@ -109,6 +109,38 @@ describe('MetricsDashboard', () => {
     expect(screen.queryByText('96.4%')).not.toBeInTheDocument()
   })
 
+  it('uses canonical statuses and keeps a calculated zero visible', async () => {
+    setMockStore({
+      systemMetrics: {
+        metrics: [
+          { metricId: 'hallucination_rate', value: null, unit: '%', status: 'collecting', sampleCount: 2, minimumSampleSize: 5 },
+          { metricId: 'resource_match_score', value: 0, unit: '%', status: 'ready', sampleCount: 1, minimumSampleSize: 1 },
+          { metricId: 'resource_match_effectiveness', value: null, unit: '%', status: 'collecting', sampleCount: 1, minimumSampleSize: 3 },
+          { metricId: 'knowledge_index_coverage', value: null, unit: '%', status: 'no_data', sampleCount: 0, minimumSampleSize: 1 },
+        ],
+        totalLearners: 1,
+        totalResources: 1,
+        totalAnswers: 0,
+        totalTasks: 0,
+        tasksCompleted: 0,
+        avgResponseTime: 0,
+        avgCompletionTime: '-',
+        activeSessions: 0,
+        satisfactionScore: 0,
+        trends: [],
+      },
+      metricsStatus: 'ready',
+    })
+    const { default: Page } = await import('./MetricsDashboard')
+
+    render(<MemoryRouter><Page /></MemoryRouter>)
+
+    expect((await screen.findAllByText('资源匹配分')).length).toBeGreaterThan(0)
+    expect(screen.getAllByText('0.0%').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('样本不足').length).toBeGreaterThan(0)
+    expect(screen.getAllByText('资源匹配效果').length).toBeGreaterThan(0)
+  })
+
   it('shows an error state when the metrics request fails', async () => {
     setMockStore({
       fetchSystemMetrics: vi.fn().mockRejectedValue(new Error('指标服务不可用')),

@@ -8,6 +8,7 @@ import { PageSkeleton } from '@/components/Skeleton'
 import EmptyState from '@/components/EmptyState'
 import ErrorState from '@/components/ErrorState'
 import { CHART_COLORS, CHART_TOOLTIP_PROPS } from '@/lib/chartTheme'
+import { findMetric, formatMetricValue, metricProgressValue, metricReady, metricStatusLabel } from '@/lib/metrics'
 import {
   TrendingUp,
   Target,
@@ -76,21 +77,43 @@ export default function MetricsDashboard() {
     loadMetrics()
   }, [loadMetrics])
 
-  const rawHallucinationRate = systemMetrics?.hallucinationRate
-  const hasSufficientHallucinationSample = systemMetrics?.hasSufficientSample === true && typeof rawHallucinationRate === 'number'
-  const hallucinationRate = systemMetrics?.hasSufficientSample === true && typeof rawHallucinationRate === 'number'
+  const standardMetrics = systemMetrics?.metrics
+  const hasStandardMetrics = Boolean(standardMetrics && standardMetrics.length > 0)
+  const hallucinationMetric = findMetric(standardMetrics, 'hallucination_rate')
+  const resourceMatchMetric = findMetric(standardMetrics, 'resource_match_score')
+  const resourceEffectivenessMetric = findMetric(standardMetrics, 'resource_match_effectiveness')
+  const knowledgeMetric = findMetric(standardMetrics, 'knowledge_index_coverage')
+  const rawHallucinationRate = hasStandardMetrics ? hallucinationMetric?.value ?? null : systemMetrics?.hallucinationRate
+  const hasSufficientHallucinationSample = hasStandardMetrics
+    ? metricReady(hallucinationMetric)
+    : systemMetrics?.hasSufficientSample === true && typeof rawHallucinationRate === 'number'
+  const hallucinationRate = hasSufficientHallucinationSample && typeof rawHallucinationRate === 'number'
     ? rawHallucinationRate
     : null
-  const hallucinationRateLabel = hasSufficientHallucinationSample
-    ? `${(hallucinationRate ?? 0).toFixed(1)}%`
+  const hallucinationRateLabel = hasStandardMetrics
+    ? formatMetricValue(hallucinationMetric, metricStatusLabel(hallucinationMetric))
+    : hasSufficientHallucinationSample
+      ? `${(hallucinationRate ?? 0).toFixed(1)}%`
     : '样本不足/待审核'
-  const rawResourceMatchAccuracy = systemMetrics?.resourceMatchAccuracy ?? null
-  const resourceMatchSampleCount = systemMetrics?.totalResources ?? 0
-  const hasSufficientResourceMatchSample = resourceMatchSampleCount >= RESOURCE_MATCH_MIN_SAMPLE_SIZE
+  const rawResourceMatchAccuracy = hasStandardMetrics
+    ? resourceMatchMetric?.value ?? null
+    : systemMetrics?.resourceMatchAccuracy ?? null
+  const resourceMatchSampleCount = hasStandardMetrics
+    ? resourceMatchMetric?.sampleCount ?? 0
+    : systemMetrics?.totalResources ?? 0
+  const resourceMatchMinimumSample = hasStandardMetrics
+    ? resourceMatchMetric?.minimumSampleSize ?? 1
+    : RESOURCE_MATCH_MIN_SAMPLE_SIZE
+  const hasSufficientResourceMatchSample = hasStandardMetrics
+    ? metricReady(resourceMatchMetric)
+    : resourceMatchSampleCount >= RESOURCE_MATCH_MIN_SAMPLE_SIZE
   const hasResourceMatchData = hasSufficientResourceMatchSample && rawResourceMatchAccuracy !== null
   const resourceMatchAccuracy = hasResourceMatchData ? rawResourceMatchAccuracy : null
   const resourceMatchUpdatedAt = formatMetricUpdatedAt(systemMetrics?.calculatedAt)
-  const knowledgeCoverageRate = systemMetrics?.knowledgeCoverageRate ?? null
+  const resourceEffectivenessValue = hasStandardMetrics ? resourceEffectivenessMetric?.value ?? null : null
+  const knowledgeCoverageRate = hasStandardMetrics
+    ? knowledgeMetric?.value ?? null
+    : systemMetrics?.knowledgeCoverageRate ?? null
   const trendData = systemMetrics?.trends ?? []
 
   const metricCards = [
@@ -98,7 +121,7 @@ export default function MetricsDashboard() {
       label: '幻觉率',
       value: hallucinationRateLabel,
       isPending: !hasSufficientHallucinationSample,
-      pendingLabel: '样本不足/待审核',
+      pendingLabel: hasStandardMetrics ? metricStatusLabel(hallucinationMetric) : '样本不足/待审核',
       target: '< 5%',
       isOnTarget: hasSufficientHallucinationSample && (hallucinationRate ?? 0) < 5,
       icon: AlertTriangle,
@@ -111,10 +134,12 @@ export default function MetricsDashboard() {
       targetText: '行业优秀水平: < 5%',
     },
     {
-      label: '资源匹配准确率',
-      value: resourceMatchAccuracy === null ? '暂无数据' : `${resourceMatchAccuracy.toFixed(1)}%`,
+      label: hasStandardMetrics ? '资源匹配分' : '资源匹配准确率',
+      value: hasStandardMetrics
+        ? formatMetricValue(resourceMatchMetric, metricStatusLabel(resourceMatchMetric))
+        : resourceMatchAccuracy === null ? '暂无数据' : `${resourceMatchAccuracy.toFixed(1)}%`,
       isPending: !hasResourceMatchData,
-      pendingLabel: '待采集',
+      pendingLabel: hasStandardMetrics ? metricStatusLabel(resourceMatchMetric) : '待采集',
       target: '> 90%',
       isOnTarget: resourceMatchAccuracy !== null && resourceMatchAccuracy >= 90,
       icon: Target,
@@ -129,9 +154,11 @@ export default function MetricsDashboard() {
     },
     {
       label: '知识点覆盖率',
-      value: knowledgeCoverageRate === null ? '暂无数据' : `${knowledgeCoverageRate.toFixed(1)}%`,
+      value: hasStandardMetrics
+        ? formatMetricValue(knowledgeMetric, metricStatusLabel(knowledgeMetric))
+        : knowledgeCoverageRate === null ? '暂无数据' : `${knowledgeCoverageRate.toFixed(1)}%`,
       isPending: knowledgeCoverageRate === null,
-      pendingLabel: '暂无数据',
+      pendingLabel: hasStandardMetrics ? metricStatusLabel(knowledgeMetric) : '暂无数据',
       target: '> 85%',
       isOnTarget: knowledgeCoverageRate !== null && knowledgeCoverageRate >= 85,
       icon: Brain,
@@ -143,6 +170,22 @@ export default function MetricsDashboard() {
       description: '衡量知识库对目标领域知识点的覆盖程度。通过知识点图谱自动分析计算。',
       targetText: '目标值: > 85%',
     },
+    ...(hasStandardMetrics ? [{
+      label: '资源匹配效果',
+      value: formatMetricValue(resourceEffectivenessMetric, metricStatusLabel(resourceEffectivenessMetric)),
+      isPending: !metricReady(resourceEffectivenessMetric),
+      pendingLabel: metricStatusLabel(resourceEffectivenessMetric),
+      target: '> 70%',
+      isOnTarget: metricReady(resourceEffectivenessMetric) && (resourceEffectivenessValue ?? 0) >= 70,
+      icon: Target,
+      color: 'text-warning',
+      bgColor: 'bg-warning/10',
+      progressValue: metricProgressValue(resourceEffectivenessMetric),
+      progressMax: 100,
+      progressVariant: 'default' as const,
+      description: '根据学习者完成答题后的实际表现验证资源是否产生效果。',
+      targetText: '目标值 > 70%',
+    }] : []),
   ]
 
   if (metricsLoading && !loaded) {
@@ -165,7 +208,7 @@ export default function MetricsDashboard() {
         </div>
       )}
       {/* 核心指标卡片 */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
         {metricCards.map((metric) => (
           <Card key={metric.label} padding="lg">
             <div className="flex items-start justify-between mb-4">
@@ -185,7 +228,7 @@ export default function MetricsDashboard() {
             </div>
             {'showSampleMetadata' in metric && metric.showSampleMetadata && (
               <div className="mt-3 space-y-1 text-xs text-text-tertiary">
-                <p>样本数：{resourceMatchSampleCount}（至少 {RESOURCE_MATCH_MIN_SAMPLE_SIZE}）</p>
+                <p>样本数：{resourceMatchSampleCount}（至少 {resourceMatchMinimumSample}）</p>
                 <p>更新时间：{resourceMatchUpdatedAt}</p>
               </div>
             )}

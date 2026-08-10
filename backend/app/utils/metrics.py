@@ -4,7 +4,7 @@
 """
 import json
 from typing import Dict, Any, Optional
-from datetime import datetime, timedelta
+from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from loguru import logger
@@ -67,11 +67,16 @@ class MetricsUtil:
         db: Session,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
+        learner_id: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Calculate a rate from reviewed, evidence-backed records only."""
-        from app.models import DebateRecord
+        from app.models import AgentTask, DebateRecord
 
         query = db.query(DebateRecord)
+        if learner_id is not None:
+            query = query.join(AgentTask, DebateRecord.task_id == AgentTask.id).filter(
+                AgentTask.learner_id == learner_id
+            )
         if start_date:
             query = query.filter(DebateRecord.created_at >= start_date)
         if end_date:
@@ -127,7 +132,7 @@ class MetricsUtil:
         db: Session,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
-    ) -> float:
+    ) -> Optional[float]:
         """
         计算知识幻觉错误率
         
@@ -140,14 +145,18 @@ class MetricsUtil:
             幻觉率（百分比）
         """
         metrics = MetricsUtil.calculate_hallucination_metrics(db, start_date, end_date)
-        return float(metrics["hallucination_rate"] or 0.0)
+        return (
+            float(metrics["hallucination_rate"])
+            if metrics["hallucination_rate"] is not None
+            else None
+        )
     
     @staticmethod
     def calculate_resource_match_accuracy(
         db: Session,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
-    ) -> float:
+    ) -> Optional[float]:
         """
         计算资源匹配准确率
         
@@ -159,36 +168,21 @@ class MetricsUtil:
         Returns:
             匹配准确率（百分比）
         """
-        from app.models import LearningResource
-        
-        query = db.query(LearningResource)
-        
-        if start_date:
-            query = query.filter(LearningResource.created_at >= start_date)
-        if end_date:
-            query = query.filter(LearningResource.created_at <= end_date)
-        
-        # 统计总数和校验通过数
-        total_resources = query.count()
-        validated_passed = query.filter(
-            LearningResource.is_validated == True,
-            LearningResource.validation_passed == True
-        ).count()
-        
-        if total_resources == 0:
-            return 0.0
-        
-        rate = (validated_passed / total_resources) * 100
-        
-        logger.debug(f"匹配准确率: 总数={total_resources}, 通过数={validated_passed}, rate={rate}%")
-        
-        return round(rate, 2)
+        from app.services.metric_service import MetricService
+
+        result = MetricService.calculate_metrics(
+            db,
+            scope="global",
+            metric_ids=["resource_match_score"],
+        )
+        return result[0]["value"] if result else None
+
     
     @staticmethod
     def calculate_knowledge_coverage_rate(
         db: Session,
         industry: Optional[str] = None,
-    ) -> float:
+    ) -> Optional[float]:
         """
         计算知识点覆盖率
         
@@ -199,25 +193,18 @@ class MetricsUtil:
         Returns:
             覆盖率（百分比）
         """
-        from app.models import KnowledgeDoc
-        
-        query = db.query(KnowledgeDoc)
-        
         if industry:
-            query = query.filter(KnowledgeDoc.industry == industry)
-        
-        # 统计切片总数和已索引数（SQL 聚合避免全表加载）
-        total_slices = query.with_entities(func.sum(KnowledgeDoc.slice_count)).scalar() or 0
-        indexed_slices = query.with_entities(func.sum(KnowledgeDoc.indexed_slice_count)).scalar() or 0
-        
-        if total_slices == 0:
-            return 0.0
-        
-        rate = (indexed_slices / total_slices) * 100
-        
-        logger.debug(f"知识点覆盖率: 总切片={total_slices}, 已索引={indexed_slices}, rate={rate}%")
-        
-        return round(rate, 2)
+            return MetricsUtil.calculate_knowledge_index_coverage_rate(db, industry)
+
+        from app.services.metric_service import MetricService
+
+        result = MetricService.calculate_metrics(
+            db,
+            scope="global",
+            metric_ids=["knowledge_index_coverage"],
+        )
+        return result[0]["value"] if result else None
+
 
     @staticmethod
     def calculate_knowledge_index_coverage_rate(
@@ -250,30 +237,18 @@ class MetricsUtil:
         This is intentionally separate from knowledge-index coverage.  The
         two values answer different questions and must not share a field name.
         """
-        from app.models import LearnerProfile, LearningResource
+        from app.services.metric_service import MetricService
 
-        learner_rows = db.query(
-            LearnerProfile.knowledge_blind_areas,
-        ).all()
-        blind_areas = [
-            area
-            for (areas,) in learner_rows
-            for area in (areas or [])
-        ]
-        if not blind_areas:
-            return None
-
-        contents = [
-            content or ""
-            for (content,) in db.query(LearningResource.content).all()
-        ]
-        covered = sum(
-            1 for area in blind_areas if any(area in content for content in contents)
+        result = MetricService.calculate_metrics(
+            db,
+            scope="global",
+            metric_ids=["blind_spot_resource_coverage"],
         )
-        return round(covered / len(blind_areas) * 100, 2)
+        return result[0]["value"] if result else None
+
     
     @staticmethod
-    def calculate_all_metrics(db: Session) -> Dict[str, float]:
+    def calculate_all_metrics(db: Session) -> Dict[str, Any]:
         """
         计算所有核心指标
         
@@ -283,10 +258,16 @@ class MetricsUtil:
         Returns:
             指标字典
         """
+        # Compatibility adapter: MetricService owns canonical values/statuses.
+        from app.services.metric_service import MetricService
+
+        standard = MetricService.calculate_metrics(db, scope="global")
+        by_id = MetricService.by_id(standard)
         metrics = {
-            "hallucination_rate": MetricsUtil.calculate_hallucination_rate(db),
-            "resource_match_accuracy": MetricsUtil.calculate_resource_match_accuracy(db),
-            "knowledge_coverage_rate": MetricsUtil.calculate_knowledge_coverage_rate(db),
+            "metrics": standard,
+            "hallucination_rate": by_id.get("hallucination_rate", {}).get("value"),
+            "resource_match_accuracy": by_id.get("resource_match_score", {}).get("value"),
+            "knowledge_coverage_rate": by_id.get("knowledge_index_coverage", {}).get("value"),
         }
         
         logger.info(f"核心指标计算完成: {metrics}")
@@ -377,7 +358,7 @@ class MetricsUtil:
             "total_answers": total_answers,
             "correct_answers": correct_answers,
             "wrong_answers": wrong_answers,
-            "accuracy_rate": round((correct_answers / total_answers * 100) if total_answers > 0 else 0, 2),
+            "accuracy_rate": round((correct_answers / total_answers * 100), 2) if total_answers > 0 else None,
             "avg_time_ms": round(avg_time, 2),
             "adaptive_distribution": {
                 "advance": advance_count,
@@ -400,14 +381,16 @@ class MetricsUtil:
         Returns:
             每日报告字典
         """
-        start_date = date.replace(hour=0, minute=0, second=0)
-        end_date = start_date + timedelta(days=1)
-        
+        from app.services.metric_service import MetricService
+
+        standard = MetricService.calculate_metrics(db, scope="global", calculated_at=date)
+        by_id = MetricService.by_id(standard)
         report = {
             "date": date.strftime("%Y-%m-%d"),
-            "hallucination_rate": MetricsUtil.calculate_hallucination_rate(db, start_date, end_date),
-            "resource_match_accuracy": MetricsUtil.calculate_resource_match_accuracy(db, start_date, end_date),
-            "knowledge_coverage_rate": MetricsUtil.calculate_knowledge_coverage_rate(db),
+            "metrics": standard,
+            "hallucination_rate": by_id.get("hallucination_rate", {}).get("value"),
+            "resource_match_accuracy": by_id.get("resource_match_score", {}).get("value"),
+            "knowledge_coverage_rate": by_id.get("knowledge_index_coverage", {}).get("value"),
             "agent_performance": MetricsUtil.calculate_agent_performance(db),
             "answer_stats": MetricsUtil.calculate_answer_statistics(db),
         }
@@ -430,9 +413,11 @@ class MetricsUtil:
         record = TestMetrics(
             record_date=utcnow_naive(),
             record_period="daily",
-            hallucination_rate=metrics.get("hallucination_rate", 0),
-            resource_match_accuracy=metrics.get("resource_match_accuracy", 0),
-            knowledge_coverage_rate=metrics.get("knowledge_coverage_rate", 0),
+            # Missing values must remain NULL.  A real zero is a calculated
+            # result and must never be substituted for an unavailable value.
+            hallucination_rate=metrics.get("hallucination_rate"),
+            resource_match_accuracy=metrics.get("resource_match_accuracy"),
+            knowledge_coverage_rate=metrics.get("knowledge_coverage_rate"),
             detailed_metrics=metrics,
         )
         

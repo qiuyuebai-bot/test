@@ -23,6 +23,7 @@ import Button from '@/components/Button'
 import ErrorState from '@/components/ErrorState'
 import EmptyState from '@/components/EmptyState'
 import { PageSkeleton } from '@/components/Skeleton'
+import { findMetric, formatMetricValue, metricStatusLabel } from '@/lib/metrics'
 
 type HealthTone = 'success' | 'warning' | 'error'
 
@@ -145,6 +146,15 @@ export default function AdminOpsOverview() {
   const taskCounts = useMemo(() => getTaskCounts(tasks), [tasks])
   const agentSummary = useMemo(() => getAgentSummary(agentStatuses), [agentStatuses])
   const hasMetrics = Boolean(systemMetrics)
+  const standardMetrics = systemMetrics?.metrics
+  const hasStandardMetrics = Boolean(standardMetrics && standardMetrics.length > 0)
+  const knowledgeMetric = findMetric(standardMetrics, 'knowledge_index_coverage')
+  const hallucinationMetric = findMetric(standardMetrics, 'hallucination_rate')
+  const resourceMatchMetric = findMetric(standardMetrics, 'resource_match_score')
+  const resourceEffectivenessMetric = findMetric(standardMetrics, 'resource_match_effectiveness')
+  const displayMetric = (metric: ReturnType<typeof findMetric>, fallback: number | null | undefined) => (
+    hasStandardMetrics ? formatMetricValue(metric, metricStatusLabel(metric)) : formatPercentage(fallback)
+  )
   const healthTone: HealthTone = metricsStatus === 'error'
     ? 'error'
     : metricsStatus === 'partial' || metricsStatus === 'idle' || !hasMetrics || agentSummary.unavailable > 0
@@ -196,7 +206,7 @@ export default function AdminOpsOverview() {
               <Gauge className="h-5 w-5 text-primary" />
             </div>
             <MetricValue
-              value={formatPercentage(systemMetrics?.knowledgeCoverageRate)}
+              value={displayMetric(knowledgeMetric, systemMetrics?.knowledgeCoverageRate)}
               label="知识覆盖率"
             />
           </div>
@@ -239,22 +249,33 @@ export default function AdminOpsOverview() {
             </div>
             <DetailLink to="/metrics">查看指标</DetailLink>
           </div>
-          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <div className="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
             <div className="rounded-lg bg-bg-secondary/60 p-3">
               <MetricValue
-                value={systemMetrics?.hasSufficientSample ? formatPercentage(systemMetrics.hallucinationRate) : '待审核'}
+                value={hasStandardMetrics
+                  ? formatMetricValue(hallucinationMetric, metricStatusLabel(hallucinationMetric, '待审核'))
+                  : systemMetrics?.hasSufficientSample ? formatPercentage(systemMetrics.hallucinationRate) : '待审核'}
                 label="知识幻觉率"
               />
               <p className="mt-2 text-xs text-text-tertiary">目标 &lt; 5%</p>
             </div>
             <div className="rounded-lg bg-bg-secondary/60 p-3">
-              <MetricValue value={formatPercentage(systemMetrics?.resourceMatchAccuracy)} label="资源匹配准确率" />
+              <MetricValue value={displayMetric(resourceMatchMetric, systemMetrics?.resourceMatchAccuracy)} label={hasStandardMetrics ? '资源匹配分' : '资源匹配准确率'} />
               <p className="mt-2 text-xs text-text-tertiary">目标 &gt; 90%</p>
             </div>
             <div className="rounded-lg bg-bg-secondary/60 p-3">
-              <MetricValue value={formatPercentage(systemMetrics?.knowledgeCoverageRate)} label="知识点覆盖率" />
+              <MetricValue value={displayMetric(knowledgeMetric, systemMetrics?.knowledgeCoverageRate)} label="知识点覆盖率" />
               <p className="mt-2 text-xs text-text-tertiary">目标 &gt; 85%</p>
             </div>
+            {hasStandardMetrics && (
+              <div className="rounded-lg bg-bg-secondary/60 p-3">
+                <MetricValue
+                  value={formatMetricValue(resourceEffectivenessMetric, metricStatusLabel(resourceEffectivenessMetric))}
+                  label="资源匹配效果"
+                />
+                <p className="mt-2 text-xs text-text-tertiary">目标 &gt; 70%</p>
+              </div>
+            )}
           </div>
         </Card>
 
@@ -270,7 +291,7 @@ export default function AdminOpsOverview() {
             <DetailLink to="/knowledge-base">管理知识库</DetailLink>
           </div>
           <div className="mt-5 flex items-end justify-between">
-            <MetricValue value={formatPercentage(systemMetrics?.knowledgeIndexCoverageRate ?? systemMetrics?.knowledgeCoverageRate)} label="索引覆盖率" />
+            <MetricValue value={displayMetric(knowledgeMetric, systemMetrics?.knowledgeIndexCoverageRate ?? systemMetrics?.knowledgeCoverageRate)} label="索引覆盖率" />
             <div className="text-right">
               <p className="metric-number text-2xl font-semibold text-text-primary">{systemMetrics?.totalResources ?? 0}</p>
               <p className="mt-1 text-xs text-text-tertiary">资源总数</p>

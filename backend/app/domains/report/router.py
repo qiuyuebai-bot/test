@@ -23,6 +23,7 @@ from app.schemas.response import (
     BaseResponse,
 )
 from app.services.report_service import ReportService
+from app.services.metric_service import MetricService
 from app.domains.learner.service import LearnerService
 from app.utils.logger import LoggerUtil
 from app.utils.auth import get_current_user, CurrentUser, require_admin
@@ -280,6 +281,12 @@ def get_system_metrics(db: Session = Depends(get_db)) -> BaseResponse:
     except Exception as e:
         LoggerUtil.log_error("获取系统指标失败", e)
         return error(message=f"获取系统指标失败: {str(e)}")
+
+
+@router.get("/report/metrics/definitions", summary="获取统一指标定义")
+def get_metric_definitions() -> BaseResponse:
+    """Expose the registry so clients can explain every reported value."""
+    return success(data=MetricService.registry())
 
 
 @router.post("/report/metrics/update", summary="更新指标统计")

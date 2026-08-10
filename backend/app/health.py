@@ -209,6 +209,7 @@ async def get_core_metrics():
     """获取核心量化指标（从数据库真实统计）"""
     from app.models import LearningResource, AgentTask, DebateRecord, KnowledgeSlice
     from app.utils.metrics import MetricsUtil
+    from app.services.metric_service import MetricService
     from sqlalchemy import func, case
 
     db = SessionLocal()
@@ -246,20 +247,30 @@ async def get_core_metrics():
 
         knowledge_coverage_rate = MetricsUtil.calculate_knowledge_index_coverage_rate(db)
         learning_blind_spot_coverage_rate = MetricsUtil.calculate_learning_blind_spot_coverage_rate(db)
+        standard_metrics = MetricService.calculate_metrics(db, scope="global")
+        standard_by_id = MetricService.by_id(standard_metrics)
 
         return success({
-            "hallucination_rate": hallucination_rate,
+            "metrics": standard_metrics,
+            "metric_registry": MetricService.registry(),
+            "hallucination_rate": standard_by_id.get("hallucination_rate", {}).get("value"),
             "total_checks": hallucination_metrics["total_checks"],
             "evaluated_checks": hallucination_metrics["evaluated_checks"],
             "pending_checks": hallucination_metrics["pending_checks"],
             "confirmed_hallucinations": hallucination_metrics["confirmed_hallucinations"],
             "evidence_gaps": hallucination_metrics["evidence_gaps"],
             "has_sufficient_sample": hallucination_metrics["has_sufficient_sample"],
-            "resource_match_accuracy": resource_match_accuracy,
-            "knowledge_coverage_rate": knowledge_coverage_rate,
-            "knowledge_index_coverage_rate": knowledge_coverage_rate,
-            "learning_blind_spot_coverage_rate": learning_blind_spot_coverage_rate,
-            "metrics_status": "ready" if knowledge_coverage_rate is not None else "no_data",
+            "resource_match_accuracy": standard_by_id.get("resource_match_score", {}).get("value"),
+            "resource_match_score": standard_by_id.get("resource_match_score", {}).get("value"),
+            "resource_match_effectiveness": standard_by_id.get("resource_match_effectiveness", {}).get("value"),
+            "answer_accuracy": standard_by_id.get("answer_accuracy", {}).get("value"),
+            "knowledge_coverage_rate": standard_by_id.get("knowledge_index_coverage", {}).get("value"),
+            "knowledge_index_coverage_rate": standard_by_id.get("knowledge_index_coverage", {}).get("value"),
+            "learning_blind_spot_coverage_rate": standard_by_id.get("blind_spot_resource_coverage", {}).get("value"),
+            "metrics_status": "degraded" if any(
+                metric.get("status") in {"collecting", "stale", "error"}
+                for metric in standard_metrics
+            ) else "ready" if standard_metrics else "no_data",
             "metrics_source": "realtime",
             "calculated_at": utcnow_naive().isoformat(),
             "agent_success_rate": agent_success_rate,

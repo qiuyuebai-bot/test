@@ -30,6 +30,7 @@ import { PageSkeleton } from '@/components/Skeleton'
 import { coreApi } from '@/api'
 import type { InteractionHistoryRecord, LearnerReport } from '@/types'
 import { normalizeHallucinationReport } from '@/lib/hallucinationEvidence'
+import { findMetric, formatMetricValue, metricReady, metricStatusLabel } from '@/lib/metrics'
 import { useNavigate } from 'react-router-dom'
 import {
   RadarChart as RechartsRadar,
@@ -178,7 +179,11 @@ export default function LearningReport() {
       setReport(reportData)
       setTestHistory(historyData.history)
       setAbilityTrendData(abilityTrend)
-      if (sysMetrics?.hallucinationRate !== undefined) {
+      if (sysMetrics?.metrics?.length) {
+        const hallucinationMetric = findMetric(sysMetrics.metrics, 'hallucination_rate')
+        setSystemHallucinationRate(hallucinationMetric?.value ?? null)
+        setHasSufficientHallucinationSample(metricReady(hallucinationMetric))
+      } else if (sysMetrics?.hallucinationRate !== undefined) {
         setSystemHallucinationRate(sysMetrics.hallucinationRate)
         setHasSufficientHallucinationSample(sysMetrics.hasSufficientSample === true)
       }
@@ -221,6 +226,10 @@ export default function LearningReport() {
   const abilityRadarData = report?.abilityRadar.data ?? []
   const learnerInfo = report?.learnerInfo
   const coreMetrics = report?.coreMetrics
+  const learnerMetricResults = coreMetrics?.metrics ?? coreMetrics?.metricResults
+  const learnerKnowledgeMetric = findMetric(learnerMetricResults, 'knowledge_index_coverage')
+  const learnerResourceMatchMetric = findMetric(learnerMetricResults, 'resource_match_score')
+  const learnerEffectivenessMetric = findMetric(learnerMetricResults, 'resource_match_effectiveness')
   const statistics = report?.statistics
   const hallucinationReport = normalizeHallucinationReport(report?.hallucinationReport)
   const credibilityLabels = {
@@ -237,13 +246,26 @@ export default function LearningReport() {
   } as const
 
   const stats = {
-    knowledgeCoverage: coreMetrics?.knowledgeCoverageRate ?? 0,
-    resourceMatch: coreMetrics?.resourceMatchAccuracy ?? 0,
+    knowledgeCoverage: learnerMetricResults
+      ? (metricReady(learnerKnowledgeMetric) ? learnerKnowledgeMetric?.value ?? null : null)
+      : coreMetrics?.knowledgeCoverageRate ?? 0,
+    resourceMatch: learnerMetricResults
+      ? (metricReady(learnerResourceMatchMetric) ? learnerResourceMatchMetric?.value ?? null : null)
+      : coreMetrics?.resourceMatchAccuracy ?? 0,
     hallucinationRate: systemHallucinationRate,
     totalResources: statistics?.totalResources ?? 0,
     completedTasks: Math.max(0, report?.learningPathTopology.currentStep ?? 0),
     pendingTasks: Math.max(0, (report?.learningPathTopology.totalSteps ?? 0) - (report?.learningPathTopology.currentStep ?? 0)),
   }
+  const knowledgeCoverageDisplay = learnerMetricResults
+    ? formatMetricValue(learnerKnowledgeMetric, metricStatusLabel(learnerKnowledgeMetric))
+    : `${(stats.knowledgeCoverage ?? 0).toFixed(1)}%`
+  const resourceMatchDisplay = learnerMetricResults
+    ? formatMetricValue(learnerResourceMatchMetric, metricStatusLabel(learnerResourceMatchMetric))
+    : `${(stats.resourceMatch ?? 0).toFixed(1)}%`
+  const resourceEffectivenessDisplay = learnerMetricResults
+    ? formatMetricValue(learnerEffectivenessMetric, metricStatusLabel(learnerEffectivenessMetric))
+    : '暂无数据'
 
   const radarChartData = abilityRadarData.map((item) => ({
     subject: item.dimension,
@@ -325,7 +347,7 @@ export default function LearningReport() {
               <Target className="w-5 h-5 text-success" />
             </div>
             <div>
-              <p className="metric-number text-xl font-semibold text-text-primary">{stats.knowledgeCoverage.toFixed(1)}%</p>
+              <p className="metric-number text-xl font-semibold text-text-primary">{knowledgeCoverageDisplay}</p>
               <p className="text-xs text-text-tertiary">知识点覆盖率</p>
             </div>
           </div>
@@ -336,8 +358,8 @@ export default function LearningReport() {
               <Zap className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <p className="metric-number text-xl font-semibold text-text-primary">{stats.resourceMatch.toFixed(1)}%</p>
-              <p className="text-xs text-text-tertiary">资源匹配准确率</p>
+              <p className="metric-number text-xl font-semibold text-text-primary">{resourceMatchDisplay}</p>
+              <p className="text-xs text-text-tertiary">{learnerMetricResults ? '资源匹配分' : '资源匹配准确率'}</p>
             </div>
           </div>
         </Card>
@@ -367,6 +389,19 @@ export default function LearningReport() {
             </div>
           </div>
         </Card>
+        {learnerMetricResults && (
+          <Card padding="md" className="hover:shadow-lift transition-all">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-warning/10 flex items-center justify-center">
+                <Target className="w-5 h-5 text-warning" />
+              </div>
+              <div>
+                <p className="metric-number text-xl font-semibold text-text-primary">{resourceEffectivenessDisplay}</p>
+                <p className="text-xs text-text-tertiary">资源匹配效果</p>
+              </div>
+            </div>
+          </Card>
+        )}
       </div>
 
       <Card padding="md">

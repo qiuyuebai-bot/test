@@ -1,5 +1,5 @@
 import { http, PagedData } from '../lib/request'
-import type { InteractionHistoryRecord, InteractionHistoryResponse, LearnerReport, LearningResource, SystemMetrics, PaginationParams } from '../types'
+import type { InteractionHistoryRecord, InteractionHistoryResponse, LearnerReport, LearningResource, SystemMetrics, MetricDefinition, PaginationParams } from '../types'
 
 export interface GenerateResourcesRequest {
   learnerId: number
@@ -98,6 +98,10 @@ export const coreApi = {
 
   getSystemMetrics(options?: { silent?: boolean }): Promise<SystemMetrics> {
     return http.get<SystemMetrics>('/report/metrics', undefined, options)
+  },
+
+  getMetricDefinitions(): Promise<MetricDefinition[]> {
+    return http.get<MetricDefinition[]>('/report/metrics/definitions')
   },
 
   submitAnswer(data: SubmitAnswerRequest): Promise<unknown> {

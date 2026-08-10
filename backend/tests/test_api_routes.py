@@ -233,6 +233,45 @@ class TestAgentRoutes:
         data = response.json()
         assert data["code"] == 200
 
+    def test_get_task_evidence_marks_missing_sources_as_insufficient(
+        self, client: TestClient, sample_agent_task, auth_headers: dict
+    ):
+        response = client.get(
+            f"/api/v1/agent/tasks/{sample_agent_task.id}/evidence",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        evidence = response.json()["data"]
+        assert evidence["summary"]["final_decision"] == "insufficient_evidence"
+        assert evidence["summary"]["confidence"] is None
+        assert len(evidence["timeline"]) == 7
+
+    def test_get_task_evidence_returns_weighted_confidence_with_sources(
+        self,
+        client: TestClient,
+        db_session: Session,
+        sample_agent_task,
+        sample_learning_resource,
+        sample_knowledge_doc,
+        sample_knowledge_slices,
+        auth_headers: dict,
+    ):
+        sample_learning_resource.generation_task_id = sample_agent_task.id
+        sample_learning_resource.source_doc_ids = [sample_knowledge_doc.id]
+        sample_learning_resource.source_slice_ids = [slice_item.id for slice_item in sample_knowledge_slices]
+        db_session.commit()
+
+        response = client.get(
+            f"/api/v1/agent/tasks/{sample_agent_task.id}/evidence",
+            headers=auth_headers,
+        )
+        assert response.status_code == 200
+        evidence = response.json()["data"]
+        assert evidence["summary"]["final_decision"] == "approved"
+        assert evidence["summary"]["confidence"] is not None
+        assert [item["weight"] for item in evidence["summary"]["confidence_breakdown"]] == [35, 25, 20, 15, 5]
+        assert len(evidence["knowledge_evidence"]) == len(sample_knowledge_slices)
+
     def test_diagnose(self, client: TestClient, sample_learner_profile: LearnerProfile, auth_headers: dict):
         """测试学情诊断"""
         response = client.post("/api/v1/agent/diagnose", json={

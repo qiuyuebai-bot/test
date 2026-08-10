@@ -10,6 +10,7 @@ const Login = lazy(() => import('./pages/Login'))
 const OnboardingName = lazy(() => import('./pages/OnboardingName'))
 const Dashboard = lazy(() => import('./pages/Dashboard'))
 const MultiAgentVisualization = lazy(() => import('./pages/MultiAgentVisualization'))
+const TaskEvidenceWorkspace = lazy(() => import('./pages/multi-agent/TaskEvidenceWorkspace'))
 const LearnerProfile = lazy(() => import('./pages/LearnerProfile'))
 const KnowledgeBase = lazy(() => import('./pages/KnowledgeBase'))
 const ResourceGeneration = lazy(() => import('./pages/ResourceGeneration'))
@@ -77,6 +78,14 @@ function App() {
               element={
                 <ProtectedRoute roles={['admin']}>
                   <MultiAgentVisualization />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="multi-agent/tasks/:taskId/evidence"
+              element={
+                <ProtectedRoute roles={['admin']}>
+                  <TaskEvidenceWorkspace />
                 </ProtectedRoute>
               }
             />

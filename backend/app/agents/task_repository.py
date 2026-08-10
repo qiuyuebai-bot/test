@@ -218,8 +218,8 @@ class TaskRepository:
                     ensure_ascii=False,
                     default=str,
                 ),
-                original_content="",
-                reference_content="",
+                original_content=debate_data.get("original_content", ""),
+                reference_content=debate_data.get("reference_content", ""),
                 comparison_summary=json.dumps(
                     debate_data.get("conflict_points", []),
                     ensure_ascii=False,
@@ -266,8 +266,14 @@ class TaskRepository:
         generation_result: Dict[str, Any],
         audit_result: Dict[str, Any],
         debate_rounds: int,
+        evidence_snapshot: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
-        """保存学习资源并标记任务完成"""
+        """保存学习资源并标记任务完成。
+
+        The compact evidence snapshot keeps the pre-revision content and audit
+        inputs available after the in-memory orchestrator cache is cleared.
+        Full source text remains in the resource/knowledge tables.
+        """
         generation_result = dict(generation_result or {})
         generation_result["content"] = normalize_resource_content(
             generation_result.get("content")
@@ -338,10 +344,10 @@ class TaskRepository:
                 task.status = "completed"
                 task.progress = 100
                 task.flow_stage = "complete"
-                task.output_data = json.dumps(
-                    {"resource_id": resource_id},
-                    ensure_ascii=False,
-                )
+                output_data = {"resource_id": resource_id}
+                if evidence_snapshot:
+                    output_data["evidence"] = evidence_snapshot
+                task.output_data = json.dumps(output_data, ensure_ascii=False, default=str)
                 task.completed_at = datetime.now()
                 if audit_result.get("_meta", {}).get("duration_ms"):
                     task.duration_ms = audit_result["_meta"]["duration_ms"]

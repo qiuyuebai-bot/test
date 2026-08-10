@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from 'react'
+import { useNavigate } from 'react-router-dom'
 import {
   Play,
   ZoomIn,
@@ -37,6 +38,7 @@ import {
 export default function MultiAgentVisualization() {
   const data = useMultiAgentData()
   const { logs, addLog, clearLogs } = useTaskLogs()
+  const navigate = useNavigate()
   const [scale, setScale] = useState(1)
   const svgRef = useRef<SVGSVGElement>(null)
 
@@ -530,6 +532,13 @@ export default function MultiAgentVisualization() {
         isOpen={!!data.selectedTask}
         onClose={() => data.setSelectedTask(undefined)}
         task={data.selectedTask}
+        onViewEvidence={() => {
+          if (!data.selectedTask) return
+          const taskId = data.selectedTask.taskId
+          data.setSelectedTask(undefined)
+          navigate(`/multi-agent/tasks/${taskId}/evidence`)
+        }}
+        onViewResource={(resourceId) => navigate(`/resources?resourceId=${resourceId}`)}
       />
     </div>
   )

@@ -1,5 +1,5 @@
 import { http, PagedData } from '../lib/request'
-import type { AgentStatus, AgentTask, DebateRecord, PaginationParams } from '../types'
+import type { AgentStatus, AgentTask, DebateRecord, PaginationParams, TaskEvidence } from '../types'
 
 export interface CreateTaskData {
   learnerId: number
@@ -74,6 +74,10 @@ export const agentApi = {
 
   getDebateRecords(taskId: number): Promise<{ taskId: number; debateRecords: DebateRecord[]; totalRounds: number; hasHallucination: boolean; allResolved: boolean }> {
     return http.get(`/agent/debate/${taskId}`)
+  },
+
+  getTaskEvidence(taskId: number): Promise<TaskEvidence> {
+    return http.get<TaskEvidence>(`/agent/tasks/${taskId}/evidence`)
   },
 
   getHallucinationMetrics(options?: { silent?: boolean }): Promise<HallucinationMetrics> {

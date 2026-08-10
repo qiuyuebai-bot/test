@@ -30,10 +30,18 @@ from app.domains.agent.schemas import (
 )
 from app.domains.learner.service import LearnerService
 from app.agents.orchestrator import orchestrator
-from app.models import AgentTask, DebateRecord, LearnerProfile
+from app.models import (
+    AgentTask,
+    DebateRecord,
+    KnowledgeDoc,
+    KnowledgeSlice,
+    LearnerProfile,
+    LearningResource,
+)
 from app.utils.logger import LoggerUtil
 from app.utils.auth import get_current_user, CurrentUser
 from app.utils.metrics import MetricsUtil
+from app.services.metric_service import MetricService
 
 router = APIRouter(prefix="/agent", tags=["Agent协同调度"])
 
@@ -44,6 +52,111 @@ def _check_task_permission(db: Session, current_user: CurrentUser, task: AgentTa
     if task.learner_id is None:
         return False
     return LearnerService.check_data_permission(db, current_user.user_id, task.learner_id)
+
+
+def _parse_json_value(value, fallback):
+    """Parse JSON columns that may contain either native values or strings."""
+    if value is None:
+        return fallback
+    if isinstance(value, (dict, list)):
+        return value
+    try:
+        return json.loads(value)
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return fallback
+
+
+def _as_list(value):
+    parsed = _parse_json_value(value, [])
+    if isinstance(parsed, list):
+        return parsed
+    return [parsed] if parsed else []
+
+
+def _score_percent(value):
+    if value is None:
+        return None
+    try:
+        score = float(value)
+    except (TypeError, ValueError):
+        return None
+    if 0 <= score <= 1:
+        score *= 100
+    return round(max(0.0, min(100.0, score)), 1)
+
+
+def _serialize_debate_record(record: DebateRecord) -> Dict:
+    judge_view = _parse_json_value(record.agent_judge_view, {})
+    generation_view = _parse_json_value(record.agent_generation_view, {})
+    conflicts = _as_list(record.conflict_description)
+    corrections = _as_list(record.judge_notes)
+    return {
+        "round": record.debate_round,
+        "debate_type": record.debate_type,
+        "has_conflict": record.has_conflict,
+        "conflict_type": record.conflict_type,
+        "conflict_severity": record.conflict_severity,
+        "is_hallucination": record.is_hallucination,
+        "hallucination_type": record.hallucination_type,
+        "hallucination_score": record.hallucination_score,
+        "judge_standpoint": judge_view,
+        "generation_counterargument": generation_view,
+        "conflict_points": conflicts,
+        "corrections": corrections,
+        "resolution_status": record.resolution_status,
+        "judge_decision": record.judge_decision,
+        "judge_confidence": record.judge_confidence,
+        "original_content": record.original_content or "",
+        "corrected_content": record.corrected_content or "",
+        "correction_reason": record.correction_reason or "",
+        "created_at": record.created_at.isoformat() if record.created_at else None,
+        "resolved_at": record.resolved_at.isoformat() if record.resolved_at else None,
+    }
+
+
+def _stage_timeline(task: AgentTask) -> list[Dict]:
+    labels = {
+        "diagnosis": "学情诊断",
+        "knowledge_retrieval": "知识检索",
+        "generation": "初稿生成",
+        "judge_first": "初次审核",
+        "debate": "辩论交叉验证",
+        "final_revision": "最终修正",
+        "complete": "放行",
+    }
+    ordered_stages = list(labels)
+    logs = _as_list(task.execution_logs)
+    by_stage = {}
+    for log in logs:
+        if isinstance(log, dict) and log.get("stage"):
+            by_stage[log["stage"]] = log
+
+    current_index = ordered_stages.index(task.flow_stage) if task.flow_stage in ordered_stages else -1
+    timeline = []
+    for index, stage in enumerate(ordered_stages):
+        log = by_stage.get(stage, {})
+        if stage in by_stage:
+            status = "completed" if index < current_index or task.status == "completed" else "active"
+        elif task.status == "completed" and index <= current_index:
+            status = "completed"
+        elif index < current_index:
+            status = "completed"
+        elif index == current_index and task.status in ("running", "pending"):
+            status = "active"
+        else:
+            status = "pending"
+        description = log.get("description", "")
+        if stage == task.flow_stage and task.flow_description:
+            description = task.flow_description
+        timeline.append({
+            "stage": stage,
+            "label": labels[stage],
+            "status": status,
+            "progress": log.get("progress", 100 if status == "completed" else task.progress if stage == task.flow_stage else 0),
+            "description": description,
+            "timestamp": log.get("timestamp"),
+        })
+    return timeline
 
 _AGENT_RESPONSES = {
     400: {"description": "请求参数错误（任务参数不合法、Agent类型无效等）"},
@@ -463,6 +576,279 @@ def get_task_logs(
         return error(message=f"查询日志失败: {str(e)}")
 
 
+@router.get("/tasks/{task_id}/evidence", summary="获取任务完整证据链")
+def get_task_evidence(
+    task_id: int,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> BaseResponse:
+    """返回任务摘要、时间线、辩论、知识来源、修正对比和决策依据。"""
+    try:
+        task = db.query(AgentTask).filter(AgentTask.id == task_id).first()
+        if not task:
+            return not_found(message="任务不存在")
+        if not _check_task_permission(db, current_user, task):
+            return unauthorized("无权限查看该任务证据链")
+
+        output_data = _parse_json_value(task.output_data, {})
+        snapshot = output_data.get("evidence", {}) if isinstance(output_data, dict) else {}
+        if not isinstance(snapshot, dict):
+            snapshot = {}
+
+        resource_id = output_data.get("resource_id") if isinstance(output_data, dict) else None
+        resource = None
+        if resource_id:
+            resource = db.query(LearningResource).filter(LearningResource.id == resource_id).first()
+        if resource is None:
+            resource = db.query(LearningResource).filter(
+                LearningResource.generation_task_id == task_id
+            ).first()
+        if resource is not None:
+            resource_id = resource.id
+
+        source_slice_ids = [
+            int(value) for value in _as_list(resource.source_slice_ids if resource else snapshot.get("source_slice_ids"))
+            if str(value).isdigit()
+        ]
+        snapshot_knowledge = [item for item in _as_list(snapshot.get("knowledge")) if isinstance(item, dict)]
+        snapshot_by_slice = {
+            int(item["slice_id"]): item
+            for item in snapshot_knowledge
+            if item.get("slice_id") is not None and str(item.get("slice_id")).isdigit()
+        }
+        if not source_slice_ids:
+            source_slice_ids = list(snapshot_by_slice)
+
+        source_slices = []
+        if source_slice_ids:
+            source_slices = db.query(KnowledgeSlice).filter(
+                KnowledgeSlice.id.in_(source_slice_ids)
+            ).order_by(KnowledgeSlice.doc_id, KnowledgeSlice.slice_index).all()
+
+        source_doc_ids = [
+            int(value) for value in _as_list(resource.source_doc_ids if resource else snapshot.get("source_doc_ids"))
+            if str(value).isdigit()
+        ]
+        source_doc_ids.extend(slice_item.doc_id for slice_item in source_slices if slice_item.doc_id not in source_doc_ids)
+        source_docs = []
+        if source_doc_ids:
+            source_docs = db.query(KnowledgeDoc).filter(KnowledgeDoc.id.in_(source_doc_ids)).all()
+        source_doc_map = {doc.id: doc for doc in source_docs}
+
+        knowledge_evidence = []
+        for source_slice in source_slices:
+            metadata = snapshot_by_slice.get(source_slice.id, {})
+            doc = source_doc_map.get(source_slice.doc_id)
+            knowledge_evidence.append({
+                "slice_id": source_slice.id,
+                "doc_id": source_slice.doc_id,
+                "doc_title": doc.title if doc else "",
+                "title": source_slice.title,
+                "content": source_slice.content,
+                "slice_index": source_slice.slice_index,
+                "similarity": metadata.get("similarity"),
+                "quality_score": source_slice.quality_score,
+                "relation": "supports",
+            })
+
+        serialized_debates = [
+            _serialize_debate_record(record)
+            for record in db.query(DebateRecord).filter(
+                DebateRecord.task_id == task_id
+            ).order_by(DebateRecord.debate_round).all()
+        ]
+
+        initial_audit = snapshot.get("initial_audit") if isinstance(snapshot.get("initial_audit"), dict) else {}
+        final_audit = snapshot.get("final_audit") if isinstance(snapshot.get("final_audit"), dict) else {}
+        if not final_audit:
+            final_audit = initial_audit
+
+        all_conflicts = [
+            point
+            for debate in serialized_debates
+            for point in debate.get("conflict_points", [])
+        ]
+        all_corrections = [
+            correction
+            for debate in serialized_debates
+            for correction in debate.get("corrections", [])
+        ]
+        source_similarity = [
+            float(item["similarity"])
+            for item in knowledge_evidence
+            if isinstance(item.get("similarity"), (int, float))
+        ]
+        source_quality = [
+            float(item["quality_score"])
+            for item in knowledge_evidence
+            if isinstance(item.get("quality_score"), (int, float)) and item.get("quality_score") > 0
+        ]
+        evidence_coverage = _score_percent(final_audit.get("evidence_coverage"))
+        if evidence_coverage is None:
+            evidence_coverage = 100.0 if knowledge_evidence else 0.0
+        source_relevance = _score_percent(
+            sum(source_similarity) / len(source_similarity)
+            if source_similarity
+            else sum(source_quality) / len(source_quality)
+            if source_quality
+            else None
+        )
+        factual_consistency = _score_percent(final_audit.get("consistency_score"))
+        if factual_consistency is None and resource is not None and resource.validation_score:
+            factual_consistency = _score_percent(resource.validation_score)
+        resolved_statuses = {"resolved", "accepted", "corrected"}
+        if serialized_debates:
+            resolved_count = sum(
+                1 for debate in serialized_debates if debate.get("resolution_status") in resolved_statuses
+            )
+            issue_resolution = round(resolved_count / len(serialized_debates) * 100, 1)
+        else:
+            issue_resolution = 100.0 if task.validated else 0.0
+        if source_docs:
+            valid_sources = sum(1 for doc in source_docs if doc.is_enabled and doc.status == "ready")
+            source_validity = round(valid_sources / len(source_docs) * 100, 1)
+        else:
+            source_validity = 0.0
+
+        breakdown = [
+            {"key": "evidence_coverage", "label": "证据覆盖度", "weight": 35, "score": evidence_coverage},
+            {"key": "source_relevance", "label": "来源相关度", "weight": 25, "score": source_relevance or 0.0},
+            {"key": "factual_consistency", "label": "事实一致性", "weight": 20, "score": factual_consistency or 0.0},
+            {"key": "issue_resolution", "label": "审核问题解决率", "weight": 15, "score": issue_resolution},
+            {"key": "source_validity", "label": "来源有效性", "weight": 5, "score": source_validity},
+        ]
+        has_sufficient_evidence = bool(knowledge_evidence and source_validity > 0)
+        weighted_confidence = round(sum(item["score"] * item["weight"] for item in breakdown) / 100, 1)
+        confidence = weighted_confidence if has_sufficient_evidence else None
+
+        latest_decision = serialized_debates[-1].get("judge_decision") if serialized_debates else None
+        passed = final_audit.get("passed")
+        if passed is None and resource is not None:
+            passed = resource.validation_passed
+        if not has_sufficient_evidence:
+            final_decision = "insufficient_evidence"
+        elif latest_decision == "rejected" or (passed is False and task.status == "failed"):
+            final_decision = "rejected"
+        elif passed:
+            final_decision = "revised_approved" if all_corrections else "approved"
+        else:
+            final_decision = "rejected"
+
+        initial_content = snapshot.get("initial_content", "")
+        if not initial_content and serialized_debates:
+            initial_content = serialized_debates[0].get("original_content", "")
+        final_content = resource.content if resource is not None else ""
+        if not final_content and serialized_debates:
+            final_content = serialized_debates[-1].get("corrected_content", "")
+
+        key_correction = None
+        if all_corrections:
+            first_correction = all_corrections[0]
+            if isinstance(first_correction, dict):
+                correction_text = first_correction.get("description") or first_correction.get("suggested_fix") or ""
+                correction_reason = first_correction.get("reason") or first_correction.get("suggested_fix") or correction_text
+            else:
+                correction_text = str(first_correction)
+                correction_reason = correction_text
+            key_correction = {
+                "original": initial_content,
+                "revised": final_content,
+                "description": correction_text,
+                "reason": correction_reason,
+            }
+
+        unresolved_risks = [
+            point.get("description", str(point)) if isinstance(point, dict) else str(point)
+            for point in all_conflicts
+            if not serialized_debates or serialized_debates[-1].get("resolution_status") not in resolved_statuses
+        ]
+        decision_reason = {
+            "release_reason": (
+                "证据充分，审核问题已解决，允许放行。"
+                if final_decision in ("approved", "revised_approved")
+                else "当前证据不足，暂不允许将内容标记为可信。"
+                if final_decision == "insufficient_evidence"
+                else "审核未通过，内容仍存在未解决风险。"
+            ),
+            "unresolved_risks": unresolved_risks,
+            "review_rules": [
+                "证据覆盖度、来源相关度、事实一致性、问题解决率、来源有效性按固定权重计算。",
+                "缺少有效知识来源时，可信度显示为证据不足。",
+            ],
+        }
+
+        learner = db.query(LearnerProfile).filter(LearnerProfile.id == task.learner_id).first()
+        diagnosis = snapshot.get("diagnosis") if isinstance(snapshot.get("diagnosis"), dict) else None
+        task_payload = {
+            "task_id": task.id,
+            "task_name": task.task_name,
+            "task_type": task.task_type,
+            "status": task.status,
+            "flow_stage": task.flow_stage,
+            "progress": task.progress,
+            "learner_id": task.learner_id,
+            "resource_id": resource_id,
+            "created_at": task.created_at.isoformat() if task.created_at else None,
+            "updated_at": task.updated_at.isoformat() if task.updated_at else None,
+            "completed_at": task.completed_at.isoformat() if task.completed_at else None,
+        }
+        summary = {
+            "final_decision": final_decision,
+            "confidence": confidence,
+            "credibility": final_audit.get("credibility") if has_sufficient_evidence else "no_evidence",
+            "has_sufficient_evidence": has_sufficient_evidence,
+            "stats": {
+                "debate_rounds": len(serialized_debates),
+                "issues_found": len(all_conflicts),
+                "corrections_applied": len(all_corrections),
+                "source_count": len(knowledge_evidence),
+            },
+            "key_correction": key_correction,
+            "confidence_breakdown": breakdown,
+        }
+
+        return success(data={
+            "task": task_payload,
+            "learner": {
+                "id": learner.id if learner else task.learner_id,
+                "name": learner.real_name if learner else None,
+                "diagnosis": diagnosis,
+            },
+            "summary": summary,
+            "timeline": _stage_timeline(task),
+            "debate_records": serialized_debates,
+            "knowledge_evidence": knowledge_evidence,
+            "source_documents": [
+                {
+                    "id": doc.id,
+                    "title": doc.title,
+                    "industry": doc.industry,
+                    "source": doc.source,
+                    "version": doc.version,
+                    "status": doc.status,
+                    "is_enabled": doc.is_enabled,
+                }
+                for doc in source_docs
+            ],
+            "initial_generation": {"content": initial_content},
+            "final_generation": {
+                "content": final_content,
+                "title": resource.title if resource else None,
+                "resource_type": resource.resource_type if resource else None,
+            },
+            "revision_comparison": {
+                "original_content": initial_content,
+                "final_content": final_content,
+                "corrections": all_corrections,
+                "has_changes": bool(key_correction and initial_content != final_content),
+            },
+            "decision": decision_reason,
+        })
+    except Exception as e:
+        LoggerUtil.log_error("获取任务证据链失败", e)
+        return error(message=f"获取任务证据链失败: {str(e)}")
+
+
 @router.get("/tasks", summary="获取任务列表")
 def get_task_list(
     learner_id: Optional[int] = None,
@@ -643,38 +1029,7 @@ def get_debate_records(
             DebateRecord.task_id == task_id
         ).order_by(DebateRecord.debate_round).all()
         
-        debate_list = []
-        for record in records:
-            try:
-                judge_view = json.loads(record.agent_judge_view) if record.agent_judge_view else {}
-                gen_view = json.loads(record.agent_generation_view) if record.agent_generation_view else {}
-                conflicts = json.loads(record.conflict_description) if record.conflict_description else []
-                corrections = json.loads(record.judge_notes) if record.judge_notes else []
-            except (json.JSONDecodeError, TypeError, ValueError):
-                judge_view = {}
-                gen_view = {}
-                conflicts = []
-                corrections = []
-            
-            debate_list.append({
-                "round": record.debate_round,
-                "debate_type": record.debate_type,
-                "has_conflict": record.has_conflict,
-                "conflict_type": record.conflict_type,
-                "conflict_severity": record.conflict_severity,
-                "is_hallucination": record.is_hallucination,
-                "hallucination_type": record.hallucination_type,
-                "hallucination_score": record.hallucination_score,
-                "judge_standpoint": judge_view,
-                "generation_counterargument": gen_view,
-                "conflict_points": conflicts,
-                "corrections": corrections,
-                "resolution_status": record.resolution_status,
-                "judge_decision": record.judge_decision,
-                "judge_confidence": record.judge_confidence,
-                "created_at": record.created_at.isoformat() if record.created_at else None,
-                "resolved_at": record.resolved_at.isoformat() if record.resolved_at else None,
-            })
+        debate_list = [_serialize_debate_record(record) for record in records]
         
         return success(data={
             "task_id": task_id,
@@ -705,7 +1060,12 @@ def get_hallucination_metrics(
     """
     try:
         metrics = MetricsUtil.calculate_hallucination_metrics(db)
-        return success(data=metrics)
+        standard = MetricService.calculate_metrics(
+            db,
+            scope="global",
+            metric_ids=["hallucination_rate"],
+        )
+        return success(data={**metrics, "metric": standard[0] if standard else None})
 
     except Exception as e:
         LoggerUtil.log_error("获取幻觉率统计失败", e)
