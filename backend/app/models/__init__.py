@@ -16,6 +16,10 @@ from app.domains.position.models import Competency, CompetencyCategoryEnum, Posi
 from app.domains.assessment.models import AssessmentTemplate, AssessmentRecord, CompetencyScore
 from app.domains.assessment.models import AssessmentStatusEnum, AssessmentMethodEnum
 
+# 认证发证相关模型
+from app.domains.certification.models import Certification, CertificationRule, CertificationRecord
+from app.domains.certification.models import CertificationLevelEnum, RuleTypeEnum, CertificationStatusEnum
+
 # 知识库相关模型
 from app.domains.knowledge.models import KnowledgeDoc, IndustryEnum, DocStatusEnum
 from app.domains.knowledge.models import KnowledgeSlice
@@ -67,6 +71,13 @@ __all__ = [
     "CompetencyScore",
     "AssessmentStatusEnum",
     "AssessmentMethodEnum",
+    # 认证发证相关
+    "Certification",
+    "CertificationRule",
+    "CertificationRecord",
+    "CertificationLevelEnum",
+    "RuleTypeEnum",
+    "CertificationStatusEnum",
     # 知识库相关
     "KnowledgeDoc",
     "IndustryEnum",
