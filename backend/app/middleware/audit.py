@@ -36,6 +36,7 @@ _PATH_PREFIX_TO_RESOURCE = {
     "/agent": "agent",
     "/positions": "position",
     "/competencies": "competency",
+    "/assessments": "assessment",
     "/resources": "resource",
     "/report": "report",
     "/privacy": "privacy",

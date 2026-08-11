@@ -12,6 +12,10 @@ from app.domains.learner.models import LearnerProfile, EducationLevelEnum, Learn
 from app.domains.position.models import Position, PositionCategoryEnum, PositionLevelEnum
 from app.domains.position.models import Competency, CompetencyCategoryEnum, PositionCompetency
 
+# 评估相关模型
+from app.domains.assessment.models import AssessmentTemplate, AssessmentRecord, CompetencyScore
+from app.domains.assessment.models import AssessmentStatusEnum, AssessmentMethodEnum
+
 # 知识库相关模型
 from app.domains.knowledge.models import KnowledgeDoc, IndustryEnum, DocStatusEnum
 from app.domains.knowledge.models import KnowledgeSlice
@@ -57,6 +61,12 @@ __all__ = [
     "Competency",
     "CompetencyCategoryEnum",
     "PositionCompetency",
+    # 评估相关
+    "AssessmentTemplate",
+    "AssessmentRecord",
+    "CompetencyScore",
+    "AssessmentStatusEnum",
+    "AssessmentMethodEnum",
     # 知识库相关
     "KnowledgeDoc",
     "IndustryEnum",
