@@ -22,7 +22,11 @@ export function readPersistedSession(learnerId: number): PersistedSession | null
     if (!raw) return null
     const parsed = JSON.parse(raw) as PersistedSession
     if (!parsed?.config?.topic || !Array.isArray(parsed.questions) || parsed.questions.length === 0) return null
-    return parsed
+    return {
+      ...parsed,
+      config: { ...parsed.config, mode: parsed.config.mode ?? 'adaptive' },
+      answersByQuestionId: parsed.answersByQuestionId ?? {},
+    }
   } catch {
     return null
   }

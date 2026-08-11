@@ -10,7 +10,9 @@ import {
   sessionStorageKey,
 } from './sessionPersistence'
 import type {
+  BatchSubmitResult,
   GuidanceRecommendation,
+  GuidanceMode,
   RecommendationOption,
   SessionConfig,
   SubmitResult,
@@ -23,6 +25,7 @@ interface StartSessionOptions {
   topic?: string
   difficulty?: number
   questionCount?: number
+  mode?: GuidanceMode
 }
 
 interface GenerateOptions {
@@ -102,6 +105,26 @@ export function useGuidanceSession(learnerId: number | null) {
       let correctCount = 0
       let generationMethod: string | null = questions[0]?.generationMethod ?? null
       let submitResult: SubmitResult | null = null
+      let answersByQuestionId: Record<string, number[]> = {}
+      let batchResult: BatchSubmitResult | null = null
+      let recoveredBatchResult: BatchSubmitResult | null = null
+
+      // A successful batch commit can be followed by a lost response. Keep the
+      // local draft for recovery, then prefer the durable server result when it
+      // is available on the next load.
+      if (
+        persisted?.config.mode === 'batch' &&
+        persisted.config.sessionId &&
+        !persisted.batchResult &&
+        typeof coreApi.getBatchResult === 'function'
+      ) {
+        try {
+          recoveredBatchResult = await coreApi.getBatchResult(persisted.config.sessionId, learnerId)
+        } catch {
+          // A 404 means the draft is still pending; transient failures must not
+          // discard the answers that are stored locally.
+        }
+      }
 
       if (hydratedLearnerIdRef.current !== learnerId) {
         hydratedLearnerIdRef.current = learnerId
@@ -109,17 +132,25 @@ export function useGuidanceSession(learnerId: number | null) {
           const mergedQuestions = mergeQuestions(persisted, questionsResponse)
           const remoteIds = new Set(questionsResponse.map((question) => question.id))
           const currentId = persisted.questions[persisted.currentQuestion]?.id
-          const answerWasInterrupted = Boolean(currentId && !remoteIds.has(currentId) && (!persisted.showResult || !persisted.submitResult))
+          const answerWasInterrupted = persisted.config.mode !== 'batch'
+            && Boolean(currentId && !remoteIds.has(currentId) && (!persisted.showResult || !persisted.submitResult))
           const firstPendingIndex = mergedQuestions.findIndex((question) => remoteIds.has(question.id))
           questions = mergedQuestions
           currentQuestion = answerWasInterrupted && firstPendingIndex >= 0
             ? firstPendingIndex
             : Math.min(persisted.currentQuestion, Math.max(0, mergedQuestions.length - 1))
-          selectedAnswers = answerWasInterrupted ? [] : (persisted.selectedAnswers ?? [])
+          answersByQuestionId = persisted.answersByQuestionId ?? {}
+          const persistedQuestionId = mergedQuestions[persisted.currentQuestion]?.id
+          selectedAnswers = answerWasInterrupted
+            ? []
+            : persisted.config.mode === 'batch'
+            ? (persistedQuestionId ? answersByQuestionId[persistedQuestionId] ?? [] : [])
+            : (persisted.selectedAnswers ?? [])
           showResult = answerWasInterrupted ? false : Boolean(persisted.showResult)
           correctCount = persisted.correctCount ?? 0
           generationMethod = persisted.generationMethod ?? mergedQuestions[0]?.generationMethod ?? null
           submitResult = answerWasInterrupted ? null : (persisted.submitResult ?? null)
+          batchResult = answerWasInterrupted ? null : (persisted.batchResult ?? recoveredBatchResult)
           sessionConfig = persisted.config
         } else if (exited) {
           questions = []
@@ -127,10 +158,13 @@ export function useGuidanceSession(learnerId: number | null) {
         } else if (questions.length > 0) {
           const firstDifficulty = questions[0].difficulty
           const allSameDifficulty = questions.every((question) => question.difficulty === firstDifficulty)
+          const isBatch = questions[0].assessmentMode === 'batch_practice'
           sessionConfig = {
+            mode: isBatch ? 'batch' : 'adaptive',
             topic: questions[0].topic,
             difficulty: allSameDifficulty ? firstDifficulty : undefined,
             questionCount: questions.length,
+            sessionId: isBatch ? questions[0].sessionId : undefined,
           }
         }
       }
@@ -147,6 +181,8 @@ export function useGuidanceSession(learnerId: number | null) {
         correctCount,
         generationMethod,
         submitResult,
+        answersByQuestionId,
+        batchResult,
       })
     } catch (error) {
       dispatch({ type: 'load_failed', error: toErrorMessage(error, '导学题库加载失败，请稍后重试') })
@@ -164,7 +200,7 @@ export function useGuidanceSession(learnerId: number | null) {
   useEffect(() => {
     if (!learnerId || !state.hydrated) return
     const key = sessionStorageKey(learnerId)
-    if (!state.sessionConfig || state.questions.length === 0) {
+    if (!state.sessionConfig || state.questions.length === 0 || state.phase === 'batchReview') {
       window.localStorage.removeItem(key)
       return
     }
@@ -173,6 +209,7 @@ export function useGuidanceSession(learnerId: number | null) {
       questions: state.questions,
       currentQuestion: state.currentQuestion,
       selectedAnswers: state.selectedAnswers,
+      answersByQuestionId: state.answersByQuestionId,
       showResult: state.showResult,
       correctCount: state.correctCount,
       generationMethod: state.generationMethod,
@@ -184,13 +221,20 @@ export function useGuidanceSession(learnerId: number | null) {
     if (!learnerId) return []
     dispatch({ type: 'generation_started' })
     try {
-      const response = await coreApi.generateTutoringQuestions({
+      const request = {
         learnerId,
         topic: options.topic || undefined,
         difficulty: options.difficulty,
         questionCount: options.questionCount,
         replacePending: options.mode === 'append' || options.mode === 'start',
-      })
+        ...(options.sessionConfig?.mode === 'batch'
+          ? {
+            assessmentMode: 'batch_practice' as const,
+            sessionId: options.sessionConfig.sessionId,
+          }
+          : {}),
+      }
+      const response = await coreApi.generateTutoringQuestions(request)
       const questions = response.questions ?? []
       if (questions.length === 0) throw new Error('暂时没有生成可用题目，请先完成资源生成')
       dispatch({
@@ -213,8 +257,9 @@ export function useGuidanceSession(learnerId: number | null) {
   const startSession = useCallback(async (options: StartSessionOptions = {}) => {
     const topic = options.topic?.trim() || recommendation?.primaryTopic || undefined
     const difficulty = options.difficulty
+    const mode = options.mode ?? 'adaptive'
     const questionCount = Math.max(1, Math.min(10, options.questionCount ?? 5))
-    const initialQuestionCount = difficulty === undefined ? 1 : questionCount
+    const initialQuestionCount = mode === 'batch' || difficulty !== undefined ? questionCount : 1
     const sessionId = createSessionId()
     const generated = await generateQuestions({
       topic,
@@ -222,6 +267,7 @@ export function useGuidanceSession(learnerId: number | null) {
       questionCount: initialQuestionCount,
       mode: 'start',
       sessionConfig: {
+        mode,
         topic: topic || '',
         difficulty,
         questionCount,
@@ -307,9 +353,85 @@ export function useGuidanceSession(learnerId: number | null) {
     }
   }, [learnerId, loadHistory, prepareNextQuestion, state])
 
+  const submitBatch = useCallback(async () => {
+    const config = state.sessionConfig
+    if (
+      !learnerId ||
+      config?.mode !== 'batch' ||
+      state.phase === 'submitting' ||
+      state.phase === 'batchReview'
+    )
+      return
+
+    const firstUnanswered = state.questions.findIndex(
+      (question) => !state.answersByQuestionId[question.id]?.length,
+    )
+    if (firstUnanswered >= 0) {
+      dispatch({
+        type: 'batch_validation_failed',
+        index: firstUnanswered,
+        error: '请先完成全部题目再交卷',
+      })
+      return
+    }
+
+    const answers = state.questions.map((question, index) => ({
+      questionId: question.id,
+      userAnswer: (state.answersByQuestionId[question.id] ?? [])
+        .map((answer) => String.fromCharCode(65 + answer))
+        .join(','),
+      sequenceIndex: index + 1,
+    }))
+    dispatch({ type: 'batch_submit_started' })
+    try {
+      const result = await coreApi.submitBatch({
+        learnerId,
+        sessionId: config.sessionId ?? '',
+        answers,
+      })
+      dispatch({ type: 'batch_submit_succeeded', result })
+      window.localStorage.removeItem(sessionStorageKey(learnerId))
+      window.localStorage.removeItem(exitStorageKey(learnerId))
+      void loadHistory(true)
+    } catch (error) {
+      dispatch({
+        type: 'batch_submit_failed',
+        error: toErrorMessage(error, '整卷提交失败，请重试'),
+      })
+    }
+  }, [learnerId, loadHistory, state])
+
+  const goToQuestion = useCallback(
+    (index: number) => {
+      if (
+        state.sessionConfig?.mode !== 'batch' ||
+        state.phase === 'submitting' ||
+        state.phase === 'batchReview'
+      )
+        return
+      dispatch({ type: 'go_to_question', index })
+    },
+    [state.phase, state.sessionConfig?.mode],
+  )
+
   const nextQuestion = useCallback(() => {
+    if (state.sessionConfig?.mode === 'batch') {
+      if (state.currentQuestion < state.questions.length - 1)
+        dispatch({ type: 'go_to_question', index: state.currentQuestion + 1 })
+      return
+    }
     if (state.currentQuestion < state.questions.length - 1) dispatch({ type: 'advance_question' })
-  }, [state.currentQuestion, state.questions.length])
+  }, [state.currentQuestion, state.questions.length, state.sessionConfig?.mode])
+
+  const previousQuestion = useCallback(() => {
+    if (
+      state.sessionConfig?.mode === 'batch' &&
+      state.currentQuestion > 0 &&
+      state.phase !== 'submitting'
+    ) {
+      dispatch({ type: 'go_to_question', index: state.currentQuestion - 1 })
+    }
+  }, [state.currentQuestion, state.phase, state.sessionConfig?.mode])
 
   const retryNextQuestion = useCallback(() => {
     const question = state.questions[state.currentQuestion]
@@ -351,7 +473,10 @@ export function useGuidanceSession(learnerId: number | null) {
   const question = state.questions[state.currentQuestion]
   const isPreparingNext = state.phase === 'preparingNext'
   const sessionTotal = state.sessionConfig?.questionCount ?? state.questions.length
-  const answeredCount = Math.min(sessionTotal, state.currentQuestion + (state.showResult ? 1 : 0))
+  const isBatch = state.sessionConfig?.mode === 'batch'
+  const answeredCount = isBatch
+    ? state.questions.filter((item) => (state.answersByQuestionId[item.id] ?? []).length > 0).length
+    : Math.min(sessionTotal, state.currentQuestion + (state.showResult ? 1 : 0))
   const progress = sessionTotal > 0 ? (answeredCount / sessionTotal) * 100 : 0
 
   return useMemo(() => ({
@@ -369,7 +494,10 @@ export function useGuidanceSession(learnerId: number | null) {
     startSession,
     selectAnswer: (index: number) => dispatch({ type: 'select_answer', index, multiple: question?.type === 'multiple' }),
     submitAnswer,
+    submitBatch,
     nextQuestion,
+    previousQuestion,
+    goToQuestion,
     retryNextQuestion,
     exitSession,
     deleteHistory,
@@ -379,10 +507,12 @@ export function useGuidanceSession(learnerId: number | null) {
     clearHistory,
     deleteHistory,
     exitSession,
+    goToQuestion,
     isPreparingNext,
     loadData,
     loadHistory,
     nextQuestion,
+    previousQuestion,
     progress,
     question,
     recommendation,
@@ -393,5 +523,6 @@ export function useGuidanceSession(learnerId: number | null) {
     startSession,
     state,
     submitAnswer,
+    submitBatch,
   ])
 }

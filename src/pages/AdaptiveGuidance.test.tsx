@@ -25,6 +25,14 @@ vi.mock('@/api', () => ({
       score: 100,
       generatedContent: {},
     }),
+    submitBatch: vi.fn().mockResolvedValue({
+      sessionId: 'batch-test',
+      total: 2,
+      correctCount: 2,
+      score: 100,
+      dimensionSummary: [],
+      questions: [],
+    }),
     generateTutoringQuestions: vi.fn().mockResolvedValue({
       questions: [],
       generationMethod: 'deterministic_fallback',
@@ -64,6 +72,14 @@ beforeEach(() => {
   vi.mocked(coreApi.getInteractionHistory).mockResolvedValue({ learnerId: 1, history: [], total: 0, page: 1, pageSize: 20 })
   vi.mocked(coreApi.deleteInteractionHistory).mockResolvedValue({ deletedCount: 1 })
   vi.mocked(coreApi.submitAnswer).mockResolvedValue({ isCorrect: true, score: 100, generatedContent: {} })
+  vi.mocked(coreApi.submitBatch).mockResolvedValue({
+    sessionId: 'batch-test',
+    total: 2,
+    correctCount: 2,
+    score: 100,
+    dimensionSummary: [],
+    questions: [],
+  })
   vi.mocked(coreApi.generateTutoringQuestions).mockResolvedValue({
     questions: [{
       id: 'q2',

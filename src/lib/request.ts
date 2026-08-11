@@ -292,6 +292,18 @@ async function request<T = unknown>(path: string, options: RequestOptions = {}):
   }
 
   if (response.status >= 500) {
+    const contentType = response.headers.get('content-type') || ''
+    if (!contentType.includes('application/json')) {
+      const unavailable = new NetworkError('后端服务暂不可用，请确认服务已启动')
+      if (!silent) {
+        toast.error('后端服务不可用', unavailable.message)
+        reportError(unavailable, {
+          tags: { kind: 'backend_unavailable', httpStatus: response.status, endpoint: path },
+          extra: { method, url },
+        })
+      }
+      throw unavailable
+    }
     if (!silent) {
       toast.error('服务器错误', '服务器处理异常，请稍后重试')
     }

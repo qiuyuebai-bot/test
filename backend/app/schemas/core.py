@@ -2,7 +2,7 @@
 核心业务模块 Pydantic Schema
 包含：个性化资源生成、学情报告、自适应导学
 """
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List, Optional, Literal
 from pydantic import BaseModel, Field
 
 
@@ -212,6 +212,10 @@ class GenerateTutoringQuestionsRequest(BaseModel):
     replace_pending: bool = Field(False, description="是否替换该主题下尚未作答的旧题")
 
 
+    assessment_mode: Literal["practice", "batch_practice"] = Field("practice", description="assessment mode")
+    session_id: Optional[str] = Field(None, description="batch session id", max_length=100)
+
+
 class SubmitAnswerRequest(BaseModel):
     """提交答题请求。动态题由服务端根据 question_id 判分。"""
     learner_id: int = Field(..., description="学习者ID", gt=0)
@@ -229,6 +233,18 @@ class SubmitAnswerRequest(BaseModel):
     question_content: Optional[str] = Field(None, description="题目内容")
     correct_answer: Optional[Any] = Field(None, description="旧题库答案")
     score: Optional[float] = Field(None, description="旧题库得分", ge=0, le=100)
+
+
+class BatchAnswerItem(BaseModel):
+    question_id: str = Field(..., min_length=1, max_length=64)
+    user_answer: Any = Field(...)
+    sequence_index: int = Field(..., ge=1)
+
+
+class SubmitBatchRequest(BaseModel):
+    learner_id: int = Field(..., gt=0)
+    session_id: str = Field(..., min_length=1, max_length=100)
+    answers: List[BatchAnswerItem] = Field(..., min_length=1, max_length=10)
 
 
 class SimplifiedExplanation(BaseModel):

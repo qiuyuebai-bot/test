@@ -33,6 +33,8 @@ const CONFIG = {
     entryModule: "app.main:app",
     host: "0.0.0.0",
     port: 8000,
+    healthPath: "/health/live",
+    startupTimeoutMs: 60000,
     requirementsFile: "requirements.txt",
   },
   frontend: {
@@ -277,6 +279,24 @@ function startFrontend(env) {
   return { proc, label: "frontend", color: CONFIG.colors.frontend };
 }
 
+async function waitForHttpReady(url, timeoutMs) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+    try {
+      const response = await fetch(url, { signal: controller.signal });
+      if (response.ok) return true;
+    } catch {
+      // The service may still be initializing.
+    } finally {
+      clearTimeout(timeoutId);
+    }
+    await new Promise((resolve) => setTimeout(resolve, 500));
+  }
+  return false;
+}
+
 // ============================================================
 // 进程管理：输出聚合 + 优雅关闭
 // ============================================================
@@ -302,6 +322,7 @@ function attachOutput(service) {
   proc.on("exit", (code, signal) => {
     if (service.stopping) return;
     if (signal === "SIGTERM" || signal === "SIGINT") return;
+    service.onUnexpectedExit?.();
     if (code === 0) {
       log("info", `[${label}] 进程退出 (code=0)`);
     } else {
@@ -429,6 +450,23 @@ function main() {
       process.exit(0);
     }, 800);
   };
+
+  services.forEach((service) => {
+    service.onUnexpectedExit = () => shutdown(`${service.label} exit`);
+  });
+
+  const backend = services.find((service) => service.label === "backend");
+  if (backend) {
+    const healthUrl = `http://127.0.0.1:${CONFIG.backend.port}${CONFIG.backend.healthPath}`;
+    void waitForHttpReady(healthUrl, CONFIG.backend.startupTimeoutMs).then((ready) => {
+      if (ready) {
+        log("success", `鍚庣鍋ュ悍妫€鏌ラ€氳繃: ${healthUrl}`);
+      } else {
+        log("error", `鍚庣鍋ュ悍妫€鏌ヨ秴鏃?: ${healthUrl}`);
+        shutdown("backend readiness timeout");
+      }
+    });
+  }
 
   process.on("SIGINT", () => shutdown("SIGINT"));
   process.on("SIGTERM", () => shutdown("SIGTERM"));

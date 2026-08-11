@@ -5,7 +5,7 @@ import Button from '@/components/Button'
 import EmptyState from '@/components/EmptyState'
 import AdvancedGuidanceSettings from './AdvancedGuidanceSettings'
 import LearnerContextBar from './LearnerContextBar'
-import type { GuidanceRecommendation } from './types'
+import type { GuidanceMode, GuidanceRecommendation } from './types'
 import { Lightbulb, Play, RefreshCw } from 'lucide-react'
 
 interface GuidanceLauncherProps {
@@ -22,7 +22,7 @@ interface GuidanceLauncherProps {
   initialTopic?: string
   initialDifficulty?: string
   initialQuestionCount?: string
-  onStart: (options?: { topic?: string; difficulty?: number; questionCount?: number }) => Promise<TutoringQuestion[]>
+  onStart: (options?: { topic?: string; difficulty?: number; questionCount?: number; mode?: GuidanceMode }) => Promise<TutoringQuestion[]>
   onRefreshRecommendation: () => void
 }
 
@@ -46,11 +46,12 @@ export default function GuidanceLauncher({
   const [topic, setTopic] = useState(initialTopic)
   const [difficulty, setDifficulty] = useState(initialDifficulty)
   const [questionCount, setQuestionCount] = useState(initialQuestionCount)
+  const [mode, setMode] = useState<GuidanceMode>('adaptive')
   const [validationError, setValidationError] = useState<string | null>(null)
 
   const start = async (options?: { topic?: string; difficulty?: number; questionCount?: number }) => {
     setValidationError(null)
-    await onStart(options)
+    await onStart({ ...options, mode })
   }
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -106,6 +107,25 @@ export default function GuidanceLauncher({
               disabled={loading}
             />
             <span className="text-xs text-text-tertiary">默认 5 题，逐题适配难度</span>
+          </div>
+
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2" role="group" aria-label="导学答题模式">
+            {([
+              { value: 'adaptive' as const, title: '逐题自适应', description: '每题提交后立即反馈，下一题随表现调整' },
+              { value: 'batch' as const, title: '整卷练习', description: '一次生成整套题，完成后统一评分与解析' },
+            ]).map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                aria-pressed={mode === option.value}
+                onClick={() => setMode(option.value)}
+                disabled={loading}
+                className={`rounded-lg border p-3 text-left transition-colors ${mode === option.value ? 'border-primary bg-primary/5' : 'border-border/70 bg-bg-secondary/30 hover:border-primary/30'}`}
+              >
+                <span className="block text-sm font-medium text-text-primary">{option.title}</span>
+                <span className="mt-1 block text-xs leading-relaxed text-text-secondary">{option.description}</span>
+              </button>
+            ))}
           </div>
 
           <div className="rounded-xl border border-primary/15 bg-primary/5 p-4">

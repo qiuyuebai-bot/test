@@ -1,5 +1,6 @@
 """交互式自适应导学服务：单题二元判定，并同时提供通俗讲解与知识点扩展。"""
 import json
+import hashlib
 import uuid
 from datetime import datetime
 from typing import Dict, Any, List, Optional
@@ -9,6 +10,7 @@ from app.database import get_db_context
 from app.models import (
     LearnerProfile,
     AnswerRecord,
+    BatchSubmission,
     LearningResource,
     IssuedTutoringQuestion,
 )
@@ -285,6 +287,7 @@ class AdaptiveTutoringService(BaseService):
             "knowledgePoints": question.knowledge_points or [],
             "generationMethod": question.generation_method,
             "assessmentMode": question.assessment_mode or "practice",
+            "sessionId": question.session_id,
             "abilityDimension": question.ability_dimension,
             "diagnosticSessionId": question.diagnostic_session_id,
         }
@@ -373,8 +376,11 @@ class AdaptiveTutoringService(BaseService):
         assessment_mode: str = "practice",
         ability_dimension: Optional[str] = None,
         diagnostic_session_id: Optional[str] = None,
+        session_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Issue server-owned questions; answer keys never leave this service."""
+        if assessment_mode == "batch_practice" and not session_id:
+            raise ValueError("整卷练习缺少会话ID")
         learner = cls.get_learner(learner_id)
         if not learner:
             raise ValueError("学习者不存在")
@@ -496,6 +502,7 @@ class AdaptiveTutoringService(BaseService):
             assessment_mode=assessment_mode,
             ability_dimension=ability_dimension or cls._infer_ability_dimension(normalized_topic),
             diagnostic_session_id=diagnostic_session_id,
+            session_id=session_id,
         )
 
     @classmethod
@@ -510,6 +517,7 @@ class AdaptiveTutoringService(BaseService):
         assessment_mode: str = "practice",
         ability_dimension: Optional[str] = None,
         diagnostic_session_id: Optional[str] = None,
+        session_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Persist server-only keys and return only the public question payload."""
         public_questions = []
@@ -550,6 +558,7 @@ class AdaptiveTutoringService(BaseService):
                     source_doc_ids=source_doc_ids,
                     generation_method=question.get("generation_method", "deterministic_fallback"),
                     assessment_mode=assessment_mode,
+                    session_id=session_id,
                     ability_dimension=ability_dimension or cls._infer_ability_dimension(question_topic),
                     diagnostic_session_id=diagnostic_session_id,
                 )
@@ -726,6 +735,284 @@ class AdaptiveTutoringService(BaseService):
             cls.log_error("自适应导学失败", e)
             return {"success": False, "error": str(e)}
     
+    @classmethod
+    @staticmethod
+    def _batch_answer_payload(item: Any) -> Dict[str, Any]:
+        if hasattr(item, "model_dump"):
+            return item.model_dump()
+        if isinstance(item, dict):
+            return item
+        return {
+            "question_id": getattr(item, "question_id", ""),
+            "user_answer": getattr(item, "user_answer", ""),
+            "sequence_index": getattr(item, "sequence_index", 0),
+        }
+
+    @classmethod
+    def _batch_fingerprint(cls, answers: List[Dict[str, Any]]) -> str:
+        canonical = []
+        for answer in sorted(answers, key=lambda item: int(item["question_id"])):
+            canonical.append({
+                "question_id": str(int(answer["question_id"])),
+                "sequence_index": int(answer["sequence_index"]),
+                "user_answer": cls._normalize_batch_answer(answer["user_answer"]),
+            })
+        payload = json.dumps(canonical, ensure_ascii=False, separators=(",", ":"), sort_keys=True)
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    @classmethod
+    def _normalize_batch_answer(cls, answer: Any) -> List[str]:
+        values = answer if isinstance(answer, list) else [answer]
+        normalized = []
+        for value in values:
+            for item in str(value).split(","):
+                cleaned = item.strip().upper()
+                if cleaned:
+                    normalized.append(cleaned)
+        if not normalized:
+            raise ValueError("answer must not be empty")
+        return sorted(normalized)
+
+    @classmethod
+    def submit_batch(
+        cls,
+        user_id: int,
+        learner_id: int,
+        session_id: str,
+        answers: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        """Grade a complete batch in one transaction and make retries idempotent."""
+        if not str(session_id or "").strip():
+            return {"success": False, "status_code": 422, "error": "batch session id is required"}
+
+        payloads = [cls._batch_answer_payload(item) for item in (answers or [])]
+        try:
+            normalized_payloads = []
+            for payload in payloads:
+                question_id = str(payload.get("question_id", "")).strip()
+                if not question_id.isdigit() or int(question_id) <= 0:
+                    return {"success": False, "status_code": 409, "error": "invalid batch question"}
+                sequence_index = int(payload.get("sequence_index", 0))
+                if sequence_index < 1:
+                    return {"success": False, "status_code": 409, "error": "invalid batch sequence"}
+                normalized_payloads.append({
+                    "question_id": str(int(question_id)),
+                    "sequence_index": sequence_index,
+                    "user_answer": cls._normalize_batch_answer(payload.get("user_answer")),
+                })
+        except (TypeError, ValueError):
+            return {"success": False, "status_code": 422, "error": "answers must not be empty"}
+
+        fingerprint = cls._batch_fingerprint(normalized_payloads)
+        with get_db_context() as db:
+            existing_submission = db.query(BatchSubmission).filter(
+                BatchSubmission.user_id == user_id,
+                BatchSubmission.learner_id == learner_id,
+                BatchSubmission.session_id == session_id,
+            ).first()
+            if existing_submission:
+                if existing_submission.answer_fingerprint != fingerprint:
+                    return {
+                        "success": False,
+                        "status_code": 409,
+                        "error": "batch session already submitted with different answers",
+                    }
+                return {"success": True, **dict(existing_submission.result_summary or {})}
+
+            session_questions = db.query(IssuedTutoringQuestion).filter(
+                IssuedTutoringQuestion.user_id == user_id,
+                IssuedTutoringQuestion.learner_id == learner_id,
+                IssuedTutoringQuestion.session_id == session_id,
+                IssuedTutoringQuestion.assessment_mode == "batch_practice",
+            ).order_by(IssuedTutoringQuestion.id.asc()).all()
+            if not session_questions:
+                return {"success": False, "status_code": 404, "error": "batch session not found"}
+            if any(question.status != "issued" for question in session_questions):
+                return {"success": False, "status_code": 409, "error": "batch questions are no longer available"}
+
+            question_by_id = {str(question.id): question for question in session_questions}
+            submitted_ids = [item["question_id"] for item in normalized_payloads]
+            if len(submitted_ids) != len(set(submitted_ids)):
+                return {"success": False, "status_code": 409, "error": "duplicate batch question"}
+            if set(submitted_ids) != set(question_by_id):
+                return {"success": False, "status_code": 409, "error": "batch question set does not match"}
+
+            sequence_values = [item["sequence_index"] for item in normalized_payloads]
+            if sorted(sequence_values) != list(range(1, len(session_questions) + 1)):
+                return {"success": False, "status_code": 409, "error": "batch sequence must be continuous"}
+
+            ordered_answers = sorted(normalized_payloads, key=lambda item: item["sequence_index"])
+            dimension_scores: Dict[str, List[float]] = {}
+            question_results = []
+            learner = db.query(LearnerProfile).filter(
+                LearnerProfile.id == learner_id,
+                LearnerProfile.user_id == user_id,
+            ).first()
+            if not learner:
+                return {"success": False, "status_code": 403, "error": "learner access denied"}
+
+            for item in ordered_answers:
+                question = question_by_id[item["question_id"]]
+                expected_answer = sorted(str(value).strip().upper() for value in (question.answer_key or []))
+                user_answer = item["user_answer"]
+                is_correct = user_answer == expected_answer
+                score = 100.0 if is_correct else 0.0
+                if question.ability_dimension:
+                    dimension_scores.setdefault(question.ability_dimension, []).append(score)
+                db.add(AnswerRecord(
+                    user_id=user_id,
+                    learner_id=learner_id,
+                    question_id=question.id,
+                    issued_question_id=question.id,
+                    question_type=question.question_type,
+                    question_topic=question.topic,
+                    question_difficulty=question.difficulty,
+                    question_content=question.content,
+                    user_answer=user_answer,
+                    correct_answer=question.answer_key,
+                    result="correct" if is_correct else "wrong",
+                    score=score,
+                    time_spent_ms=0,
+                    attempt_count=1,
+                    hints_used=0,
+                    feedback_given=True,
+                    feedback_content=question.explanation or "",
+                    decision_log={"assessment_mode": "batch_practice"},
+                    session_id=session_id,
+                    sequence_index=item["sequence_index"],
+                ))
+                question_results.append({
+                    "questionId": str(question.id),
+                    "isCorrect": is_correct,
+                    "score": score,
+                    "userAnswer": user_answer,
+                    "correctAnswer": expected_answer,
+                    "explanation": question.explanation or "",
+                    "knowledgePoints": question.knowledge_points or [],
+                })
+
+            total = len(question_results)
+            correct_count = sum(1 for item in question_results if item["isCorrect"])
+            dimension_summary = []
+            for dimension, scores in dimension_scores.items():
+                answered_count = len(scores)
+                correct_count_for_dimension = sum(1 for value in scores if value >= 60)
+                dimension_summary.append({
+                    "dimension": dimension,
+                    "answeredCount": answered_count,
+                    "correctCount": correct_count_for_dimension,
+                    "score": round(sum(scores) / answered_count, 1),
+                })
+
+            result_summary = {
+                "sessionId": session_id,
+                "total": total,
+                "correctCount": correct_count,
+                "score": round(sum(item["score"] for item in question_results) / total, 1),
+                "dimensionSummary": dimension_summary,
+                "questions": question_results,
+            }
+            cls._update_learner_profile_batch(
+                learner,
+                dimension_scores,
+                total=total,
+                correct_count=correct_count,
+                db=db,
+            )
+            for question in session_questions:
+                question.status = "answered"
+                question.answered_at = datetime.utcnow()
+            db.add(BatchSubmission(
+                user_id=user_id,
+                learner_id=learner_id,
+                session_id=session_id,
+                answer_fingerprint=fingerprint,
+                result_summary=result_summary,
+            ))
+            db.flush()
+            logger.info(
+                f"[batch practice] submitted: user_id={user_id}, learner_id={learner_id}, "
+                f"session_id={session_id}, question_count={total}"
+            )
+            return {"success": True, **result_summary}
+
+    @classmethod
+    def get_batch_result(
+        cls,
+        user_id: int,
+        learner_id: int,
+        session_id: str,
+    ) -> Optional[Dict[str, Any]]:
+        with get_db_context() as db:
+            submission = db.query(BatchSubmission).filter(
+                BatchSubmission.user_id == user_id,
+                BatchSubmission.learner_id == learner_id,
+                BatchSubmission.session_id == session_id,
+            ).first()
+            if not submission:
+                return None
+            return {"success": True, **dict(submission.result_summary or {})}
+
+    @classmethod
+    def _update_learner_profile_batch(
+        cls,
+        learner: LearnerProfile,
+        dimension_scores: Dict[str, List[float]],
+        total: int,
+        correct_count: int,
+        db=None,
+    ) -> None:
+        if db is None:
+            with get_db_context() as managed_db:
+                cls._update_learner_profile_batch(
+                    learner,
+                    dimension_scores,
+                    total,
+                    correct_count,
+                    db=managed_db,
+                )
+            return
+
+        attached = db.query(LearnerProfile).filter(LearnerProfile.id == learner.id).first()
+        if not attached:
+            return
+        assessments = dict(attached.ability_assessments or {})
+        allowed_dimensions = {
+            "theoretical_foundation",
+            "programming_ability",
+            "algorithm_design",
+            "system_architecture",
+            "data_analysis",
+            "engineering_practice",
+        }
+        for dimension, scores in dimension_scores.items():
+            if dimension not in allowed_dimensions or not scores:
+                continue
+            answered_count = len(scores)
+            dimension_score = sum(scores) / answered_count
+            entry = dict(assessments.get(dimension) or {})
+            prior_estimated = entry.get("estimatedScore")
+            estimated = float(prior_estimated) if prior_estimated is not None else float(getattr(attached, dimension, 0) or 0)
+            change = 2 if dimension_score >= 60 else -1
+            new_estimated = max(0.0, min(100.0, estimated + change))
+            previous_count = int(entry.get("answeredCount", 0) or 0)
+            entry.update({
+                "estimatedScore": new_estimated,
+                "confidence": round(min(0.95, 0.35 + (previous_count + answered_count) * 0.03), 2),
+                "answeredCount": previous_count + answered_count,
+                "status": "estimated",
+                "lastAssessedAt": datetime.utcnow().isoformat(),
+            })
+            assessments[dimension] = entry
+            setattr(attached, dimension, max(0.0, min(100.0, new_estimated + float(entry.get("manualAdjustment", 0) or 0))))
+
+        previous_total = int(attached.total_questions_answered or 0)
+        previous_correct = float(attached.total_correct_rate or 0) * previous_total
+        new_total = previous_total + total
+        attached.total_questions_answered = new_total
+        attached.total_correct_rate = (previous_correct + correct_count) / new_total if new_total else 0.0
+        attached.ability_assessments = assessments
+
     @classmethod
     def _run_agent_decision(
         cls,

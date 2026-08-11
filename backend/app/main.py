@@ -177,6 +177,8 @@ app.include_router(report_router, prefix=settings.API_PREFIX)
 # 自适应导学路由（从 core.py 拆分）
 from app.domains.tutoring.router import router as tutoring_router
 app.include_router(tutoring_router, prefix=settings.API_PREFIX)
+from app.domains.tutoring.batch_router import router as batch_tutoring_router
+app.include_router(batch_tutoring_router, prefix=settings.API_PREFIX)
 
 # 能力诊断路由
 from app.domains.diagnostic.router import router as diagnostic_router

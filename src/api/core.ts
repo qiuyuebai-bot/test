@@ -16,6 +16,9 @@ export interface TutoringQuestion {
   difficulty: number
   knowledgePoints?: string[]
   generationMethod?: string
+  assessmentMode?: 'practice' | 'batch_practice'
+  sessionId?: string
+  abilityDimension?: string
 }
 
 export interface GenerateTutoringQuestionsRequest {
@@ -24,6 +27,8 @@ export interface GenerateTutoringQuestionsRequest {
   difficulty?: number
   questionCount?: number
   replacePending?: boolean
+  assessmentMode?: 'practice' | 'batch_practice'
+  sessionId?: string
 }
 
 export interface GenerateTutoringQuestionsResponse {
@@ -39,6 +44,40 @@ export interface SubmitAnswerRequest {
   hintsUsed: number
   sessionId?: string
   sequenceIndex?: number
+}
+
+export interface SubmitBatchAnswer {
+  questionId: string
+  userAnswer: string
+  sequenceIndex: number
+}
+
+export interface SubmitBatchRequest {
+  learnerId: number
+  sessionId: string
+  answers: SubmitBatchAnswer[]
+}
+
+export interface BatchSubmitResult {
+  sessionId: string
+  total: number
+  correctCount: number
+  score: number
+  dimensionSummary: Array<{
+    dimension: string
+    answeredCount: number
+    correctCount: number
+    score: number
+  }>
+  questions: Array<{
+    questionId: string
+    isCorrect: boolean
+    score: number
+    userAnswer: string[]
+    correctAnswer: string[]
+    explanation: string
+    knowledgePoints: string[]
+  }>
 }
 
 export const coreApi = {
@@ -159,5 +198,16 @@ export const coreApi = {
       timeout: 120000,
       silent: true,
     })
+  },
+
+  submitBatch(data: SubmitBatchRequest): Promise<BatchSubmitResult> {
+    return http.post<BatchSubmitResult>('/tutoring/answers/batch', data, {
+      timeout: 120000,
+      silent: true,
+    })
+  },
+
+  getBatchResult(sessionId: string, learnerId: number): Promise<BatchSubmitResult> {
+    return http.get<BatchSubmitResult>(`/tutoring/answers/batch/${sessionId}`, { learnerId }, { silent: true })
   },
 }

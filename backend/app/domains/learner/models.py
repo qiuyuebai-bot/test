@@ -258,11 +258,34 @@ class IssuedTutoringQuestion(Base):
     source_question_index = Column(Integer, nullable=True)
     generation_method = Column(String(50), nullable=False)
     assessment_mode = Column(String(20), nullable=False, default="practice", index=True)
+    session_id = Column(String(100), nullable=True, index=True)
     ability_dimension = Column(String(50), nullable=True, index=True)
     diagnostic_session_id = Column(String(64), ForeignKey("diagnostic_sessions.id"), nullable=True, index=True)
     status = Column(String(20), nullable=False, default="issued", index=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     answered_at = Column(DateTime, nullable=True)
+
+
+class BatchSubmission(Base):
+    """Idempotency record and durable result for a completed batch session."""
+
+    __tablename__ = "batch_tutoring_submissions"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "learner_id",
+            "session_id",
+            name="uq_batch_tutoring_submission_session",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    learner_id = Column(Integer, ForeignKey("learner_profiles.id"), nullable=False, index=True)
+    session_id = Column(String(100), nullable=False, index=True)
+    answer_fingerprint = Column(String(64), nullable=False)
+    result_summary = Column(JSON, nullable=False)
+    submitted_at = Column(DateTime, server_default=func.now(), nullable=False)
 
 
 class AnswerRecord(Base):
