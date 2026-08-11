@@ -43,6 +43,15 @@ def create_competency(
     return PositionService.create_competency(db, data)
 
 
+@router.get("/competencies/{competency_id}", summary="胜任力项详情")
+def get_competency_detail(
+    competency_id: int,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> BaseResponse:
+    return PositionService.get_competency_by_id(db, competency_id)
+
+
 @router.put("/competencies/{competency_id}", summary="更新胜任力项")
 def update_competency(
     competency_id: int,
