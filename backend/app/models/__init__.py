@@ -26,9 +26,6 @@ from app.domains.resource.models import ResourceVersion
 from app.domains.learner.models import IssuedTutoringQuestion, AnswerRecord, QuestionTypeEnum, AnswerResultEnum, AdaptiveDecisionEnum
 from app.domains.learner.models import LearningPath, PathNodeTypeEnum, NodeStatusEnum
 
-# 企业培训相关模型
-from app.domains.training.models import EnterpriseTraining, TrainingStatusEnum, TransferStatusEnum
-
 # 系统统计相关模型
 from app.models.test_metrics import TestMetrics
 
@@ -85,10 +82,6 @@ __all__ = [
     "LearningPath",
     "PathNodeTypeEnum",
     "NodeStatusEnum",
-    # 企业培训相关
-    "EnterpriseTraining",
-    "TrainingStatusEnum",
-    "TransferStatusEnum",
     # 系统统计相关
     "TestMetrics",
     # 脱敏数据相关
