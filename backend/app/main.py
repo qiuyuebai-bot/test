@@ -179,6 +179,10 @@ app.include_router(tutoring_router, prefix=settings.API_PREFIX)
 from app.domains.position.router import router as position_router
 app.include_router(position_router, prefix=settings.API_PREFIX)
 
+# 评估域路由
+from app.domains.assessment.router import router as assessment_router
+app.include_router(assessment_router, prefix=settings.API_PREFIX)
+
 # 业务配置选项路由（从 core.py 拆分）
 from app.routers.config import router as config_router
 app.include_router(config_router, prefix=settings.API_PREFIX)
