@@ -207,6 +207,7 @@ class AdaptiveDecisionEnum(enum.Enum):
     MAINTAIN = "maintain"
     SIMPLIFY = "simplify"
     REVIEW = "review"
+    CONSOLIDATE = "consolidate"
 
 
 class IssuedTutoringQuestion(Base):
