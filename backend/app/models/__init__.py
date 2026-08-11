@@ -8,6 +8,10 @@ from app.database import Base
 from app.models.user import User, UserRoleEnum
 from app.domains.learner.models import LearnerProfile, EducationLevelEnum, LearningStyleEnum, LearningPhaseEnum
 
+# 岗位与胜任力相关模型
+from app.domains.position.models import Position, PositionCategoryEnum, PositionLevelEnum
+from app.domains.position.models import Competency, CompetencyCategoryEnum, PositionCompetency
+
 # 知识库相关模型
 from app.domains.knowledge.models import KnowledgeDoc, IndustryEnum, DocStatusEnum
 from app.domains.knowledge.models import KnowledgeSlice
@@ -46,6 +50,13 @@ __all__ = [
     "EducationLevelEnum",
     "LearningStyleEnum",
     "LearningPhaseEnum",
+    # 岗位与胜任力相关
+    "Position",
+    "PositionCategoryEnum",
+    "PositionLevelEnum",
+    "Competency",
+    "CompetencyCategoryEnum",
+    "PositionCompetency",
     # 知识库相关
     "KnowledgeDoc",
     "IndustryEnum",
