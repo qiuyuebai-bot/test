@@ -20,6 +20,10 @@ from app.domains.assessment.models import AssessmentStatusEnum, AssessmentMethod
 from app.domains.certification.models import Certification, CertificationRule, CertificationRecord
 from app.domains.certification.models import CertificationLevelEnum, RuleTypeEnum, CertificationStatusEnum
 
+# 培训项目相关模型
+from app.domains.training.models import TrainingProject, TrainingEnrollment, TrainingPlan
+from app.domains.training.models import ProjectTypeEnum, ProjectStatusEnum, EnrollmentStatusEnum, PlanStatusEnum
+
 # 知识库相关模型
 from app.domains.knowledge.models import KnowledgeDoc, IndustryEnum, DocStatusEnum
 from app.domains.knowledge.models import KnowledgeSlice
@@ -78,6 +82,14 @@ __all__ = [
     "CertificationLevelEnum",
     "RuleTypeEnum",
     "CertificationStatusEnum",
+    # 培训项目相关
+    "TrainingProject",
+    "TrainingEnrollment",
+    "TrainingPlan",
+    "ProjectTypeEnum",
+    "ProjectStatusEnum",
+    "EnrollmentStatusEnum",
+    "PlanStatusEnum",
     # 知识库相关
     "KnowledgeDoc",
     "IndustryEnum",

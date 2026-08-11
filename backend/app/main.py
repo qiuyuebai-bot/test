@@ -187,6 +187,10 @@ app.include_router(assessment_router, prefix=settings.API_PREFIX)
 from app.domains.certification.router import router as certification_router
 app.include_router(certification_router, prefix=settings.API_PREFIX)
 
+# 培训项目域路由
+from app.domains.training.router import router as training_router
+app.include_router(training_router, prefix=settings.API_PREFIX)
+
 # 业务配置选项路由（从 core.py 拆分）
 from app.routers.config import router as config_router
 app.include_router(config_router, prefix=settings.API_PREFIX)
