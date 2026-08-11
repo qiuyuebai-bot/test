@@ -24,7 +24,6 @@ from app.exception_handlers import register_exception_handlers
 from app.health import router as health_router
 from app.seed_data import (
     init_default_admin,
-    init_training_seed_data,
     init_learner_seed_data,
 )
 
@@ -39,7 +38,6 @@ async def lifespan(app: FastAPI):
         logger.info("数据库初始化完成")
         init_default_admin()
         if settings.SEED_ON_STARTUP:
-            init_training_seed_data()
             init_learner_seed_data()
             logger.info("种子数据初始化完成（SEED_ON_STARTUP=true）")
         else:
@@ -177,13 +175,13 @@ app.include_router(report_router, prefix=settings.API_PREFIX)
 from app.domains.tutoring.router import router as tutoring_router
 app.include_router(tutoring_router, prefix=settings.API_PREFIX)
 
+# 岗位与胜任力路由
+from app.domains.position.router import router as position_router
+app.include_router(position_router, prefix=settings.API_PREFIX)
+
 # 业务配置选项路由（从 core.py 拆分）
 from app.routers.config import router as config_router
 app.include_router(config_router, prefix=settings.API_PREFIX)
-
-# 企业培训任务路由
-from app.domains.training.router import router as training_router
-app.include_router(training_router, prefix=settings.API_PREFIX)
 
 # 数据隐私与合规路由
 from app.routers.privacy import router as privacy_router

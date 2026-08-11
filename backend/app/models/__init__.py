@@ -8,6 +8,10 @@ from app.database import Base
 from app.models.user import User, UserRoleEnum
 from app.domains.learner.models import LearnerProfile, EducationLevelEnum, LearningStyleEnum, LearningPhaseEnum
 
+# 岗位与胜任力相关模型
+from app.domains.position.models import Position, PositionCategoryEnum, PositionLevelEnum
+from app.domains.position.models import Competency, CompetencyCategoryEnum, PositionCompetency
+
 # 知识库相关模型
 from app.domains.knowledge.models import KnowledgeDoc, IndustryEnum, DocStatusEnum
 from app.domains.knowledge.models import KnowledgeSlice
@@ -25,9 +29,6 @@ from app.domains.resource.models import ResourceTemplate, TemplateCategoryEnum
 from app.domains.resource.models import ResourceVersion
 from app.domains.learner.models import IssuedTutoringQuestion, AnswerRecord, QuestionTypeEnum, AnswerResultEnum, AdaptiveDecisionEnum
 from app.domains.learner.models import LearningPath, PathNodeTypeEnum, NodeStatusEnum
-
-# 企业培训相关模型
-from app.domains.training.models import EnterpriseTraining, TrainingStatusEnum, TransferStatusEnum
 
 # 系统统计相关模型
 from app.models.test_metrics import TestMetrics
@@ -49,6 +50,13 @@ __all__ = [
     "EducationLevelEnum",
     "LearningStyleEnum",
     "LearningPhaseEnum",
+    # 岗位与胜任力相关
+    "Position",
+    "PositionCategoryEnum",
+    "PositionLevelEnum",
+    "Competency",
+    "CompetencyCategoryEnum",
+    "PositionCompetency",
     # 知识库相关
     "KnowledgeDoc",
     "IndustryEnum",
@@ -85,10 +93,6 @@ __all__ = [
     "LearningPath",
     "PathNodeTypeEnum",
     "NodeStatusEnum",
-    # 企业培训相关
-    "EnterpriseTraining",
-    "TrainingStatusEnum",
-    "TransferStatusEnum",
     # 系统统计相关
     "TestMetrics",
     # 脱敏数据相关

@@ -1,8 +1,8 @@
 """
 种子数据初始化
-默认管理员 + 企业培训 + 学习者画像
+默认管理员 + 学习者画像
 
-CLI 用法：python -m app.seed_data [--admin-only] [--training] [--learners]
+CLI 用法：python -m app.seed_data [--admin-only] [--learners]
 """
 import sys
 from loguru import logger
@@ -35,20 +35,6 @@ def init_default_admin():
             logger.debug("默认管理员账户已存在")
     except Exception as e:
         logger.warning(f"初始化默认管理员失败: {e}")
-        db.rollback()
-    finally:
-        db.close()
-
-
-def init_training_seed_data():
-    """初始化企业培训种子数据"""
-    from app.domains.training.service import TrainingService
-
-    db = SessionLocal()
-    try:
-        TrainingService.init_seed_data(db)
-    except Exception as e:
-        logger.warning(f"初始化培训种子数据失败: {e}")
         db.rollback()
     finally:
         db.close()
@@ -119,9 +105,8 @@ def init_metrics_seed_data():
 
 
 def seed_all():
-    """初始化全部种子数据（管理员 + 培训 + 学习者）"""
+    """初始化全部种子数据（管理员 + 学习者）"""
     init_default_admin()
-    init_training_seed_data()
     init_learner_seed_data()
     init_metrics_seed_data()
 
@@ -132,15 +117,12 @@ if __name__ == "__main__":
         print("用法: python -m app.seed_data [选项]")
         print("  (无参数)   初始化全部种子数据")
         print("  --admin-only  仅初始化默认管理员")
-        print("  --training    仅初始化企业培训数据")
         print("  --learners    仅初始化学习者画像数据")
         print("  --metrics     根据当前事实生成标准指标快照")
         sys.exit(0)
 
     if "--admin-only" in args:
         init_default_admin()
-    elif "--training" in args:
-        init_training_seed_data()
     elif "--learners" in args:
         init_learner_seed_data()
     elif "--metrics" in args:
