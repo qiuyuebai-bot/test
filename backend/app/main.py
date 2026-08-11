@@ -175,6 +175,10 @@ app.include_router(report_router, prefix=settings.API_PREFIX)
 from app.domains.tutoring.router import router as tutoring_router
 app.include_router(tutoring_router, prefix=settings.API_PREFIX)
 
+# 岗位与胜任力路由
+from app.domains.position.router import router as position_router
+app.include_router(position_router, prefix=settings.API_PREFIX)
+
 # 业务配置选项路由（从 core.py 拆分）
 from app.routers.config import router as config_router
 app.include_router(config_router, prefix=settings.API_PREFIX)
