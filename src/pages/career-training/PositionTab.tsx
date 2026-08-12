@@ -12,19 +12,20 @@ import Textarea from '@/components/Textarea'
 import EmptyState from '@/components/EmptyState'
 import LoadingState from '@/components/LoadingState'
 import CompetencyRadar, { type RadarItem } from '@/components/career-training/CompetencyRadar'
-import type { Position, PositionDetail } from '@/types/training'
+import type { Position, PositionDetail, Competency } from '@/types/training'
 
 const CATEGORY_LABEL: Record<string, string> = {
   technical: '技术', management: '管理', operation: '运营', design: '设计', other: '其他',
 }
 
 export default function PositionTab() {
-  const { positions, positionsLoading, fetchPositions, fetchCompetencies, user } = useStore(
+  const { positions, positionsLoading, fetchPositions, fetchCompetencies, competencies, user } = useStore(
     useShallow((s) => ({
       positions: s.positions,
       positionsLoading: s.positionsLoading,
       fetchPositions: s.fetchPositions,
       fetchCompetencies: s.fetchCompetencies,
+      competencies: s.competencies,
       user: s.user,
     })),
   )
@@ -32,6 +33,7 @@ export default function PositionTab() {
   const [detailLoading, setDetailLoading] = useState(false)
   const [showCreatePosition, setShowCreatePosition] = useState(false)
   const [showCreateCompetency, setShowCreateCompetency] = useState(false)
+  const [showLinkCompetency, setShowLinkCompetency] = useState(false)
   const canEdit = user?.role === 'admin' || user?.role === 'teacher'
 
   useEffect(() => {
@@ -115,7 +117,12 @@ export default function PositionTab() {
               <div className="text-sm text-text-secondary">{selected.description}</div>
             )}
             <div>
-              <h4 className="text-sm font-medium text-text-primary mb-2">胜任力矩阵</h4>
+              <div className="flex items-center justify-between mb-2">
+                <h4 className="text-sm font-medium text-text-primary">胜任力矩阵</h4>
+                {canEdit && (
+                  <Button size="sm" variant="ghost" onClick={() => setShowLinkCompetency(true)}>关联胜任力</Button>
+                )}
+              </div>
               {selected.competencies.length >= 3 && (
                 <CompetencyRadar items={radarItems} />
               )}
@@ -153,6 +160,24 @@ export default function PositionTab() {
           onCreated={() => {
             setShowCreateCompetency(false)
             void fetchCompetencies()
+          }}
+        />
+      )}
+      {canEdit && showLinkCompetency && selected && (
+        <LinkCompetencyModal
+          positionId={selected.id}
+          existingCompetencyIds={selected.competencies.map((c) => c.competency_id)}
+          allCompetencies={competencies}
+          onClose={() => setShowLinkCompetency(false)}
+          onLinked={async () => {
+            // 重新拉取岗位详情以刷新胜任力矩阵
+            try {
+              const detail = await trainingApi.getPosition(selected.id)
+              setSelected(detail)
+            } catch (err) {
+              console.error('refresh position failed:', err)
+            }
+            setShowLinkCompetency(false)
           }}
         />
       )}
@@ -262,6 +287,89 @@ function CreateCompetencyModal({ onClose, onCreated }: {
           <Button onClick={handleSubmit} loading={submitting} disabled={!form.code || !form.name}>创建</Button>
         </div>
       </div>
+    </Modal>
+  )
+}
+
+function LinkCompetencyModal({
+  positionId, existingCompetencyIds, allCompetencies, onClose, onLinked,
+}: {
+  positionId: number
+  existingCompetencyIds: number[]
+  allCompetencies: Competency[]
+  onClose: () => void
+  onLinked: () => void
+}) {
+  // 可选胜任力 = 全部 - 已关联
+  const available = allCompetencies.filter((c) => !existingCompetencyIds.includes(c.id))
+  const [competencyId, setCompetencyId] = useState('')
+  const [requiredLevel, setRequiredLevel] = useState('3')
+  const [weight, setWeight] = useState('1.0')
+  const [isMandatory, setIsMandatory] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleSubmit = async () => {
+    if (!competencyId) return
+    setSubmitting(true)
+    try {
+      await trainingApi.addPositionCompetency(positionId, {
+        competency_id: Number(competencyId),
+        required_level: Number(requiredLevel) || 3,
+        weight: Number(weight) || 1.0,
+        is_mandatory: isMandatory,
+      })
+      onLinked()
+    } catch (err) {
+      console.error('addPositionCompetency failed:', err)
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Modal isOpen onClose={onClose} maxWidth="max-w-lg" className="p-6">
+      <h3 className="text-lg font-semibold text-text-primary mb-4 pr-8">关联胜任力</h3>
+      {available.length === 0 ? (
+        <div className="text-sm text-text-secondary py-4 text-center">
+          所有胜任力已关联，请先在右上角"新增胜任力"创建更多胜任力项。
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <FormField label="胜任力" required>
+            <select
+              value={competencyId}
+              onChange={(e) => setCompetencyId(e.target.value)}
+              className="w-full h-10 px-3 bg-bg-secondary border border-border rounded-input text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+            >
+              <option value="">请选择胜任力</option>
+              {available.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}（{c.code}）</option>
+              ))}
+            </select>
+          </FormField>
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="要求等级（1-5）" required>
+              <Input type="number" min={1} max={5} value={requiredLevel} onChange={(e) => setRequiredLevel(e.target.value)} />
+            </FormField>
+            <FormField label="权重">
+              <Input type="number" min={0} step={0.1} value={weight} onChange={(e) => setWeight(e.target.value)} />
+            </FormField>
+          </div>
+          <label className="flex items-center gap-2 text-sm text-text-primary cursor-pointer">
+            <input
+              type="checkbox"
+              checked={isMandatory}
+              onChange={(e) => setIsMandatory(e.target.checked)}
+              className="w-4 h-4 rounded border-border"
+            />
+            必修胜任力
+          </label>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="ghost" onClick={onClose}>取消</Button>
+            <Button onClick={handleSubmit} loading={submitting} disabled={!competencyId}>关联</Button>
+          </div>
+        </div>
+      )}
     </Modal>
   )
 }
