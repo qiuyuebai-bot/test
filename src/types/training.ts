@@ -22,6 +22,15 @@ export interface PositionCompetency {
   weight: number
   is_mandatory: boolean
   created_at: string
+  // http 客户端 keysToCamel 转换后的运行时字段（与上方 snake_case 互为兼容）
+  positionId?: number
+  competencyId?: number
+  competencyName?: string
+  competencyCode?: string
+  competencyCategory?: string
+  requiredLevel?: number
+  isMandatory?: boolean
+  createdAt?: string
 }
 
 export interface Position {

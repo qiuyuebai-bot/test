@@ -54,8 +54,8 @@ export default function PositionTab() {
   }
 
   const radarItems: RadarItem[] = (selected?.competencies ?? []).map((c) => ({
-    name: c.competency_name ?? `#${c.competency_id}`,
-    required: c.required_level,
+    name: (c.competencyName ?? c.competency_name) ?? `#${c.competencyId ?? c.competency_id}`,
+    required: c.requiredLevel ?? c.required_level ?? 0,
   }))
 
   if (positionsLoading && positions.length === 0) return <LoadingState />
@@ -130,11 +130,11 @@ export default function PositionTab() {
                 {selected.competencies.map((c) => (
                   <div key={c.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                     <div>
-                      <span className="text-sm font-medium text-text-primary">{c.competency_name}</span>
-                      {c.is_mandatory && <Badge variant="info" className="ml-2">必修</Badge>}
+                      <span className="text-sm font-medium text-text-primary">{c.competencyName ?? c.competency_name}</span>
+                      {(c.isMandatory ?? c.is_mandatory) && <Badge variant="info" className="ml-2">必修</Badge>}
                     </div>
                     <div className="text-sm text-text-secondary">
-                      要求等级：<span className="text-primary font-medium">L{c.required_level}</span>
+                      要求等级：<span className="text-primary font-medium">L{c.requiredLevel ?? c.required_level}</span>
                       <span className="text-text-tertiary ml-2">(权重 {c.weight})</span>
                     </div>
                   </div>
@@ -166,7 +166,7 @@ export default function PositionTab() {
       {canEdit && showLinkCompetency && selected && (
         <LinkCompetencyModal
           positionId={selected.id}
-          existingCompetencyIds={selected.competencies.map((c) => c.competency_id)}
+          existingCompetencyIds={selected.competencies.map((c) => (c.competencyId ?? c.competency_id) as number)}
           allCompetencies={competencies}
           onClose={() => setShowLinkCompetency(false)}
           onLinked={async () => {
