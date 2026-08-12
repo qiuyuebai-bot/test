@@ -44,7 +44,7 @@ describe('CertificationTab', () => {
 
   it('渲染认证列表与申请记录', () => {
     render(<MemoryRouter><CertificationTab /></MemoryRouter>)
-    expect(screen.getByText('前端初级认证')).toBeInTheDocument()
+    expect(screen.getAllByText('前端初级认证')[0]).toBeInTheDocument()
     expect(screen.getByText('待审核')).toBeInTheDocument()
   })
 

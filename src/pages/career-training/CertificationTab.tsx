@@ -117,10 +117,11 @@ export default function CertificationTab() {
         ) : (
           <div className="space-y-2">
             {certificationRecords.map((r) => {
+              const cert = certifications.find((c) => c.id === r.certification_id)
               return (
                 <div key={r.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                   <div>
-                    <span className="text-sm font-medium text-text-primary">记录 #{r.id}</span>
+                    <span className="text-sm font-medium text-text-primary">{cert?.name ?? `认证#${r.certification_id}`}</span>
                     <Badge variant={STATUS_VARIANT[r.status] ?? 'default'} className="ml-2">
                       {STATUS_LABEL[r.status] ?? r.status}
                     </Badge>
