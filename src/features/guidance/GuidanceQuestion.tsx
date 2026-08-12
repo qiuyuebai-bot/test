@@ -2,7 +2,7 @@ import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
 import type { TutoringQuestion } from '@/api/core'
-import type { SubmitResult } from './types'
+import type { GuidanceMode, SubmitResult } from './types'
 import { ArrowRight, CheckCircle2, Layers, XCircle } from 'lucide-react'
 
 interface GuidanceQuestionProps {
@@ -18,10 +18,14 @@ interface GuidanceQuestionProps {
   sessionDifficulty?: number
   questionCount: number
   hasNext: boolean
+  mode?: GuidanceMode
+  hasPrevious?: boolean
+  batchCanSubmit?: boolean
   onSelect: (index: number) => void
   onSubmit: () => void
   onNext: () => void
   onRetryNext: () => void
+  onPrevious?: () => void
   onExit: () => void
 }
 
@@ -50,10 +54,14 @@ export default function GuidanceQuestion({
   sessionDifficulty,
   questionCount,
   hasNext,
+  mode = 'adaptive',
+  hasPrevious = false,
+  batchCanSubmit = false,
   onSelect,
   onSubmit,
   onNext,
   onRetryNext,
+  onPrevious,
   onExit,
 }: GuidanceQuestionProps) {
   const isMultiSelect = question.type === 'multiple'
@@ -89,6 +97,7 @@ export default function GuidanceQuestion({
             <button
               key={`${question.id}-${index}`}
               type="button"
+              aria-pressed={selected}
               onClick={() => onSelect(index)}
               disabled={showResult || isSubmitting}
               className={`w-full rounded-xl border p-4 text-left transition-all ${
@@ -136,8 +145,23 @@ export default function GuidanceQuestion({
 
       <div className="flex flex-wrap items-center justify-between gap-3 p-5 pt-0">
         <span className="text-xs text-text-tertiary">共 {questionCount} 题</span>
-        <div className="ml-auto flex items-center gap-2">
-          {!showResult ? (
+        <div className={`${mode === 'batch' ? 'w-full justify-between sm:w-auto' : 'ml-auto'} flex items-center gap-2`}>
+          {mode === 'batch' ? (
+            <>
+              <Button variant="outline" size="sm" onClick={onPrevious} disabled={!hasPrevious || isSubmitting}>
+                上一题
+              </Button>
+              {hasNext ? (
+                <Button variant="primary" size="sm" onClick={onNext} disabled={isSubmitting}>
+                  下一题 <ArrowRight className="h-4 w-4" />
+                </Button>
+              ) : (
+                <Button variant="primary" size="sm" onClick={onSubmit} disabled={!batchCanSubmit || isSubmitting} loading={isSubmitting}>
+                  提交整卷
+                </Button>
+              )}
+            </>
+          ) : !showResult ? (
             <Button variant="primary" onClick={onSubmit} disabled={selectedAnswers.length === 0 || isSubmitting} loading={isSubmitting}>
               提交答案
             </Button>

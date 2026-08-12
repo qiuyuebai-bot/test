@@ -84,6 +84,7 @@ class LearnerService:
             data_analysis=learner_data.data_analysis,
             engineering_practice=learner_data.engineering_practice,
             knowledge_blind_areas=learner_data.knowledge_blind_areas,
+            ability_assessments={},
         )
         
         try:
@@ -93,6 +94,13 @@ class LearnerService:
         except Exception:
             db.rollback()
             raise
+
+        if learner_data.manual_ability_adjustments:
+            LearnerService.apply_manual_ability_adjustments(
+                db,
+                learner,
+                learner_data.manual_ability_adjustments,
+            )
 
         logger.info(f"创建学习者画像: id={learner.id}, user_id={learner.user_id}")
 
@@ -218,9 +226,13 @@ class LearnerService:
         
         # 更新基本信息
         update_dict = update_data.model_dump(exclude_unset=True)
+        manual_adjustments = update_dict.pop("manual_ability_adjustments", None)
         for key, value in update_dict.items():
             if hasattr(learner, key):
                 setattr(learner, key, value)
+
+        if manual_adjustments is not None:
+            LearnerService.apply_manual_ability_adjustments(db, learner, manual_adjustments)
         
         db.commit()
         db.refresh(learner)
@@ -229,6 +241,31 @@ class LearnerService:
         
         return learner
     
+    @staticmethod
+    def apply_manual_ability_adjustments(
+        db: Session,
+        learner: LearnerProfile,
+        adjustments: Dict[str, float],
+    ) -> LearnerProfile:
+        """Store optional corrections without destroying system estimates."""
+        allowed = {name for name, _ in LearnerService.ABILITY_DIMENSIONS}
+        assessments = dict(learner.ability_assessments or {})
+        for dimension, raw_adjustment in adjustments.items():
+            if dimension not in allowed:
+                continue
+            adjustment = max(-50.0, min(50.0, float(raw_adjustment)))
+            entry = dict(assessments.get(dimension) or {})
+            entry["manualAdjustment"] = adjustment
+            raw_estimated = entry.get("estimatedScore")
+            estimated = float(raw_estimated) if raw_estimated is not None else float(getattr(learner, dimension, 0) or 0)
+            setattr(learner, dimension, max(0.0, min(100.0, estimated + adjustment)))
+            assessments[dimension] = entry
+        learner.ability_assessments = assessments
+        db.add(learner)
+        db.commit()
+        db.refresh(learner)
+        return learner
+
     @staticmethod
     def delete_learner(db: Session, learner_id: int) -> bool:
         """

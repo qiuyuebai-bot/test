@@ -9,6 +9,7 @@ export type GuidancePhase =
   | 'submitting'
   | 'feedback'
   | 'preparingNext'
+  | 'batchReview'
   | 'completed'
 
 export interface HistoryRecord {
@@ -27,7 +28,11 @@ export interface HistoryRecord {
   score: number
 }
 
+export type GuidanceMode = 'adaptive' | 'batch'
+
 export interface SessionConfig {
+  /** Optional at the type boundary so pre-mode persisted sessions remain readable. */
+  mode?: GuidanceMode
   topic: string
   difficulty?: number
   questionCount: number
@@ -43,6 +48,8 @@ export interface PersistedSession {
   correctCount: number
   generationMethod: string | null
   submitResult: SubmitResult | null
+  answersByQuestionId?: Record<string, number[]>
+  batchResult?: BatchSubmitResult | null
 }
 
 export interface GeneratedContent {
@@ -77,6 +84,30 @@ export interface SubmitResult {
   generatedContent?: GeneratedContent
 }
 
+export interface BatchQuestionResult {
+  questionId: string
+  isCorrect: boolean
+  score: number
+  userAnswer: string[]
+  correctAnswer: string[]
+  explanation: string
+  knowledgePoints: string[]
+}
+
+export interface BatchSubmitResult {
+  sessionId: string
+  total: number
+  correctCount: number
+  score: number
+  dimensionSummary: Array<{
+    dimension: string
+    answeredCount: number
+    correctCount: number
+    score: number
+  }>
+  questions: BatchQuestionResult[]
+}
+
 export interface RecommendationOption {
   topic: string
   reason: string
@@ -97,11 +128,13 @@ export interface GuidanceState {
   questions: TutoringQuestion[]
   currentQuestion: number
   selectedAnswers: number[]
+  answersByQuestionId: Record<string, number[]>
   showResult: boolean
   sessionConfig: SessionConfig | null
   correctCount: number
   generationMethod: string | null
   submitResult: SubmitResult | null
+  batchResult: BatchSubmitResult | null
   pendingNextDifficulty: number | null
   generationError: string | null
   submissionError: string | null

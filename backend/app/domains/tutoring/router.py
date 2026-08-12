@@ -79,6 +79,8 @@ def generate_tutoring_questions(
             request.difficulty,
             request.question_count,
             request.replace_pending,
+            assessment_mode=request.assessment_mode,
+            session_id=request.session_id,
         )
         return success(data={"questions": questions, "generation_method": questions[0].get("generationMethod", "deterministic_fallback") if questions else "deterministic_fallback"})
     except ValueError as e:

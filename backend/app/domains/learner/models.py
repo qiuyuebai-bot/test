@@ -79,6 +79,11 @@ class LearnerProfile(Base):
     data_analysis = Column(Float, default=0.0, comment="数据分析(0-100)")
     engineering_practice = Column(Float, default=0.0, comment="工程实践(0-100)")
 
+    # 系统诊断元数据；保留六个旧数值字段作为兼容的最终展示值
+    ability_assessments = Column(JSON, default=dict, nullable=False, comment="六维能力系统估算与置信度")
+    diagnostic_status = Column(String(20), default="not_started", nullable=False, comment="能力诊断状态")
+    diagnostic_completed_at = Column(DateTime, nullable=True, comment="最近一次能力诊断完成时间")
+
     domain_knowledge = Column(Float, default=0.0, comment="领域知识(0-100)")
     problem_solving = Column(Float, default=0.0, comment="问题解决能力(0-100)")
     teamwork = Column(Float, default=0.0, comment="团队协作(0-100)")
@@ -193,6 +198,25 @@ class QuestionTypeEnum(enum.Enum):
     PRACTICAL = "practical"
 
 
+class DiagnosticSession(Base):
+    """服务端维护的六维能力诊断会话。"""
+
+    __tablename__ = "diagnostic_sessions"
+
+    id = Column(String(64), primary_key=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    learner_id = Column(Integer, ForeignKey("learner_profiles.id"), nullable=False, index=True)
+    status = Column(String(20), nullable=False, default="active", index=True)
+    questions_per_dimension = Column(Integer, nullable=False, default=2)
+    total_questions = Column(Integer, nullable=False, default=0)
+    answered_questions = Column(Integer, nullable=False, default=0)
+    dimension_counts = Column(JSON, default=dict, nullable=False)
+    results = Column(JSON, default=dict, nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
+    completed_at = Column(DateTime, nullable=True)
+
+
 class AnswerResultEnum(enum.Enum):
     """答题结果枚举"""
     CORRECT = "correct"
@@ -234,9 +258,35 @@ class IssuedTutoringQuestion(Base):
     source_resource_id = Column(Integer, ForeignKey("learning_resources.id"), nullable=True, index=True)
     source_question_index = Column(Integer, nullable=True)
     generation_method = Column(String(50), nullable=False)
+    assessment_mode = Column(String(20), nullable=False, default="practice", index=True)
+    session_id = Column(String(100), nullable=True, index=True)
+    ability_dimension = Column(String(50), nullable=True, index=True)
+    diagnostic_session_id = Column(String(64), ForeignKey("diagnostic_sessions.id"), nullable=True, index=True)
     status = Column(String(20), nullable=False, default="issued", index=True)
     created_at = Column(DateTime, server_default=func.now(), nullable=False)
     answered_at = Column(DateTime, nullable=True)
+
+
+class BatchSubmission(Base):
+    """Idempotency record and durable result for a completed batch session."""
+
+    __tablename__ = "batch_tutoring_submissions"
+    __table_args__ = (
+        UniqueConstraint(
+            "user_id",
+            "learner_id",
+            "session_id",
+            name="uq_batch_tutoring_submission_session",
+        ),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    learner_id = Column(Integer, ForeignKey("learner_profiles.id"), nullable=False, index=True)
+    session_id = Column(String(100), nullable=False, index=True)
+    answer_fingerprint = Column(String(64), nullable=False)
+    result_summary = Column(JSON, nullable=False)
+    submitted_at = Column(DateTime, server_default=func.now(), nullable=False)
 
 
 class AnswerRecord(Base):
