@@ -15,6 +15,13 @@ vi.mock('@/api', () => ({
       level: 'junior', is_active: true, competencies: [], created_at: '', updated_at: '',
     }),
   },
+  agentApi: {
+    runFullPipeline: vi.fn().mockResolvedValue({ taskId: 42 }),
+  },
+  coreApi: {
+    getResourceList: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20, totalPages: 0 }),
+    getResourceDetail: vi.fn(),
+  },
 }))
 
 import { resetMockStore, setMockStore } from '../../test/mockStore'

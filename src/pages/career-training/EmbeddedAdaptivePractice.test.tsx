@@ -12,7 +12,7 @@ vi.mock('@/store', async () => {
 })
 
 import { useGuidanceSession } from '@/features/guidance/useGuidanceSession'
-import { resetMockStore, setMockStore } from '../../test/mockStore'
+import { resetMockStore } from '../../test/mockStore'
 import EmbeddedAdaptivePractice from './EmbeddedAdaptivePractice'
 import type { PositionDetail } from '@/types/training'
 
