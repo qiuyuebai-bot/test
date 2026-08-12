@@ -6,6 +6,7 @@ import { createLearnerSlice, type LearnerSlice } from './learnerStore'
 import { createKnowledgeSlice, type KnowledgeSliceState } from './knowledgeStore'
 import { createAgentSlice, createMetricsSlice, type AgentSlice, type MetricsSlice } from './agentStore'
 import { createResourceSlice, type ResourceSlice } from './resourceStore'
+import { createTrainingSlice, type TrainingSlice } from './trainingStore'
 
 interface UISlice {
   isDarkMode: boolean
@@ -14,7 +15,7 @@ interface UISlice {
   toggleSidebar: () => void
 }
 
-export type AppState = UISlice & AuthSlice & LearnerSlice & KnowledgeSliceState & AgentSlice & MetricsSlice & ResourceSlice
+export type AppState = UISlice & AuthSlice & LearnerSlice & KnowledgeSliceState & AgentSlice & MetricsSlice & ResourceSlice & TrainingSlice
 
 const createUISlice: StateCreator<AppState, [], [], UISlice> = (set) => ({
   isDarkMode: false,
@@ -43,6 +44,7 @@ export const useStore = create<AppState>()(
       ...createAgentSlice(...a),
       ...createMetricsSlice(...a),
       ...createResourceSlice(...a),
+      ...createTrainingSlice(...a),
     }),
     {
       name: 'multi-agent-system-store',
