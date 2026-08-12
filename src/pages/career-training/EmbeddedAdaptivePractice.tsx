@@ -15,7 +15,7 @@ interface Props {
 
 export default function EmbeddedAdaptivePractice({ position, learnerId }: Props) {
   const session = useGuidanceSession(learnerId)
-  const { state, question, progress, sessionTotal, answeredCount, isPreparingNext } = session
+  const { state, question, sessionTotal, answeredCount, isPreparingNext } = session
   const [customTopic, setCustomTopic] = useState('')
   const [difficulty, setDifficulty] = useState('')
   const [questionCount, setQuestionCount] = useState('5')
