@@ -18,6 +18,7 @@ import {
   LogOut,
   ChevronDown,
   ShieldCheck,
+  Briefcase,
   type LucideIcon,
 } from 'lucide-react'
 import { clsx } from 'clsx'
@@ -53,6 +54,7 @@ const navigationGroups: NavigationGroup[] = [
       { name: '自适应导学', href: '/guidance', icon: GraduationCap },
       { name: '资源生成', href: '/resources', icon: FileText },
       { name: '学情报告', href: '/report', icon: BarChart3 },
+      { name: '就业培训', href: '/career-training/position', icon: Briefcase },
     ],
   },
   {

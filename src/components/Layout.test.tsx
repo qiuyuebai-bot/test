@@ -15,7 +15,7 @@ describe('Layout navigation', () => {
     resetMockStore()
   })
 
-  it('hides removed enterprise, privacy, and deployment entries', () => {
+  it('hides removed privacy and deployment entries', () => {
     render(
       <MemoryRouter initialEntries={['/dashboard']}>
         <Routes>
@@ -24,10 +24,11 @@ describe('Layout navigation', () => {
       </MemoryRouter>,
     )
 
-    expect(screen.queryByText('企业内训')).not.toBeInTheDocument()
     expect(screen.queryByText('隐私合规')).not.toBeInTheDocument()
     expect(screen.queryByText('部署说明')).not.toBeInTheDocument()
     expect(screen.getAllByText('运行监控').length).toBeGreaterThan(0)
+    // 新增：就业培训入口可见
+    expect(screen.getAllByRole('link', { name: '就业培训' }).length).toBeGreaterThan(0)
   })
 
   it('renders the four navigation groups for administrators', () => {

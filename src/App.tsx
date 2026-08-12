@@ -19,6 +19,7 @@ const AdaptiveGuidance = lazy(() => import('./pages/AdaptiveGuidance'))
 const SystemTest = lazy(() => import('./pages/SystemTest'))
 const MetricsDashboard = lazy(() => import('./pages/MetricsDashboard'))
 const AdminOpsOverview = lazy(() => import('./pages/AdminOpsOverview'))
+const CareerTraining = lazy(() => import('./pages/CareerTraining'))
 
 function PageFallback() {
   return <PageSkeleton />
@@ -94,7 +95,9 @@ function App() {
             <Route path="resources" element={<ResourceGeneration />} />
             <Route path="report" element={<LearningReport />} />
             <Route path="guidance" element={<AdaptiveGuidance />} />
-            <Route path="enterprise" element={<Navigate to="/dashboard" replace />} />
+            <Route path="career-training" element={<CareerTraining />} />
+            <Route path="career-training/:tab" element={<CareerTraining />} />
+            <Route path="enterprise" element={<Navigate to="/career-training/position" replace />} />
             <Route path="privacy" element={<Navigate to="/dashboard" replace />} />
             <Route
               path="monitoring"
