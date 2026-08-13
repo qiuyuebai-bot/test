@@ -161,9 +161,12 @@ class TestEnrollment:
         assert result["data"]["status"] == EnrollmentStatusEnum.ENROLLED.value
 
     def test_enroll_duplicate(self, db, active_project):
-        TrainingService.enroll(db, active_project, user_id=1)
-        result = TrainingService.enroll(db, active_project, user_id=1)
-        assert result["code"] == 400
+        first = TrainingService.enroll(db, active_project, user_id=1)
+        assert first["code"] == 200
+        second = TrainingService.enroll(db, active_project, user_id=1)
+        # 幂等报名：已报名时返回已有记录而非报错
+        assert second["code"] == 200
+        assert second["data"]["id"] == first["data"]["id"]
 
     def test_enroll_inactive_project(self, db, position_with_competencies):
         pos_id, _ = position_with_competencies

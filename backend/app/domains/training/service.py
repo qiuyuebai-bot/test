@@ -157,7 +157,7 @@ class TrainingService:
             TrainingEnrollment.user_id == user_id,
         ).first()
         if existing:
-            return bad_request(message="已报名该培训项目")
+            return success(data=TrainingService._enrollment_to_response(existing), message="已报名该培训项目")
 
         enrollment = TrainingEnrollment(
             project_id=project_id,
@@ -192,11 +192,11 @@ class TrainingService:
     # ===========================================
 
     @staticmethod
-    def generate_plan(db: Session, enrollment_id: int, user_id: int, assessment_record_id: int) -> Dict[str, Any]:
+    def generate_plan(db: Session, enrollment_id: int, user_id: int, assessment_record_id: int, is_staff: bool = False) -> Dict[str, Any]:
         enrollment = db.query(TrainingEnrollment).filter(TrainingEnrollment.id == enrollment_id).first()
         if not enrollment:
             return not_found(message="报名记录不存在")
-        if enrollment.user_id != user_id:
+        if enrollment.user_id != user_id and not is_staff:
             return bad_request(message="无权操作此报名记录")
 
         ar = db.query(AssessmentRecord).filter(AssessmentRecord.id == assessment_record_id).first()

@@ -12,6 +12,7 @@ from app.domains.training.schemas import (
     EnrollRequest, GeneratePlanRequest, UpdateProgressRequest,
 )
 from app.domains.training.service import TrainingService
+from app.models.user import UserRoleEnum
 from app.utils.auth import get_current_user, CurrentUser, require_teacher
 
 router = APIRouter(tags=["培训项目"])
@@ -102,7 +103,8 @@ def generate_plan(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> BaseResponse:
-    return TrainingService.generate_plan(db, enrollment_id, current_user.user_id, data.assessment_record_id)
+    is_staff = current_user.role in (UserRoleEnum.ADMIN.value, UserRoleEnum.TEACHER.value)
+    return TrainingService.generate_plan(db, enrollment_id, current_user.user_id, data.assessment_record_id, is_staff=is_staff)
 
 
 @router.get("/training-enrollments/{enrollment_id}/plan", summary="获取学习计划")

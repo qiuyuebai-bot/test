@@ -18,7 +18,7 @@ describe('hidden legacy routes', () => {
     resetMockStore()
   })
 
-  it.each(['/enterprise', '/privacy', '/deployment'])(
+  it.each(['/privacy', '/deployment'])(
     'redirects %s to the dashboard for authenticated users', async (path) => {
       window.history.replaceState({}, '', path)
       render(<App />)
@@ -26,6 +26,13 @@ describe('hidden legacy routes', () => {
       await waitFor(() => expect(window.location.pathname).toBe('/dashboard'))
     },
   )
+
+  it('redirects /enterprise to the career-training position tab', async () => {
+    window.history.replaceState({}, '', '/enterprise')
+    render(<App />)
+
+    await waitFor(() => expect(window.location.pathname).toBe('/career-training/position'))
+  })
 
   it('redirects the legacy test route to runtime monitoring', async () => {
     window.history.replaceState({}, '', '/test')

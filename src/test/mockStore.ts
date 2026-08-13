@@ -62,6 +62,23 @@ const defaults: State = {
   fetchResources: () => Promise.resolve(),
   generateResources: () => Promise.resolve({ taskId: '1' }),
   generateResource: () => Promise.resolve({}),
+  // Training slice
+  positions: [],
+  positionsLoading: false,
+  competencies: [],
+  assessmentRecords: [],
+  assessmentRecordsLoading: false,
+  certifications: [],
+  certificationRecords: [],
+  certificationRecordsLoading: false,
+  trainingProjects: [],
+  trainingProjectsLoading: false,
+  fetchPositions: () => Promise.resolve(),
+  fetchCompetencies: () => Promise.resolve(),
+  fetchAssessmentRecords: () => Promise.resolve(),
+  fetchCertifications: () => Promise.resolve(),
+  fetchCertificationRecords: () => Promise.resolve(),
+  fetchTrainingProjects: () => Promise.resolve(),
 }
 
 export const mockStoreState: State = { ...defaults }
