@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useShallow } from 'zustand/react/shallow'
 import { useStore } from '@/store'
 import type { LearnerProfile } from '@/types'
@@ -11,10 +11,26 @@ import GuidanceQuestion from '@/features/guidance/GuidanceQuestion'
 import GuidanceFeedback from '@/features/guidance/GuidanceFeedback'
 import GuidanceSessionSummary from '@/features/guidance/GuidanceSessionSummary'
 import GuidanceHistoryDrawer from '@/features/guidance/GuidanceHistoryDrawer'
+import BatchQuestionNavigator from '@/features/guidance/BatchQuestionNavigator'
+import BatchGuidanceResult from '@/features/guidance/BatchGuidanceResult'
+import type { GuidanceMode } from '@/features/guidance/types'
 import { useGuidanceSession } from '@/features/guidance/useGuidanceSession'
+
+const dimensionTopics: Record<string, string> = {
+  theoretical_foundation: 'theory fundamentals',
+  programming_ability: 'programming fundamentals',
+  algorithm_design: 'algorithm design',
+  system_architecture: 'system architecture',
+  data_analysis: 'data analysis',
+  engineering_practice: 'engineering practice',
+}
 
 export default function AdaptiveGuidance() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const requestedDimension = searchParams.get('dimension') || ''
+  const requestedTopic = dimensionTopics[requestedDimension] || searchParams.get('topic') || ''
+  const requestedLearnerId = Number(searchParams.get('learnerId')) || null
   const {
     currentLearner,
     learners,
@@ -36,16 +52,19 @@ export default function AdaptiveGuidance() {
     const source = currentLearner ? [currentLearner, ...learners] : learners
     return source.filter((learner, index, all) => all.findIndex((candidate) => candidate.id === learner.id) === index)
   }, [currentLearner, learners])
-  const [selectedLearnerId, setSelectedLearnerId] = useState<number | null>(null)
-  const [launcherDefaults, setLauncherDefaults] = useState({ topic: '', difficulty: '', questionCount: '5' })
+  const [selectedLearnerId, setSelectedLearnerId] = useState<number | null>(requestedLearnerId)
+  const [launcherDefaults, setLauncherDefaults] = useState({ topic: requestedTopic, difficulty: '', questionCount: '5' })
   const learner = availableLearners.find((item) => item.id === selectedLearnerId) ?? currentLearner ?? availableLearners[0]
   const session = useGuidanceSession(learner?.id ?? null)
 
   useEffect(() => {
     if (!selectedLearnerId || !availableLearners.some((item) => item.id === selectedLearnerId)) {
-      setSelectedLearnerId(currentLearner?.id ?? availableLearners[0]?.id ?? null)
+      const requestedLearner = requestedLearnerId && availableLearners.some((item) => item.id === requestedLearnerId)
+        ? requestedLearnerId
+        : null
+      setSelectedLearnerId(requestedLearner ?? currentLearner?.id ?? availableLearners[0]?.id ?? null)
     }
-  }, [availableLearners, currentLearner?.id, selectedLearnerId])
+  }, [availableLearners, currentLearner?.id, requestedLearnerId, selectedLearnerId])
 
   useEffect(() => {
     if (learner?.id || learners.length > 0 || learnersLoading || learnerError) return
@@ -57,15 +76,19 @@ export default function AdaptiveGuidance() {
     setCurrentLearner(nextLearner)
   }
 
-  const handleStart = (options?: { topic?: string; difficulty?: number; questionCount?: number }) => {
-    if (options) {
+  const handleStart = (options?: { topic?: string; difficulty?: number; questionCount?: number; mode?: GuidanceMode }) => {
+    const resolvedOptions = { ...options }
+    if (resolvedOptions.topic === undefined && launcherDefaults.topic) resolvedOptions.topic = launcherDefaults.topic
+    if (resolvedOptions.difficulty === undefined && launcherDefaults.difficulty) resolvedOptions.difficulty = Number(launcherDefaults.difficulty)
+    if (resolvedOptions.questionCount === undefined) resolvedOptions.questionCount = Number(launcherDefaults.questionCount) || 5
+    if (resolvedOptions) {
       setLauncherDefaults((previous) => ({
-        topic: options.topic ?? previous.topic,
-        difficulty: options.difficulty === undefined ? '' : String(options.difficulty),
-        questionCount: options.questionCount === undefined ? previous.questionCount : String(options.questionCount),
+        topic: resolvedOptions.topic ?? previous.topic,
+        difficulty: resolvedOptions.difficulty === undefined ? '' : String(resolvedOptions.difficulty),
+        questionCount: resolvedOptions.questionCount === undefined ? previous.questionCount : String(resolvedOptions.questionCount),
       }))
     }
-    return session.startSession(options)
+    return session.startSession(resolvedOptions)
   }
 
   const isLoading = session.state.phase === 'initializing' || (!learner && learnersLoading)
@@ -92,6 +115,27 @@ export default function AdaptiveGuidance() {
         description="无法读取当前学习者的导学题目，请稍后重试。"
         details={session.state.loadError}
         onRetry={() => { void session.loadData() }}
+      />
+    )
+  }
+
+  const isBatch = session.state.sessionConfig?.mode === 'batch'
+  const isBatchReview = isBatch && session.state.phase === 'batchReview' && session.state.batchResult
+
+  if (isBatchReview && session.state.batchResult) {
+    const config = session.state.sessionConfig
+    const batchResult = session.state.batchResult
+    return (
+      <BatchGuidanceResult
+        result={batchResult}
+        questions={session.state.questions}
+        onBack={session.exitSession}
+        onRetry={() => {
+          if (config) void session.startSession({ mode: 'batch', topic: config.topic, difficulty: config.difficulty, questionCount: config.questionCount })
+        }}
+        onWeakDimension={(dimension) => {
+          if (config) void session.startSession({ mode: 'batch', topic: dimensionTopics[dimension] || dimension, difficulty: config.difficulty, questionCount: config.questionCount })
+        }}
       />
     )
   }
@@ -134,6 +178,8 @@ export default function AdaptiveGuidance() {
         answeredCount={session.answeredCount}
         sessionTotal={session.sessionTotal}
         progress={session.progress}
+        mode={isBatch ? 'batch' : 'adaptive'}
+        topic={session.state.sessionConfig?.topic}
         disabled={isSubmitting || session.isPreparingNext}
         onLearnerChange={handleLearnerChange}
         onExit={session.exitSession}
@@ -144,7 +190,7 @@ export default function AdaptiveGuidance() {
           <GuidanceQuestion
             question={session.question}
             selectedAnswers={session.state.selectedAnswers}
-            showResult={session.state.showResult}
+            showResult={isBatch ? false : session.state.showResult}
             isSubmitting={isSubmitting}
             isPreparingNext={session.isPreparingNext}
             submitResult={session.state.submitResult}
@@ -154,25 +200,40 @@ export default function AdaptiveGuidance() {
             sessionDifficulty={session.state.sessionConfig?.difficulty}
             questionCount={session.sessionTotal}
             hasNext={hasNext}
+            mode={isBatch ? 'batch' : 'adaptive'}
+            hasPrevious={isBatch && session.state.currentQuestion > 0}
+            batchCanSubmit={isBatch && session.answeredCount === session.sessionTotal}
             onSelect={session.selectAnswer}
-            onSubmit={() => { void session.submitAnswer() }}
+            onSubmit={() => { void (isBatch ? session.submitBatch() : session.submitAnswer()) }}
             onNext={session.nextQuestion}
             onRetryNext={() => { void session.retryNextQuestion() }}
+            onPrevious={session.previousQuestion}
             onExit={session.exitSession}
           />
-          {session.state.showResult && session.state.submitResult && (
+          {!isBatch && session.state.showResult && session.state.submitResult && (
             <GuidanceFeedback questionTopic={session.question.topic} result={session.state.submitResult} />
           )}
         </div>
-        <GuidanceHistoryDrawer
-          learnerName={learner.realName}
-          records={session.state.historyRecords}
-          loading={session.state.historyLoading}
-          error={session.state.historyError}
-          onOpen={() => { void session.loadHistory() }}
-          onDelete={session.deleteHistory}
-          onClear={session.clearHistory}
-        />
+        <div className="space-y-4">
+          {isBatch && (
+            <BatchQuestionNavigator
+              questions={session.state.questions}
+              currentQuestion={session.state.currentQuestion}
+              answersByQuestionId={session.state.answersByQuestionId}
+              disabled={isSubmitting}
+              onSelect={session.goToQuestion}
+            />
+          )}
+          <GuidanceHistoryDrawer
+            learnerName={learner.realName}
+            records={session.state.historyRecords}
+            loading={session.state.historyLoading}
+            error={session.state.historyError}
+            onOpen={() => { void session.loadHistory() }}
+            onDelete={session.deleteHistory}
+            onClear={session.clearHistory}
+          />
+        </div>
       </div>
     </div>
   )

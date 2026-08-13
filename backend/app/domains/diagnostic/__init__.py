@@ -1,0 +1,1 @@
+"""Initial ability diagnostic domain."""

@@ -433,6 +433,31 @@ class TestUpdateLearnerProfile:
         )
         assert sample_learner_profile.theoretical_foundation == original_theory
 
+    def test_practice_answer_recovers_from_insufficient_estimate(
+        self, db_session, sample_learner_profile
+    ):
+        sample_learner_profile.ability_assessments = {
+            "programming_ability": {
+                "status": "insufficient_evidence",
+                "estimatedScore": None,
+                "answeredCount": 1,
+            }
+        }
+        db_session.commit()
+
+        AdaptiveTutoringService._update_learner_profile(
+            learner=sample_learner_profile,
+            topic="练习",
+            score=100,
+            is_correct=True,
+            ability_dimension="programming_ability",
+        )
+
+        db_session.refresh(sample_learner_profile)
+        assessment = sample_learner_profile.ability_assessments["programming_ability"]
+        assert assessment["estimatedScore"] == 82.0
+        assert sample_learner_profile.programming_ability == 82.0
+
 
 class TestGetInteractionHistory:
     """get_interaction_history 分页查询"""

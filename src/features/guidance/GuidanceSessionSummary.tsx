@@ -2,6 +2,7 @@ import type { LearnerProfile, UserRole } from '@/types'
 import Card from '@/components/Card'
 import Button from '@/components/Button'
 import LearnerContextBar from './LearnerContextBar'
+import type { GuidanceMode } from './types'
 import { Brain, LogOut } from 'lucide-react'
 
 interface GuidanceSessionSummaryProps {
@@ -13,6 +14,8 @@ interface GuidanceSessionSummaryProps {
   answeredCount: number
   sessionTotal: number
   progress: number
+  mode?: GuidanceMode
+  topic?: string
   disabled?: boolean
   onLearnerChange: (learner: LearnerProfile) => void
   onExit: () => void
@@ -27,6 +30,8 @@ export default function GuidanceSessionSummary({
   answeredCount,
   sessionTotal,
   progress,
+  mode = 'adaptive',
+  topic,
   disabled,
   onLearnerChange,
   onExit,
@@ -37,7 +42,8 @@ export default function GuidanceSessionSummary({
         <div className="flex min-w-0 items-center gap-3">
           <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl bg-primary/10"><Brain className="h-5 w-5 text-primary" /></div>
           <div className="min-w-0">
-            <h2 className="text-lg font-semibold text-text-primary">动态自适应导学</h2>
+            {topic && <p className="mt-1 text-xs text-text-tertiary">{topic}</p>}
+            <h2 className="text-lg font-semibold text-text-primary">{mode === 'batch' ? '整卷练习' : '动态自适应导学'}</h2>
             <div className="mt-1"><LearnerContextBar learner={learner} learners={learners} role={role} selectedLearnerId={selectedLearnerId} onLearnerChange={onLearnerChange} disabled={disabled} /></div>
           </div>
         </div>

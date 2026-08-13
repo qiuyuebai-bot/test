@@ -29,6 +29,7 @@ export interface CreateLearnerData {
   dataAnalysis?: number
   engineeringPractice?: number
   knowledgeBlindAreas?: string[]
+  manualAbilityAdjustments?: Record<string, number>
 }
 
 export const learnerApi = {

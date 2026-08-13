@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { useLocation } from 'react-router-dom'
 import { renderWithRouter } from '../test/renderPage'
 
 vi.mock('@/store', async () => {
@@ -27,7 +29,7 @@ vi.mock('recharts', () => ({
   CartesianGrid: () => <div />,
 }))
 
-const { resetMockStore } = await import('../test/mockStore')
+const { resetMockStore, setMockStore } = await import('../test/mockStore')
 
 beforeEach(() => {
   resetMockStore()
@@ -44,5 +46,40 @@ describe('LearnerProfile page', () => {
     const { default: Page } = await import('./LearnerProfile')
     renderWithRouter(<Page />)
     expect(await screen.findByText(/录入\/读取学习者背景数据/)).toBeInTheDocument()
+  })
+
+  it('opens dimension practice from the ability detail row', async () => {
+    const user = userEvent.setup()
+    const learner = {
+      id: 7,
+      userId: 1,
+      realName: '测试学习者',
+      educationLevel: '本科',
+      major: '计算机科学',
+      theoreticalFoundation: 30,
+      programmingAbility: 60,
+      algorithmDesign: 70,
+      systemArchitecture: 65,
+      dataAnalysis: 55,
+      engineeringPractice: 50,
+      averageAbility: 55,
+      knowledgeBlindAreas: [],
+      isDataAnonymized: false,
+    }
+    setMockStore({
+      learners: [learner],
+      currentLearner: learner,
+      pagination: { page: 1, pageSize: 20, total: 1, totalPages: 1 },
+    })
+    const { default: Page } = await import('./LearnerProfile')
+    function LocationProbe() {
+      const location = useLocation()
+      return <output data-testid="location">{location.pathname}{location.search}</output>
+    }
+
+    renderWithRouter(<><Page /><LocationProbe /></>)
+    await user.click(await screen.findByRole('button', { name: '进入理论基础导学练习' }))
+
+    expect(screen.getByTestId('location')).toHaveTextContent('/guidance?dimension=theoretical_foundation&learnerId=7')
   })
 })

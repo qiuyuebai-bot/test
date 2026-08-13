@@ -41,6 +41,7 @@ class LearnerProfileCreate(LearnerProfileBase):
     
     # 知识盲区
     knowledge_blind_areas: List[str] = Field(default_factory=list, description="知识盲区标签")
+    manual_ability_adjustments: Dict[str, float] = Field(default_factory=dict, description="可选的能力手动修正")
 
 
 class LearnerProfileUpdate(BaseModel):
@@ -67,6 +68,7 @@ class LearnerProfileUpdate(BaseModel):
     
     # 知识盲区
     knowledge_blind_areas: Optional[List[str]] = None
+    manual_ability_adjustments: Optional[Dict[str, float]] = None
 
 
 class LearnerProfileResponse(BaseModel):
@@ -92,6 +94,10 @@ class LearnerProfileResponse(BaseModel):
     system_architecture: float
     data_analysis: float
     engineering_practice: float
+
+    ability_assessments: Dict[str, Any] = Field(default_factory=dict)
+    diagnostic_status: str = "not_started"
+    diagnostic_completed_at: Optional[datetime] = None
     
     average_ability: float
     knowledge_blind_areas: List[str] = []

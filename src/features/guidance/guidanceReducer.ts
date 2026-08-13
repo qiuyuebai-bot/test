@@ -1,5 +1,5 @@
 import type { TutoringQuestion } from '@/api/core'
-import type { GuidanceState, SessionConfig, SubmitResult } from './types'
+import type { BatchSubmitResult, GuidanceState, SessionConfig, SubmitResult } from './types'
 
 export const initialGuidanceState: GuidanceState = {
   phase: 'initializing',
@@ -7,11 +7,13 @@ export const initialGuidanceState: GuidanceState = {
   questions: [],
   currentQuestion: 0,
   selectedAnswers: [],
+  answersByQuestionId: {},
   showResult: false,
   sessionConfig: null,
   correctCount: 0,
   generationMethod: null,
   submitResult: null,
+  batchResult: null,
   pendingNextDifficulty: null,
   generationError: null,
   submissionError: null,
@@ -36,6 +38,8 @@ export type GuidanceAction =
       correctCount?: number
       generationMethod?: string | null
       submitResult?: SubmitResult | null
+      answersByQuestionId?: Record<string, number[]>
+      batchResult?: BatchSubmitResult | null
     }
   | { type: 'load_failed'; error: string }
   | { type: 'generation_started'; clearError?: boolean }
@@ -49,6 +53,7 @@ export type GuidanceAction =
   | { type: 'session_topic_updated'; topic: string }
   | { type: 'generation_failed'; error: string; silent?: boolean }
   | { type: 'select_answer'; index: number; multiple: boolean }
+  | { type: 'go_to_question'; index: number }
   | { type: 'submit_started' }
   | {
       type: 'submit_succeeded'
@@ -57,6 +62,10 @@ export type GuidanceAction =
       nextDifficulty?: number | null
     }
   | { type: 'submit_failed'; error: string }
+  | { type: 'batch_validation_failed'; index: number; error: string }
+  | { type: 'batch_submit_started' }
+  | { type: 'batch_submit_succeeded'; result: BatchSubmitResult }
+  | { type: 'batch_submit_failed'; error: string }
   | { type: 'prefetch_started'; difficulty: number }
   | { type: 'prefetch_succeeded'; questions: TutoringQuestion[]; generationMethod?: string | null }
   | { type: 'prefetch_failed'; error: string }
@@ -76,22 +85,33 @@ export function guidanceReducer(state: GuidanceState, action: GuidanceAction): G
         historyLoading: state.historyLoading,
       }
     case 'hydrated':
+      {
+      const sessionConfig = action.sessionConfig?.mode
+        ? action.sessionConfig
+        : action.sessionConfig
+        ? { ...action.sessionConfig, mode: 'adaptive' as const }
+        : null
       return {
         ...state,
-        phase: action.questions.length > 0 ? (action.showResult ? 'feedback' : 'answering') : 'ready',
+        phase: action.questions.length > 0
+          ? sessionConfig?.mode === 'batch' && action.batchResult ? 'batchReview' : action.showResult ? 'feedback' : 'answering'
+          : 'ready',
         hydrated: true,
         questions: action.questions,
-        sessionConfig: action.sessionConfig,
+        sessionConfig,
         currentQuestion: action.currentQuestion ?? 0,
         selectedAnswers: action.selectedAnswers ?? [],
+        answersByQuestionId: action.answersByQuestionId ?? {},
         showResult: action.showResult ?? false,
         correctCount: action.correctCount ?? 0,
         generationMethod: action.generationMethod ?? null,
         submitResult: action.submitResult ?? null,
+        batchResult: action.batchResult ?? null,
         generationError: null,
         submissionError: null,
         nextQuestionError: null,
         loadError: null,
+      }
       }
     case 'load_failed':
       return { ...state, hydrated: true, phase: 'ready', loadError: action.error }
@@ -123,6 +143,8 @@ export function guidanceReducer(state: GuidanceState, action: GuidanceAction): G
         selectedAnswers: [],
         showResult: false,
         submitResult: null,
+        answersByQuestionId: {},
+        batchResult: null,
         sessionConfig: action.sessionConfig ?? state.sessionConfig,
         generationMethod: action.generationMethod ?? action.questions[0]?.generationMethod ?? null,
         generationError: null,
@@ -150,7 +172,30 @@ export function guidanceReducer(state: GuidanceState, action: GuidanceAction): G
           ? state.selectedAnswers.filter((index) => index !== action.index)
           : [...state.selectedAnswers, action.index]
         : [action.index]
+      if (state.sessionConfig?.mode === 'batch' && state.questions[state.currentQuestion]) {
+        const questionId = state.questions[state.currentQuestion].id
+        return {
+          ...state,
+          selectedAnswers,
+          answersByQuestionId: { ...state.answersByQuestionId, [questionId]: selectedAnswers },
+          phase: 'answering',
+          submissionError: null,
+        }
+      }
       return { ...state, selectedAnswers, phase: state.showResult ? state.phase : 'answering' }
+    }
+    case 'go_to_question': {
+      const currentQuestion = Math.min(Math.max(0, action.index), Math.max(0, state.questions.length - 1))
+      const questionId = state.questions[currentQuestion]?.id
+      return {
+        ...state,
+        currentQuestion,
+        selectedAnswers: questionId ? state.answersByQuestionId[questionId] ?? [] : [],
+        phase: 'answering',
+        showResult: false,
+        submitResult: null,
+        submissionError: null,
+      }
     }
     case 'submit_started':
       return { ...state, phase: 'submitting', submissionError: null, nextQuestionError: null, submitResult: null }
@@ -165,6 +210,28 @@ export function guidanceReducer(state: GuidanceState, action: GuidanceAction): G
         submissionError: null,
       }
     case 'submit_failed':
+      return { ...state, phase: 'answering', showResult: false, submissionError: action.error }
+    case 'batch_validation_failed':
+      return {
+        ...state,
+        phase: 'answering',
+        currentQuestion: Math.min(Math.max(0, action.index), Math.max(0, state.questions.length - 1)),
+        selectedAnswers: state.questions[action.index]?.id ? state.answersByQuestionId[state.questions[action.index].id] ?? [] : [],
+        showResult: false,
+        submissionError: action.error,
+      }
+    case 'batch_submit_started':
+      return { ...state, phase: 'submitting', submissionError: null, batchResult: null }
+    case 'batch_submit_succeeded':
+      return {
+        ...state,
+        phase: 'batchReview',
+        showResult: true,
+        batchResult: action.result,
+        correctCount: action.result.correctCount,
+        submissionError: null,
+      }
+    case 'batch_submit_failed':
       return { ...state, phase: 'answering', showResult: false, submissionError: action.error }
     case 'prefetch_started':
       return { ...state, phase: 'preparingNext', pendingNextDifficulty: action.difficulty, nextQuestionError: null }
@@ -198,10 +265,12 @@ export function guidanceReducer(state: GuidanceState, action: GuidanceAction): G
         questions: [],
         currentQuestion: 0,
         selectedAnswers: [],
+        answersByQuestionId: {},
         showResult: false,
         sessionConfig: null,
         correctCount: 0,
         submitResult: null,
+        batchResult: null,
         pendingNextDifficulty: null,
         generationError: null,
         submissionError: null,
