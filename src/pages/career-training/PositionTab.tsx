@@ -34,6 +34,7 @@ export default function PositionTab() {
   const [showCreatePosition, setShowCreatePosition] = useState(false)
   const [showCreateCompetency, setShowCreateCompetency] = useState(false)
   const [showLinkCompetency, setShowLinkCompetency] = useState(false)
+  const [showCompetencyManager, setShowCompetencyManager] = useState(false)
   const canEdit = user?.role === 'admin' || user?.role === 'teacher'
 
   useEffect(() => {
@@ -53,6 +54,29 @@ export default function PositionTab() {
     }
   }
 
+  const handleRemoveCompetency = async (positionId: number, competencyId: number) => {
+    if (!selected) return
+    if (!confirm('确定要移除该胜任力关联吗？')) return
+    try {
+      await trainingApi.removePositionCompetency(positionId, competencyId)
+      const detail = await trainingApi.getPosition(positionId)
+      setSelected(detail)
+    } catch (err) {
+      console.error('removePositionCompetency failed:', err)
+    }
+  }
+
+  const handleDeletePosition = async (positionId: number) => {
+    if (!confirm(`确定要删除岗位"${selected?.name}"吗？此操作不可撤销。`)) return
+    try {
+      await trainingApi.deletePosition(positionId)
+      setSelected(null)
+      void fetchPositions()
+    } catch (err) {
+      console.error('deletePosition failed:', err)
+    }
+  }
+
   const radarItems: RadarItem[] = (selected?.competencies ?? []).map((c) => ({
     name: (c.competencyName ?? c.competency_name) ?? `#${c.competencyId ?? c.competency_id}`,
     required: c.requiredLevel ?? c.required_level ?? 0,
@@ -69,6 +93,7 @@ export default function PositionTab() {
         <h2 className="text-lg font-medium text-text-primary">岗位列表</h2>
         {canEdit && (
           <div className="flex gap-2">
+            <Button variant="secondary" size="sm" onClick={() => setShowCompetencyManager(true)}>胜任力管理</Button>
             <Button variant="secondary" size="sm" onClick={() => setShowCreateCompetency(true)}>新增胜任力</Button>
             <Button size="sm" onClick={() => setShowCreatePosition(true)}>新增岗位</Button>
           </div>
@@ -133,14 +158,30 @@ export default function PositionTab() {
                       <span className="text-sm font-medium text-text-primary">{c.competencyName ?? c.competency_name}</span>
                       {(c.isMandatory ?? c.is_mandatory) && <Badge variant="info" className="ml-2">必修</Badge>}
                     </div>
-                    <div className="text-sm text-text-secondary">
-                      要求等级：<span className="text-primary font-medium">L{c.requiredLevel ?? c.required_level}</span>
-                      <span className="text-text-tertiary ml-2">(权重 {c.weight})</span>
+                    <div className="flex items-center gap-3">
+                      <div className="text-sm text-text-secondary">
+                        要求等级：<span className="text-primary font-medium">L{c.requiredLevel ?? c.required_level}</span>
+                        <span className="text-text-tertiary ml-2">(权重 {c.weight})</span>
+                      </div>
+                      {canEdit && (
+                        <button
+                          onClick={() => void handleRemoveCompetency(selected.id, (c.competencyId ?? c.competency_id) as number)}
+                          className="text-xs text-error hover:text-error-dark transition-colors"
+                        >
+                          移除
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))}
               </div>
             </div>
+
+            {canEdit && (
+              <div className="flex justify-end pt-4 border-t border-border">
+                <Button variant="ghost" onClick={() => void handleDeletePosition(selected.id)}>删除岗位</Button>
+              </div>
+            )}
           </div>
         ) : null}
       </Modal>
@@ -179,6 +220,13 @@ export default function PositionTab() {
             }
             setShowLinkCompetency(false)
           }}
+        />
+      )}
+      {canEdit && showCompetencyManager && (
+        <CompetencyManagerModal
+          competencies={competencies}
+          onClose={() => setShowCompetencyManager(false)}
+          onChanged={() => { void fetchCompetencies() }}
         />
       )}
     </div>
@@ -368,6 +416,70 @@ function LinkCompetencyModal({
             <Button variant="ghost" onClick={onClose}>取消</Button>
             <Button onClick={handleSubmit} loading={submitting} disabled={!competencyId}>关联</Button>
           </div>
+        </div>
+      )}
+    </Modal>
+  )
+}
+
+function CompetencyManagerModal({
+  competencies, onClose, onChanged,
+}: {
+  competencies: Competency[]
+  onClose: () => void
+  onChanged: () => void
+}) {
+  const [deletingId, setDeletingId] = useState<number | null>(null)
+
+  const handleDelete = async (id: number, name: string) => {
+    if (!confirm(`确定要删除胜任力"${name}"吗？此操作不可撤销，已关联该胜任力的岗位将同时解除关联。`)) return
+    setDeletingId(id)
+    try {
+      await trainingApi.deleteCompetency(id)
+      onChanged()
+    } catch (err) {
+      console.error('deleteCompetency failed:', err)
+    } finally {
+      setDeletingId(null)
+    }
+  }
+
+  return (
+    <Modal isOpen onClose={onClose} maxWidth="max-w-2xl" className="p-6 max-h-[80vh] overflow-y-auto">
+      <h3 className="text-lg font-semibold text-text-primary mb-4 pr-8">胜任力管理</h3>
+      {competencies.length === 0 ? (
+        <div className="text-sm text-text-secondary py-6 text-center">
+          暂无胜任力，请先在右上角"新增胜任力"创建。
+        </div>
+      ) : (
+        <div className="space-y-1">
+          {competencies.map((c) => (
+            <div
+              key={c.id}
+              className="flex items-center justify-between py-2 px-3 border border-border rounded-input hover:bg-bg-secondary/50 transition-colors"
+            >
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-text-primary truncate">{c.name}</span>
+                  {c.category && (
+                    <Badge variant="default">{CATEGORY_LABEL[c.category] ?? c.category}</Badge>
+                  )}
+                  {!c.is_active && <Badge variant="error">已停用</Badge>}
+                </div>
+                <div className="text-xs text-text-tertiary mt-0.5">
+                  编码：<span>{c.code}</span>
+                  {c.description && <span className="ml-2">· {c.description}</span>}
+                </div>
+              </div>
+              <button
+                onClick={() => void handleDelete(c.id, c.name)}
+                disabled={deletingId === c.id}
+                className="ml-3 text-xs text-error hover:text-error-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {deletingId === c.id ? '删除中…' : '删除'}
+              </button>
+            </div>
+          ))}
         </div>
       )}
     </Modal>

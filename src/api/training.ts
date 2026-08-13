@@ -43,6 +43,10 @@ export const trainingApi = {
     return http.post<PositionCompetency>(`/positions/${positionId}/competencies`, data)
   },
 
+  removePositionCompetency(positionId: number, competencyId: number): Promise<void> {
+    return http.delete<void>(`/positions/${positionId}/competencies/${competencyId}`)
+  },
+
   // ---- 胜任力 ----
   listCompetencies(params?: ListParams & { category?: string }): Promise<PagedData<Competency>> {
     return http.get<PagedData<Competency>>('/competencies', {
@@ -55,6 +59,10 @@ export const trainingApi = {
 
   createCompetency(data: { code: string; name: string; category?: string; description?: string }): Promise<Competency> {
     return http.post<Competency>('/competencies', data)
+  },
+
+  deleteCompetency(id: number): Promise<void> {
+    return http.delete<void>(`/competencies/${id}`)
   },
 
   // ============ Assessment 域 ============

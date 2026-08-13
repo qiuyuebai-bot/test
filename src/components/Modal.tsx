@@ -1,6 +1,7 @@
 import { clsx } from 'clsx'
 import { X } from 'lucide-react'
 import { ReactNode, useEffect, useRef } from 'react'
+import Button from './Button'
 
 interface ModalProps {
   isOpen: boolean
@@ -67,9 +68,8 @@ export default function Modal({ isOpen, onClose, children, maxWidth = 'max-w-lg'
         aria-labelledby="modal-title"
         tabIndex={-1}
         className={clsx(
-          'relative w-full bg-bg-card rounded-2xl shadow-modal overflow-hidden animate-scale-in outline-none',
+          'relative w-full bg-bg-card rounded-2xl shadow-modal animate-scale-in outline-none flex flex-col max-h-[90vh]',
           maxWidth,
-          className
         )}
       >
         <h2 id="modal-title" className="sr-only">
@@ -78,11 +78,16 @@ export default function Modal({ isOpen, onClose, children, maxWidth = 'max-w-lg'
         <button
           onClick={onClose}
           aria-label="关闭对话框"
-          className="absolute top-5 right-5 p-1 hover:bg-bg-secondary rounded-lg transition-colors z-10"
+          className="absolute top-5 right-5 p-1 hover:bg-bg-secondary rounded-lg transition-colors z-20"
         >
           <X className="w-5 h-5 text-text-secondary" />
         </button>
-        {children}
+        <div className={clsx('flex-1 overflow-y-auto', className)}>
+          {children}
+        </div>
+        <div className="flex justify-center py-3 border-t border-border bg-bg-card rounded-b-2xl">
+          <Button variant="ghost" size="sm" onClick={onClose}>关闭</Button>
+        </div>
       </div>
     </div>
   )

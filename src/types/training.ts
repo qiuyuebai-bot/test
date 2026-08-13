@@ -59,6 +59,10 @@ export interface CompetencyConfig {
   question_count: number
   difficulty: number
   assessment_method: string
+  // http 客户端 keysToCamel 转换后的运行时字段
+  competencyId?: number
+  questionCount?: number
+  assessmentMethod?: string
 }
 
 export interface AssessmentTemplate {
@@ -72,6 +76,14 @@ export interface AssessmentTemplate {
   is_active: boolean
   created_at: string
   updated_at: string
+  // http 客户端 keysToCamel 转换后的运行时字段
+  positionId?: number
+  competencyConfigs?: CompetencyConfig[]
+  passThreshold?: number
+  durationMinutes?: number
+  isActive?: boolean
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface CompetencyScore {
@@ -110,12 +122,34 @@ export interface AssessmentRecord {
   completed_at?: string
   created_at: string
   updated_at: string
+  // http 客户端 keysToCamel 转换后的运行时字段
+  templateId?: number
+  userId?: number
+  learnerId?: number
+  positionId?: number
+  overallScore?: number
+  overallLevel?: number
+  gapSummary?: Array<{
+    competencyId: number
+    competencyName: string
+    currentLevel: number
+    requiredLevel: number
+    gap: number
+  }>
+  aiDiagnosis?: string
+  startedAt?: string
+  completedAt?: string
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface AssessmentRecordDetail extends AssessmentRecord {
   competency_scores: CompetencyScore[]
   template_name?: string
   position_name?: string
+  competencyScores?: CompetencyScore[]
+  templateName?: string
+  positionName?: string
 }
 
 export interface GapItem {
@@ -126,6 +160,12 @@ export interface GapItem {
   required_level: number
   gap: number
   is_met: boolean
+  competencyId?: number
+  competencyName?: string
+  competencyCode?: string
+  currentLevel?: number
+  requiredLevel?: number
+  isMet?: boolean
 }
 
 export interface GapAnalysis {
@@ -138,6 +178,14 @@ export interface GapAnalysis {
   met_count: number
   gap_count: number
   gaps: GapItem[]
+  recordId?: number
+  overallScore?: number
+  overallLevel?: number
+  passThreshold?: number
+  isPassed?: boolean
+  totalCompetencies?: number
+  metCount?: number
+  gapCount?: number
 }
 
 // ============ Certification 域 ============
@@ -187,6 +235,16 @@ export interface TrainingProject {
   created_by?: number
   created_at: string
   updated_at: string
+  // http 客户端 keysToCamel 转换后的运行时字段
+  positionId?: number
+  certificationId?: number
+  projectType?: string
+  enterpriseName?: string
+  startDate?: string
+  endDate?: string
+  createdBy?: number
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface TrainingEnrollment {
@@ -201,6 +259,16 @@ export interface TrainingEnrollment {
   certification_record_id?: number
   created_at: string
   updated_at: string
+  // http 客户端 keysToCamel 转换后的运行时字段
+  projectId?: number
+  userId?: number
+  learnerId?: number
+  enrolledAt?: string
+  completedAt?: string
+  finalScore?: number
+  certificationRecordId?: number
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface PlanStage {
@@ -212,6 +280,10 @@ export interface PlanStage {
   target_level: number
   deadline?: string | null
   description?: string
+  // http 客户端 keysToCamel 转换后的运行时字段
+  competencyIds?: number[]
+  estimatedHours?: number
+  targetLevel?: number
 }
 
 export interface TrainingPlan {
@@ -229,4 +301,16 @@ export interface TrainingPlan {
   generated_by_ai: boolean
   created_at: string
   updated_at: string
+  // http 客户端 keysToCamel 转换后的运行时字段
+  projectId?: number
+  enrollmentId?: number
+  userId?: number
+  learnerId?: number
+  assessmentRecordId?: number
+  planContent?: PlanStage[]
+  totalStages?: number
+  completedStages?: number
+  generatedByAi?: boolean
+  createdAt?: string
+  updatedAt?: string
 }
