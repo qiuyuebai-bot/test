@@ -14,6 +14,7 @@ from app.domains.training.schemas import (
     TrainingProjectCreate, TrainingProjectUpdate,
 )
 from app.domains.position.models import Position, Competency, PositionCompetency
+from app.domains.learner.models import LearnerProfile
 from app.domains.assessment.models import (
     AssessmentRecord, CompetencyScore, AssessmentStatusEnum,
 )
@@ -47,6 +48,13 @@ def not_found(message: str = "资源不存在") -> Dict[str, Any]:
 class TrainingService:
     """培训项目域服务"""
 
+    PROJECT_TYPE_ALIASES = {
+        "onboarding": "onboard",
+        "reskilling": "transfer",
+        "upskilling": "upskill",
+        "certification": "compliance",
+    }
+
     # ===========================================
     # 培训项目 CRUD
     # ===========================================
@@ -67,7 +75,7 @@ class TrainingService:
             description=data.description,
             position_id=data.position_id,
             certification_id=data.certification_id,
-            project_type=data.project_type,
+            project_type=TrainingService._normalize_project_type(data.project_type),
             enterprise_name=data.enterprise_name,
             start_date=data.start_date,
             end_date=data.end_date,
@@ -82,13 +90,18 @@ class TrainingService:
     @staticmethod
     def get_project_list(
         db: Session, page: int = 1, page_size: int = 20,
-        status: Optional[str] = None, keyword: Optional[str] = None
+        status: Optional[str] = None, keyword: Optional[str] = None,
+        position_id: Optional[int] = None, is_staff: bool = False,
     ) -> Dict[str, Any]:
         query = db.query(TrainingProject)
-        if status:
+        if not is_staff:
+            query = query.filter(TrainingProject.status == ProjectStatusEnum.ACTIVE.value)
+        elif status:
             query = query.filter(TrainingProject.status == status)
         if keyword:
             query = query.filter(TrainingProject.name.contains(keyword))
+        if position_id:
+            query = query.filter(TrainingProject.position_id == position_id)
         total = query.count()
         items = query.order_by(TrainingProject.created_at.desc()).offset(
             (page - 1) * page_size
@@ -101,9 +114,11 @@ class TrainingService:
         })
 
     @staticmethod
-    def get_project_by_id(db: Session, project_id: int) -> Dict[str, Any]:
+    def get_project_by_id(db: Session, project_id: int, is_staff: bool = False) -> Dict[str, Any]:
         project = db.query(TrainingProject).filter(TrainingProject.id == project_id).first()
         if not project:
+            return not_found(message="培训项目不存在")
+        if project.status != ProjectStatusEnum.ACTIVE.value and not is_staff:
             return not_found(message="培训项目不存在")
         result = TrainingService._project_to_response(project)
         # 附带岗位名称
@@ -125,6 +140,8 @@ class TrainingService:
         if not project:
             return not_found(message="培训项目不存在")
         update_data = data.model_dump(exclude_unset=True)
+        if "project_type" in update_data:
+            update_data["project_type"] = TrainingService._normalize_project_type(update_data["project_type"])
         for key, value in update_data.items():
             setattr(project, key, value)
         db.commit()
@@ -145,23 +162,36 @@ class TrainingService:
     # ===========================================
 
     @staticmethod
-    def enroll(db: Session, project_id: int, user_id: int, learner_id: Optional[int] = None) -> Dict[str, Any]:
+    def enroll(
+        db: Session, project_id: int, user_id: int,
+        learner_id: Optional[int] = None, is_staff: bool = False,
+    ) -> Dict[str, Any]:
         project = db.query(TrainingProject).filter(TrainingProject.id == project_id).first()
         if not project:
             return not_found(message="培训项目不存在")
         if project.status != ProjectStatusEnum.ACTIVE.value:
             return bad_request(message="项目不在报名中")
 
+        if learner_id:
+            learner = db.query(LearnerProfile).filter(LearnerProfile.id == learner_id).first()
+            if not learner:
+                return not_found(message="学习者不存在")
+            if learner.user_id != user_id and not is_staff:
+                return bad_request(message="只能为本人关联的学习者报名")
+            enrollment_user_id = learner.user_id
+        else:
+            enrollment_user_id = user_id
+
         existing = db.query(TrainingEnrollment).filter(
             TrainingEnrollment.project_id == project_id,
-            TrainingEnrollment.user_id == user_id,
+            TrainingEnrollment.user_id == enrollment_user_id,
         ).first()
         if existing:
             return success(data=TrainingService._enrollment_to_response(existing), message="已报名该培训项目")
 
         enrollment = TrainingEnrollment(
             project_id=project_id,
-            user_id=user_id,
+            user_id=enrollment_user_id,
             learner_id=learner_id,
             status=EnrollmentStatusEnum.ENROLLED.value,
         )
@@ -187,6 +217,78 @@ class TrainingService:
             "page_size": page_size,
         })
 
+    @staticmethod
+    def get_enrollment(
+        db: Session, project_id: int, user_id: int,
+        learner_id: Optional[int] = None, is_staff: bool = False,
+    ) -> Dict[str, Any]:
+        """查询当前用户在项目中的报名状态，不产生报名副作用。"""
+        query = db.query(TrainingEnrollment).filter(TrainingEnrollment.project_id == project_id)
+        if learner_id:
+            query = query.filter(TrainingEnrollment.learner_id == learner_id)
+            if not is_staff:
+                query = query.filter(TrainingEnrollment.user_id == user_id)
+        else:
+            query = query.filter(TrainingEnrollment.user_id == user_id)
+        enrollment = query.first()
+        return success(data=TrainingService._enrollment_to_response(enrollment) if enrollment else None)
+
+    @staticmethod
+    def validate_training_context(
+        db: Session, learner_id: int, context: Optional[Dict[str, Any]],
+    ) -> Optional[str]:
+        """Validate a stage context against the persisted training plan."""
+        if not context:
+            return None
+        try:
+            project_id = int(context.get("project_id", context.get("projectId")))
+            enrollment_id = int(context.get("enrollment_id", context.get("enrollmentId")))
+            plan_id = int(context.get("plan_id", context.get("planId")))
+            position_id = int(context.get("position_id", context.get("positionId")))
+            stage_data = context.get("stage") or {}
+            stage_number = int(stage_data.get("stage"))
+        except (TypeError, ValueError):
+            return "岗位培训上下文格式无效"
+
+        enrollment = db.query(TrainingEnrollment).filter(TrainingEnrollment.id == enrollment_id).first()
+        plan = db.query(TrainingPlan).filter(TrainingPlan.id == plan_id).first()
+        project = db.query(TrainingProject).filter(TrainingProject.id == project_id).first()
+        if not enrollment or not plan or not project:
+            return "岗位培训上下文对应的记录不存在"
+        if enrollment.project_id != project_id or plan.enrollment_id != enrollment_id:
+            return "岗位培训上下文关联关系无效"
+
+        learner = db.query(LearnerProfile).filter(LearnerProfile.id == learner_id).first()
+        if not learner:
+            return "学习者不存在"
+        if enrollment.learner_id is not None:
+            learner_matches_enrollment = enrollment.learner_id == learner_id
+        else:
+            learner_matches_enrollment = learner.user_id == enrollment.user_id
+        if (
+            project.position_id != position_id
+            or plan.user_id != enrollment.user_id
+            or (plan.learner_id is not None and plan.learner_id != learner_id)
+            or not learner_matches_enrollment
+        ):
+            return "岗位培训上下文与学习者或岗位不匹配"
+
+        stages = plan.plan_content or []
+        persisted_stage = next((stage for stage in stages if stage.get("stage") == stage_number), None)
+        if not persisted_stage:
+            return "岗位培训阶段不存在"
+
+        requested_ids = stage_data.get("competency_ids", stage_data.get("competencyIds", [])) or []
+        persisted_ids = persisted_stage.get("competency_ids", persisted_stage.get("competencyIds", [])) or []
+        try:
+            requested_id_set = {int(value) for value in requested_ids}
+            persisted_id_set = {int(value) for value in persisted_ids}
+        except (TypeError, ValueError):
+            return "岗位培训阶段能力与计划不匹配"
+        if requested_id_set != persisted_id_set:
+            return "岗位培训阶段能力与计划不匹配"
+        return None
+
     # ===========================================
     # AI 学习计划生成
     # ===========================================
@@ -199,11 +301,23 @@ class TrainingService:
         if enrollment.user_id != user_id and not is_staff:
             return bad_request(message="无权操作此报名记录")
 
+        project = db.query(TrainingProject).filter(TrainingProject.id == enrollment.project_id).first()
+        if not project:
+            return not_found(message="培训项目不存在")
+
         ar = db.query(AssessmentRecord).filter(AssessmentRecord.id == assessment_record_id).first()
         if not ar:
             return not_found(message="评估记录不存在")
         if ar.status != AssessmentStatusEnum.COMPLETED.value:
             return bad_request(message="评估尚未完成")
+        if ar.position_id != project.position_id:
+            return bad_request(message="评估记录与培训项目岗位不匹配")
+        if enrollment.learner_id and ar.learner_id != enrollment.learner_id:
+            return bad_request(message="评估记录与报名学习者不匹配")
+        if not enrollment.learner_id and ar.user_id != enrollment.user_id:
+            return bad_request(message="评估记录与报名用户不匹配")
+        if not is_staff and ar.user_id != user_id:
+            return bad_request(message="无权使用此评估记录")
 
         # 获取差距数据
         scores = db.query(CompetencyScore).filter(
@@ -242,7 +356,7 @@ class TrainingService:
         plan = TrainingPlan(
             project_id=enrollment.project_id,
             enrollment_id=enrollment_id,
-            user_id=user_id,
+            user_id=enrollment.user_id,
             learner_id=enrollment.learner_id,
             assessment_record_id=assessment_record_id,
             plan_content=plan_content,
@@ -262,20 +376,27 @@ class TrainingService:
         return success(data=TrainingService._plan_to_response(plan), message="学习计划已生成")
 
     @staticmethod
-    def get_plan(db: Session, enrollment_id: int) -> Dict[str, Any]:
+    def get_plan(db: Session, enrollment_id: int, user_id: int, is_staff: bool = False) -> Dict[str, Any]:
         enrollment = db.query(TrainingEnrollment).filter(TrainingEnrollment.id == enrollment_id).first()
         if not enrollment:
             return not_found(message="报名记录不存在")
+        if enrollment.user_id != user_id and not is_staff:
+            return bad_request(message="无权查看此学习计划")
         plan = db.query(TrainingPlan).filter(TrainingPlan.enrollment_id == enrollment_id).first()
         if not plan:
             return not_found(message="学习计划不存在")
         return success(data=TrainingService._plan_to_response(plan))
 
     @staticmethod
-    def update_progress(db: Session, plan_id: int, completed_stages: int) -> Dict[str, Any]:
+    def update_progress(
+        db: Session, plan_id: int, completed_stages: int,
+        user_id: int, is_staff: bool = False,
+    ) -> Dict[str, Any]:
         plan = db.query(TrainingPlan).filter(TrainingPlan.id == plan_id).first()
         if not plan:
             return not_found(message="学习计划不存在")
+        if plan.user_id != user_id and not is_staff:
+            return bad_request(message="无权操作此学习计划")
         if completed_stages < 0 or completed_stages > plan.total_stages:
             return bad_request(message=f"已完成阶段数无效，应在 0-{plan.total_stages} 之间")
 
@@ -289,10 +410,15 @@ class TrainingService:
         return success(data=TrainingService._plan_to_response(plan), message="进度已更新")
 
     @staticmethod
-    def complete_enrollment(db: Session, enrollment_id: int, final_score: Optional[float] = None) -> Dict[str, Any]:
+    def complete_enrollment(
+        db: Session, enrollment_id: int, user_id: int,
+        final_score: Optional[float] = None, is_staff: bool = False,
+    ) -> Dict[str, Any]:
         enrollment = db.query(TrainingEnrollment).filter(TrainingEnrollment.id == enrollment_id).first()
         if not enrollment:
             return not_found(message="报名记录不存在")
+        if enrollment.user_id != user_id and not is_staff:
+            return bad_request(message="无权完成此培训")
         if enrollment.status not in (EnrollmentStatusEnum.ENROLLED.value, EnrollmentStatusEnum.IN_PROGRESS.value):
             return bad_request(message=f"报名状态不允许完成: {enrollment.status}")
 
@@ -321,6 +447,10 @@ class TrainingService:
             "overall_level": ar.overall_level,
             "gap_competencies": gaps,
             "project_type": project.project_type if project else None,
+            "required_output": {
+                "competency_ids": [g["competency_id"] for g in gaps],
+                "target_level": "每个阶段目标等级",
+            },
         }
 
         response, _ = LLMUtil.call_with_prompt_template(
@@ -336,13 +466,26 @@ class TrainingService:
         # 转换为培训计划格式
         plan_stages = []
         for idx, node in enumerate(nodes, 1):
+            valid_ids = {g["competency_id"] for g in gaps}
+            requested_ids = node.get("competency_ids", []) or []
+            competency_ids = []
+            for value in requested_ids:
+                try:
+                    competency_id = int(value)
+                except (TypeError, ValueError):
+                    continue
+                if competency_id in valid_ids and competency_id not in competency_ids:
+                    competency_ids.append(competency_id)
+            if not competency_ids:
+                competency_ids = [gaps[min(idx - 1, len(gaps) - 1)]["competency_id"]] if gaps else []
+            matching_gaps = [g for g in gaps if g["competency_id"] in competency_ids]
             plan_stages.append({
                 "stage": idx,
                 "title": node.get("name", f"阶段{idx}"),
-                "competency_ids": [g["competency_id"] for g in gaps],
+                "competency_ids": competency_ids,
                 "resources": node.get("resources", []),
                 "estimated_hours": TrainingService._parse_hours(node.get("estimated_time", "2小时")),
-                "target_level": node.get("difficulty", 3),
+                "target_level": max((g.get("required_level", 3) for g in matching_gaps), default=node.get("difficulty", 3)),
                 "deadline": None,
                 "description": node.get("description", ""),
             })
@@ -384,6 +527,12 @@ class TrainingService:
         """从时间字符串中解析小时数"""
         digits = "".join(c for c in str(time_str) if c.isdigit())
         return max(1, int(digits or 2))
+
+    @staticmethod
+    def _normalize_project_type(project_type: Optional[str]) -> Optional[str]:
+        if not project_type:
+            return project_type
+        return TrainingService.PROJECT_TYPE_ALIASES.get(project_type, project_type)
 
     # ===========================================
     # 私有辅助方法

@@ -10,6 +10,7 @@ vi.mock('@/store', async () => {
 
 vi.mock('@/api', () => ({
   trainingApi: {
+    getEnrollment: vi.fn(),
     enrollProject: vi.fn(),
     generatePlan: vi.fn(),
     getPlan: vi.fn(),
@@ -33,9 +34,10 @@ describe('LearningPlanTab', () => {
       assessmentRecords: [
         { id: 5, template_id: 1, user_id: 1, position_id: 1, status: 'completed', overall_score: 72, created_at: '', updated_at: '' },
       ],
-      trainingProjectsLoading: false,
-      fetchTrainingProjects: vi.fn(),
-      fetchAssessmentRecords: vi.fn(),
+    trainingProjectsLoading: false,
+    fetchTrainingProjects: vi.fn(),
+    fetchAssessmentRecords: vi.fn(),
+      user: { id: 1, userId: 1, username: 'learner', role: 'learner' },
     })
   })
 
@@ -44,7 +46,16 @@ describe('LearningPlanTab', () => {
     expect(screen.getByText('前端入职培训')).toBeInTheDocument()
   })
 
-  it('点击项目后可报名并生成计划', async () => {
+  it('点击项目只查看报名状态，不会自动报名', async () => {
+    vi.mocked(trainingApi.getEnrollment).mockResolvedValueOnce(null)
+    render(<MemoryRouter><LearningPlanTab /></MemoryRouter>)
+    await userEvent.click(screen.getByText('前端入职培训'))
+    expect(await screen.findByRole('button', { name: '报名培训项目' })).toBeInTheDocument()
+    expect(trainingApi.enrollProject).not.toHaveBeenCalled()
+  })
+
+  it('显式报名后可选择匹配评估并生成计划', async () => {
+    vi.mocked(trainingApi.getEnrollment).mockResolvedValueOnce(null)
     vi.mocked(trainingApi.enrollProject).mockResolvedValueOnce({ id: 9, project_id: 1, user_id: 1, status: 'enrolled', created_at: '', updated_at: '' })
     vi.mocked(trainingApi.generatePlan).mockResolvedValueOnce({
       id: 1, project_id: 1, enrollment_id: 9, user_id: 1, assessment_record_id: 5,
@@ -54,6 +65,10 @@ describe('LearningPlanTab', () => {
     })
     render(<MemoryRouter><LearningPlanTab /></MemoryRouter>)
     await userEvent.click(screen.getByText('前端入职培训'))
+    await userEvent.click(await screen.findByRole('button', { name: '报名培训项目' }))
+    await userEvent.click(await screen.findByRole('button', { name: '选择评估记录并生成计划' }))
+    await userEvent.click(screen.getByText('记录 #5'))
+    await userEvent.click(screen.getByRole('button', { name: '生成计划' }))
     await waitFor(() => {
       expect(screen.getByText('阶段1')).toBeInTheDocument()
     })

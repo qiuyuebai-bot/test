@@ -4,6 +4,7 @@ import type { AppState } from './index'
 import type {
   Position, Competency, AssessmentRecord,
   Certification, CertificationRecord, TrainingProject,
+  TrainingStageContext,
 } from '../types/training'
 
 export interface TrainingSlice {
@@ -17,13 +18,16 @@ export interface TrainingSlice {
   certificationRecordsLoading: boolean
   trainingProjects: TrainingProject[]
   trainingProjectsLoading: boolean
+  activeTrainingContext: TrainingStageContext | null
 
   fetchPositions: (params?: { page?: number; pageSize?: number; keyword?: string }) => Promise<void>
   fetchCompetencies: () => Promise<void>
-  fetchAssessmentRecords: (params?: { positionId?: number; status?: string }) => Promise<void>
+  fetchAssessmentRecords: (params?: { positionId?: number; learnerId?: number; status?: string }) => Promise<void>
   fetchCertifications: () => Promise<void>
-  fetchCertificationRecords: (params?: { status?: string }) => Promise<void>
+  fetchCertificationRecords: (params?: { status?: string; learnerId?: number }) => Promise<void>
   fetchTrainingProjects: (params?: { status?: string; positionId?: number }) => Promise<void>
+  setTrainingContext: (context: TrainingStageContext | null) => void
+  clearTrainingContext: () => void
 }
 
 export const createTrainingSlice: StateCreator<AppState, [], [], TrainingSlice> = (set) => ({
@@ -37,6 +41,7 @@ export const createTrainingSlice: StateCreator<AppState, [], [], TrainingSlice> 
   certificationRecordsLoading: false,
   trainingProjects: [],
   trainingProjectsLoading: false,
+  activeTrainingContext: null,
 
   fetchPositions: async (params) => {
     set({ positionsLoading: true })
@@ -68,6 +73,7 @@ export const createTrainingSlice: StateCreator<AppState, [], [], TrainingSlice> 
       const result = await trainingApi.listAssessmentRecords({
         page: 1,
         page_size: 50,
+        learner_id: params?.learnerId,
         position_id: params?.positionId,
         status: params?.status,
       })
@@ -94,6 +100,7 @@ export const createTrainingSlice: StateCreator<AppState, [], [], TrainingSlice> 
         page: 1,
         page_size: 50,
         status: params?.status,
+        learner_id: params?.learnerId,
       })
       set({ certificationRecords: result.items, certificationRecordsLoading: false })
     } catch (err) {
@@ -117,4 +124,7 @@ export const createTrainingSlice: StateCreator<AppState, [], [], TrainingSlice> 
       set({ trainingProjectsLoading: false })
     }
   },
+
+  setTrainingContext: (context) => set({ activeTrainingContext: context }),
+  clearTrainingContext: () => set({ activeTrainingContext: null }),
 })

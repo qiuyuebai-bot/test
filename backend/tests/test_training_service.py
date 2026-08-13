@@ -131,6 +131,22 @@ class TestTrainingProjectCRUD:
         assert result["code"] == 200
         assert result["data"]["total"] >= 1
 
+    def test_get_project_list_hides_drafts_for_learners(self, db, position_with_competencies, active_project):
+        pos_id, _ = position_with_competencies
+        db.add(TrainingProject(name="草稿项目", position_id=pos_id, status=ProjectStatusEnum.DRAFT.value))
+        db.commit()
+        result = TrainingService.get_project_list(db, page=1, page_size=10)
+        assert result["code"] == 200
+        assert all(item["status"] == ProjectStatusEnum.ACTIVE.value for item in result["data"]["items"])
+
+    def test_get_project_list_ignores_requested_draft_status_for_learners(self, db, position_with_competencies):
+        pos_id, _ = position_with_competencies
+        db.add(TrainingProject(name="草稿项目", position_id=pos_id, status=ProjectStatusEnum.DRAFT.value))
+        db.commit()
+        result = TrainingService.get_project_list(db, status=ProjectStatusEnum.DRAFT.value)
+        assert result["code"] == 200
+        assert result["data"]["total"] == 0
+
     def test_get_project_by_id(self, db, active_project):
         result = TrainingService.get_project_by_id(db, active_project)
         assert result["code"] == 200
@@ -215,12 +231,28 @@ class TestTrainingPlan:
         result = TrainingService.generate_plan(db, enrollment_id, user_id=999, assessment_record_id=ar_id)
         assert result["code"] == 400
 
+    def test_generate_plan_rejects_assessment_from_another_position(self, db, active_project, completed_assessment_with_gap):
+        _, _, ar_id = completed_assessment_with_gap
+        other_position = Position(code="BE-001", name="后端工程师")
+        db.add(other_position)
+        db.commit()
+        other_project = TrainingProject(
+            name="后端培训", position_id=other_position.id,
+            status=ProjectStatusEnum.ACTIVE.value,
+        )
+        db.add(other_project)
+        db.commit()
+        db.refresh(other_project)
+        enrollment_id = TrainingService.enroll(db, other_project.id, user_id=1)["data"]["id"]
+        result = TrainingService.generate_plan(db, enrollment_id, user_id=1, assessment_record_id=ar_id)
+        assert result["code"] == 400
+
     def test_get_plan(self, db, active_project, completed_assessment_with_gap):
         _, _, ar_id = completed_assessment_with_gap
         enroll_result = TrainingService.enroll(db, active_project, user_id=1)
         enrollment_id = enroll_result["data"]["id"]
         TrainingService.generate_plan(db, enrollment_id, user_id=1, assessment_record_id=ar_id)
-        result = TrainingService.get_plan(db, enrollment_id)
+        result = TrainingService.get_plan(db, enrollment_id, user_id=1)
         assert result["code"] == 200
         assert result["data"]["total_stages"] >= 1
 
@@ -232,7 +264,7 @@ class TestTrainingPlan:
         plan_id = plan_result["data"]["id"]
         total = plan_result["data"]["total_stages"]
 
-        result = TrainingService.update_progress(db, plan_id, completed_stages=1)
+        result = TrainingService.update_progress(db, plan_id, completed_stages=1, user_id=1)
         assert result["code"] == 200
         assert result["data"]["completed_stages"] == 1
         expected_progress = round(1 / total * 100, 1)
@@ -247,7 +279,7 @@ class TestTrainingPlan:
         plan_id = plan_result["data"]["id"]
         total = plan_result["data"]["total_stages"]
 
-        result = TrainingService.update_progress(db, plan_id, completed_stages=total)
+        result = TrainingService.update_progress(db, plan_id, completed_stages=total, user_id=1)
         assert result["code"] == 200
         assert result["data"]["status"] == PlanStatusEnum.COMPLETED.value
         assert result["data"]["progress"] == 100.0
@@ -260,7 +292,16 @@ class TestTrainingPlan:
         plan_result = TrainingService.generate_plan(db, enrollment_id, user_id=1, assessment_record_id=ar_id)
         plan_id = plan_result["data"]["id"]
 
-        result = TrainingService.update_progress(db, plan_id, completed_stages=999)
+        result = TrainingService.update_progress(db, plan_id, completed_stages=999, user_id=1)
+        assert result["code"] == 400
+
+    def test_update_progress_rejects_other_user(self, db, active_project, completed_assessment_with_gap):
+        _, _, ar_id = completed_assessment_with_gap
+        enrollment_id = TrainingService.enroll(db, active_project, user_id=1)["data"]["id"]
+        plan_id = TrainingService.generate_plan(
+            db, enrollment_id, user_id=1, assessment_record_id=ar_id,
+        )["data"]["id"]
+        result = TrainingService.update_progress(db, plan_id, completed_stages=1, user_id=999)
         assert result["code"] == 400
 
 
@@ -268,7 +309,7 @@ class TestCompleteEnrollment:
     def test_complete_enrollment(self, db, active_project):
         enroll_result = TrainingService.enroll(db, active_project, user_id=1)
         enrollment_id = enroll_result["data"]["id"]
-        result = TrainingService.complete_enrollment(db, enrollment_id, final_score=85.0)
+        result = TrainingService.complete_enrollment(db, enrollment_id, user_id=1, final_score=85.0)
         assert result["code"] == 200
         assert result["data"]["status"] == EnrollmentStatusEnum.COMPLETED.value
         assert result["data"]["final_score"] == 85.0
@@ -277,6 +318,6 @@ class TestCompleteEnrollment:
     def test_complete_already_completed(self, db, active_project):
         enroll_result = TrainingService.enroll(db, active_project, user_id=1)
         enrollment_id = enroll_result["data"]["id"]
-        TrainingService.complete_enrollment(db, enrollment_id)
-        result = TrainingService.complete_enrollment(db, enrollment_id)
+        TrainingService.complete_enrollment(db, enrollment_id, user_id=1)
+        result = TrainingService.complete_enrollment(db, enrollment_id, user_id=1)
         assert result["code"] == 400

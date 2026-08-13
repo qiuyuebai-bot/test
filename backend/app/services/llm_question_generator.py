@@ -35,6 +35,7 @@ class LLMQuestionGenerator:
         *,
         variation_seed: str | None = None,
         excluded_questions: List[str] | None = None,
+        training_context: Dict[str, Any] | None = None,
     ) -> List[Dict[str, Any]]:
         if not LLMUtil.is_available():
             raise RuntimeError("LLM is unavailable")
@@ -52,6 +53,7 @@ class LLMQuestionGenerator:
                     question_count=count,
                     variation_seed=attempt_seed,
                     excluded_questions=excluded_questions or [],
+                    training_context=training_context,
                     difficulty_standard=cls.difficulty_standard(difficulty),
                     multiple_choice_count=count // 3,
                 )

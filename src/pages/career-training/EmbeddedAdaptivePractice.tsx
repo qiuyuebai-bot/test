@@ -1,5 +1,7 @@
 import { useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { useGuidanceSession } from '@/features/guidance/useGuidanceSession'
+import { useStore } from '@/store'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
@@ -14,7 +16,8 @@ interface Props {
 }
 
 export default function EmbeddedAdaptivePractice({ position, learnerId }: Props) {
-  const session = useGuidanceSession(learnerId)
+  const trainingContext = useStore(useShallow((state) => state.activeTrainingContext))
+  const session = useGuidanceSession(learnerId, trainingContext)
   const { state, question, sessionTotal, answeredCount, isPreparingNext } = session
   const [customTopic, setCustomTopic] = useState('')
   const [difficulty, setDifficulty] = useState('')
@@ -24,7 +27,7 @@ export default function EmbeddedAdaptivePractice({ position, learnerId }: Props)
     return <EmptyState type="default" title="需要学习者画像" description="当前账号没有关联的学习者画像，无法开始练习" />
   }
 
-  const defaultTopic = position?.name ?? ''
+  const defaultTopic = trainingContext?.stage.title ?? position?.name ?? ''
   const handleStart = () => {
     void session.startSession({
       topic: customTopic.trim() || defaultTopic,
@@ -48,6 +51,7 @@ export default function EmbeddedAdaptivePractice({ position, learnerId }: Props)
           {state.sessionConfig?.topic && (
             <span>· 主题：{state.sessionConfig.topic}</span>
           )}
+          {trainingContext?.stage.targetLevel && <span>· 目标 L{trainingContext.stage.targetLevel}</span>}
         </div>
       )}
 
@@ -57,7 +61,7 @@ export default function EmbeddedAdaptivePractice({ position, learnerId }: Props)
           <div className="space-y-4">
             <div>
               <h3 className="text-sm font-medium text-text-primary mb-1">练习配置</h3>
-              <p className="text-xs text-text-tertiary">主题默认使用岗位名称，可自由修改</p>
+              <p className="text-xs text-text-tertiary">主题默认使用当前培训阶段，可自由修改</p>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <div>

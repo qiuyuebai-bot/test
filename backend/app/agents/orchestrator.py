@@ -119,6 +119,7 @@ class AgentOrchestrator:
         target_topic: str,
         resource_type: str = "guide",
         industry: str = None,
+        training_context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """执行完整流水线：诊断 → 检索 → 生成 → 审核 → 辩论 → 完成"""
         logger.info(
@@ -144,7 +145,8 @@ class AgentOrchestrator:
             # 阶段3：内容生成
             self._update_task_stage(task_id, "generation", 50, "正在生成学习资源...")
             generation_result = self._run_generation(
-                task_id, learner_id, diagnosis_result, knowledge_results, target_topic, resource_type
+                task_id, learner_id, diagnosis_result, knowledge_results, target_topic, resource_type,
+                training_context=training_context,
             )
             self._update_running_task(task_id, generation_result=generation_result)
             initial_content = generation_result.get("content", "")
@@ -265,6 +267,7 @@ class AgentOrchestrator:
     def _run_generation(
         self, task_id: int, learner_id: int, diagnosis_result: Dict[str, Any],
         knowledge_results: List[Dict], target_topic: str, resource_type: str,
+        training_context: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         with get_db_context() as db:
             learner = LearnerService.get_learner_by_id(db, learner_id)
@@ -279,6 +282,7 @@ class AgentOrchestrator:
                 "learner_profile": learner_dict,
                 "target_topic": target_topic,
                 "resource_type": resource_type,
+                "training_context": training_context or {},
             },
         )
         if not result.get("_meta", {}).get("success", False):

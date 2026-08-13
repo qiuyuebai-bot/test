@@ -1,5 +1,6 @@
 import { http, PagedData } from '../lib/request'
 import type { InteractionHistoryRecord, InteractionHistoryResponse, LearnerReport, LearningResource, SystemMetrics, MetricDefinition, PaginationParams } from '../types'
+import type { TrainingStageContext } from '../types/training'
 
 export interface GenerateResourcesRequest {
   learnerId: number
@@ -29,6 +30,7 @@ export interface GenerateTutoringQuestionsRequest {
   replacePending?: boolean
   assessmentMode?: 'practice' | 'batch_practice'
   sessionId?: string
+  trainingContext?: TrainingStageContext | null
 }
 
 export interface GenerateTutoringQuestionsResponse {

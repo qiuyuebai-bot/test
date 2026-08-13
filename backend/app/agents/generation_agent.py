@@ -52,6 +52,7 @@ class GenerationAgent(BaseAgent):
         learner_profile = input_data.get("learner_profile", {})
         resource_type = input_data.get("resource_type", "guide")
         target_topic = input_data.get("target_topic", "")
+        training_context = input_data.get("training_context") or {}
         base_seed = (
             input_data.get("variation_seed")
             or (context or {}).get("variation_seed")
@@ -73,6 +74,7 @@ class GenerationAgent(BaseAgent):
                 learner_profile,
                 target_topic,
                 variation_seed,
+                training_context,
             )
         elif resource_type == "exercise":
             resource_content = self._generate_exercises(
@@ -81,6 +83,7 @@ class GenerationAgent(BaseAgent):
                 learner_profile,
                 target_topic,
                 variation_seed,
+                training_context,
             )
         elif resource_type == "lecture":
             resource_content = self._generate_lecture(
@@ -89,6 +92,7 @@ class GenerationAgent(BaseAgent):
                 learner_profile,
                 target_topic,
                 variation_seed,
+                training_context,
             )
         else:
             raise ValueError(f"不支持的资源类型: {resource_type}")
@@ -109,6 +113,7 @@ class GenerationAgent(BaseAgent):
             "source_slice_ids": resource_content.get("source_slice_ids", []),
             "source_doc_ids": resource_content.get("source_doc_ids", []),
             "generation_method": resource_content.get("generation_method", "deterministic_fallback"),
+            "training_context": training_context,
         }
         
         logger.debug(f"[知识生成Agent] 生成完成: 类型={resource_type}, 字数={result['word_count']}")
@@ -122,6 +127,7 @@ class GenerationAgent(BaseAgent):
         profile: Dict[str, Any],
         topic: str,
         variation_seed: str = "",
+        training_context: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """
         生成实操指南
@@ -139,7 +145,8 @@ class GenerationAgent(BaseAgent):
             try:
                 return {
                     **LLMGenerator.generate_guide(
-                        diagnosis, knowledge, profile, topic, variation_seed=variation_seed
+                        diagnosis, knowledge, profile, topic, variation_seed=variation_seed,
+                        training_context=training_context,
                     ),
                     "generation_method": "deepseek",
                 }
@@ -221,6 +228,7 @@ class GenerationAgent(BaseAgent):
         profile: Dict[str, Any],
         topic: str,
         variation_seed: str = "",
+        training_context: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """
         生成分阶测试题
@@ -238,7 +246,8 @@ class GenerationAgent(BaseAgent):
             try:
                 return {
                     **LLMGenerator.generate_exercises(
-                        diagnosis, knowledge, profile, topic, variation_seed=variation_seed
+                        diagnosis, knowledge, profile, topic, variation_seed=variation_seed,
+                        training_context=training_context,
                     ),
                     "generation_method": "deepseek",
                 }
@@ -298,6 +307,7 @@ class GenerationAgent(BaseAgent):
         profile: Dict[str, Any],
         topic: str,
         variation_seed: str = "",
+        training_context: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         """
         生成专属知识讲义
@@ -315,7 +325,8 @@ class GenerationAgent(BaseAgent):
             try:
                 return {
                     **LLMGenerator.generate_lecture(
-                        diagnosis, knowledge, profile, topic, variation_seed=variation_seed
+                        diagnosis, knowledge, profile, topic, variation_seed=variation_seed,
+                        training_context=training_context,
                     ),
                     "generation_method": "deepseek",
                 }

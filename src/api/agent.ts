@@ -20,6 +20,22 @@ export interface FullPipelineRequest {
   targetTopic: string
   resourceType?: string
   industry?: string
+  trainingContext?: {
+    projectId: number
+    enrollmentId: number
+    planId: number
+    positionId: number
+    learnerId?: number
+    assessmentRecordId?: number
+    stage: {
+      stage: number
+      title: string
+      competencyIds?: number[]
+      competency_ids?: number[]
+      targetLevel?: number
+      target_level?: number
+    }
+  }
 }
 
 export interface HallucinationMetrics {

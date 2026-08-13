@@ -79,7 +79,7 @@ class CompetencyScoreResponse(BaseModel):
 class AssessmentStartRequest(BaseModel):
     """开始评估请求"""
     template_id: int = Field(..., description="评估模板ID")
-    learner_id: Optional[int] = Field(None, description="学习者画像ID")
+    learner_id: int = Field(..., description="学习者画像ID")
 
 
 class AssessmentSubmitRequest(BaseModel):

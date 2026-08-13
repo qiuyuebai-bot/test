@@ -279,6 +279,9 @@ class TaskRepository:
             generation_result.get("content")
         )
         generation_result["word_count"] = len(generation_result["content"])
+        content_json = dict(generation_result.get("content_json") or {})
+        if generation_result.get("training_context"):
+            content_json["training_context"] = generation_result["training_context"]
 
         with get_db_context() as db:
             task = db.query(AgentTask).filter(AgentTask.id == task_id).first()
@@ -303,7 +306,7 @@ class TaskRepository:
                             difficulty_level=generation_result.get("difficulty_level", 3),
                             version="1.0",
                             content=generation_result.get("content", ""),
-                            content_json=generation_result.get("content_json", {}),
+                            content_json=content_json,
                             word_count=generation_result.get("word_count", 0),
                             source_slice_ids=generation_result.get("source_slice_ids", []),
                             source_doc_ids=generation_result.get("source_doc_ids", []),

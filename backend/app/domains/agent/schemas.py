@@ -95,6 +95,7 @@ class GenerationRequest(BaseModel):
     target_topic: str = Field(..., description="目标主题", min_length=1)
     resource_type: str = Field("guide", description="资源类型: guide/exercise/lecture")
     industry: Optional[str] = Field(None, description="行业领域")
+    training_context: Optional[Dict[str, Any]] = Field(None, description="岗位培训阶段上下文")
 
 
 # ========== 审核校验相关 ==========

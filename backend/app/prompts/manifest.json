@@ -18,12 +18,12 @@
   "resource_generation": {
     "version": "1.0.0",
     "description": "个性化学习资源生成：按学习者画像与知识点生成专属资源",
-    "variables": ["learner_summary", "knowledge_topic", "resource_type", "difficulty_level", "reference_knowledge"]
+    "variables": ["learner_summary", "knowledge_topic", "resource_type", "difficulty_level", "training_context", "reference_knowledge"]
   },
   "question_generation": {
     "version": "1.0.0",
     "description": "分阶测试题生成：按难度等级生成对应题目与解析",
-      "variables": ["knowledge_topic", "difficulty_level", "difficulty_standard", "question_count", "multiple_choice_count", "reference_knowledge", "excluded_questions"]
+      "variables": ["knowledge_topic", "difficulty_level", "difficulty_standard", "question_count", "multiple_choice_count", "training_context", "reference_knowledge", "excluded_questions"]
   },
   "tutoring_feedback": {
     "version": "1.0.0",

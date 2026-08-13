@@ -28,10 +28,12 @@ def get_projects(
     page_size: int = Query(20, ge=1, le=100),
     status: Optional[str] = Query(None),
     keyword: Optional[str] = Query(None),
+    position_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> BaseResponse:
-    return TrainingService.get_project_list(db, page, page_size, status, keyword)
+    is_staff = current_user.role in (UserRoleEnum.ADMIN.value, UserRoleEnum.TEACHER.value)
+    return TrainingService.get_project_list(db, page, page_size, status, keyword, position_id, is_staff=is_staff)
 
 
 @router.post("/training-projects", summary="创建培训项目")
@@ -49,7 +51,8 @@ def get_project_detail(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> BaseResponse:
-    return TrainingService.get_project_by_id(db, project_id)
+    is_staff = current_user.role in (UserRoleEnum.ADMIN.value, UserRoleEnum.TEACHER.value)
+    return TrainingService.get_project_by_id(db, project_id, is_staff=is_staff)
 
 
 @router.put("/training-projects/{project_id}", summary="更新培训项目")
@@ -78,7 +81,19 @@ def enroll(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> BaseResponse:
-    return TrainingService.enroll(db, project_id, current_user.user_id, data.learner_id)
+    is_staff = current_user.role in (UserRoleEnum.ADMIN.value, UserRoleEnum.TEACHER.value)
+    return TrainingService.enroll(db, project_id, current_user.user_id, data.learner_id, is_staff=is_staff)
+
+
+@router.get("/training-projects/{project_id}/enrollment", summary="查询当前用户报名状态")
+def get_enrollment(
+    project_id: int,
+    learner_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> BaseResponse:
+    is_staff = current_user.role in (UserRoleEnum.ADMIN.value, UserRoleEnum.TEACHER.value)
+    return TrainingService.get_enrollment(db, project_id, current_user.user_id, learner_id, is_staff=is_staff)
 
 
 @router.get("/training-projects/{project_id}/enrollments", summary="项目学员列表")
@@ -113,7 +128,8 @@ def get_plan(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> BaseResponse:
-    return TrainingService.get_plan(db, enrollment_id)
+    is_staff = current_user.role in (UserRoleEnum.ADMIN.value, UserRoleEnum.TEACHER.value)
+    return TrainingService.get_plan(db, enrollment_id, current_user.user_id, is_staff=is_staff)
 
 
 @router.put("/training-plans/{plan_id}/progress", summary="更新学习进度")
@@ -123,13 +139,15 @@ def update_progress(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> BaseResponse:
-    return TrainingService.update_progress(db, plan_id, data.completed_stages)
+    is_staff = current_user.role in (UserRoleEnum.ADMIN.value, UserRoleEnum.TEACHER.value)
+    return TrainingService.update_progress(db, plan_id, data.completed_stages, current_user.user_id, is_staff=is_staff)
 
 
 @router.post("/training-enrollments/{enrollment_id}/complete", summary="完成培训")
 def complete_enrollment(
     enrollment_id: int,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_teacher),
+    current_user: CurrentUser = Depends(get_current_user),
 ) -> BaseResponse:
-    return TrainingService.complete_enrollment(db, enrollment_id)
+    is_staff = current_user.role in (UserRoleEnum.ADMIN.value, UserRoleEnum.TEACHER.value)
+    return TrainingService.complete_enrollment(db, enrollment_id, current_user.user_id, is_staff=is_staff)

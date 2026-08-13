@@ -214,6 +214,7 @@ class GenerateTutoringQuestionsRequest(BaseModel):
 
     assessment_mode: Literal["practice", "batch_practice"] = Field("practice", description="assessment mode")
     session_id: Optional[str] = Field(None, description="batch session id", max_length=100)
+    training_context: Optional[Dict[str, Any]] = Field(None, description="岗位培训阶段上下文")
 
 
 class SubmitAnswerRequest(BaseModel):

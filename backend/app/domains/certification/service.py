@@ -16,6 +16,7 @@ from app.domains.certification.schemas import (
     CertificationRuleCreate, CertificationApplyRequest,
 )
 from app.domains.position.models import Position, Competency, PositionCompetency
+from app.domains.learner.models import LearnerProfile
 from app.domains.assessment.models import (
     AssessmentTemplate, AssessmentRecord, CompetencyScore,
     AssessmentStatusEnum,
@@ -23,6 +24,7 @@ from app.domains.assessment.models import (
 from app.schemas.response import (
     success as _success,
     bad_request as _bad_request,
+    forbidden as _forbidden,
     not_found as _not_found,
 )
 from app.utils.logger import LoggerUtil
@@ -39,6 +41,10 @@ def success(data: Any = None, message: str = "操作成功") -> Dict[str, Any]:
 
 def bad_request(message: str = "请求参数错误", data: Any = None) -> Dict[str, Any]:
     return _unwrap(_bad_request(message=message, data=data))
+
+
+def forbidden(message: str = "禁止访问") -> Dict[str, Any]:
+    return _unwrap(_forbidden(message=message))
 
 
 def not_found(message: str = "资源不存在") -> Dict[str, Any]:
@@ -116,6 +122,12 @@ class CertificationService:
         if not cert:
             return not_found(message="认证不存在")
         update_data = data.model_dump(exclude_unset=True)
+        if update_data.get("is_active") is True:
+            has_rules = db.query(CertificationRule).filter(
+                CertificationRule.certification_id == cert_id,
+            ).first()
+            if not has_rules:
+                return bad_request(message="认证尚未配置发证规则，不能启用")
         for key, value in update_data.items():
             setattr(cert, key, value)
         db.commit()
@@ -127,6 +139,11 @@ class CertificationService:
         cert = db.query(Certification).filter(Certification.id == cert_id).first()
         if not cert:
             return not_found(message="认证不存在")
+        has_records = db.query(CertificationRecord).filter(
+            CertificationRecord.certification_id == cert_id,
+        ).first()
+        if has_records:
+            return bad_request(message="认证已有申请或发证记录，不能删除，请停用认证")
         db.delete(cert)
         db.commit()
         return success(message="删除成功")
@@ -185,12 +202,22 @@ class CertificationService:
     # ===========================================
 
     @staticmethod
-    def apply_for_certification(db: Session, user_id: int, data: CertificationApplyRequest) -> Dict[str, Any]:
+    def apply_for_certification(
+        db: Session, user_id: int, data: CertificationApplyRequest, is_staff: bool = False,
+    ) -> Dict[str, Any]:
         cert = db.query(Certification).filter(Certification.id == data.certification_id).first()
         if not cert:
             return not_found(message="认证不存在")
         if not cert.is_active:
             return bad_request(message="认证已停用")
+
+        learner = db.query(LearnerProfile).filter(
+            LearnerProfile.id == data.learner_id,
+        ).first()
+        if not learner:
+            return not_found(message="学习者不存在")
+        if not is_staff and learner.user_id != user_id:
+            return forbidden(message="只能为当前学习者申请认证")
 
         record = db.query(AssessmentRecord).filter(
             AssessmentRecord.id == data.assessment_record_id
@@ -200,17 +227,55 @@ class CertificationService:
         if record.status != AssessmentStatusEnum.COMPLETED.value:
             return bad_request(message="评估尚未完成，无法申请认证")
 
+        if record.user_id != learner.user_id:
+            return forbidden(message="评估记录不属于所选学习者")
+        if record.learner_id != learner.id:
+            return forbidden(message="评估记录不属于所选学习者")
+
         # 评估记录的岗位需与认证岗位匹配
         if record.position_id != cert.position_id:
             return bad_request(message="评估记录的岗位与认证岗位不匹配")
 
+        rules = db.query(CertificationRule).filter(
+            CertificationRule.certification_id == cert.id,
+        ).all()
+        if not rules:
+            return bad_request(message="认证尚未配置发证规则，暂不能申请")
+
+        existing_pending = db.query(CertificationRecord).filter(
+            CertificationRecord.certification_id == cert.id,
+            CertificationRecord.learner_id == learner.id,
+            CertificationRecord.status == CertificationStatusEnum.PENDING.value,
+        ).first()
+        if existing_pending:
+            return bad_request(message="该学习者已有待审核的认证申请")
+
+        existing_assessment = db.query(CertificationRecord).filter(
+            CertificationRecord.certification_id == cert.id,
+            CertificationRecord.learner_id == learner.id,
+            CertificationRecord.assessment_record_id == record.id,
+        ).first()
+        if existing_assessment:
+            return bad_request(message="该评估记录已用于此认证，不能重复申请")
+
+        now = datetime.now()
+        existing_approved = db.query(CertificationRecord).filter(
+            CertificationRecord.certification_id == cert.id,
+            CertificationRecord.learner_id == learner.id,
+            CertificationRecord.status == CertificationStatusEnum.APPROVED.value,
+        ).all()
+        if any(item.expires_at is None or item.expires_at > now for item in existing_approved):
+            return bad_request(message="该学习者已有有效的认证证书")
+
         # 自动评估规则
         evaluation = CertificationService._evaluate_rules(db, cert.id, record.id)
+        if not evaluation.get("passed", False):
+            return bad_request(message="当前评估结果未满足认证规则，暂不具备申请资格", data=evaluation)
 
         cert_record = CertificationRecord(
             certification_id=data.certification_id,
-            user_id=user_id,
-            learner_id=data.learner_id,
+            user_id=learner.user_id,
+            learner_id=learner.id,
             assessment_record_id=data.assessment_record_id,
             status=CertificationStatusEnum.PENDING.value,
             rule_evaluation=evaluation,
@@ -223,11 +288,15 @@ class CertificationService:
     @staticmethod
     def get_record_list(
         db: Session, page: int = 1, page_size: int = 20,
-        user_id: Optional[int] = None, status: Optional[str] = None
+        user_id: Optional[int] = None, status: Optional[str] = None,
+        learner_id: Optional[int] = None, is_staff: bool = False,
     ) -> Dict[str, Any]:
+        CertificationService._sync_expired_records(db)
         query = db.query(CertificationRecord)
         if user_id:
             query = query.filter(CertificationRecord.user_id == user_id)
+        if learner_id:
+            query = query.filter(CertificationRecord.learner_id == learner_id)
         if status:
             query = query.filter(CertificationRecord.status == status)
         total = query.count()
@@ -242,10 +311,15 @@ class CertificationService:
         })
 
     @staticmethod
-    def get_record_detail(db: Session, record_id: int) -> Dict[str, Any]:
+    def get_record_detail(
+        db: Session, record_id: int, user_id: Optional[int] = None, is_staff: bool = False,
+    ) -> Dict[str, Any]:
+        CertificationService._sync_expired_records(db)
         rec = db.query(CertificationRecord).filter(CertificationRecord.id == record_id).first()
         if not rec:
             return not_found(message="认证记录不存在")
+        if user_id is not None and not is_staff and rec.user_id != user_id:
+            return forbidden(message="无权查看此认证记录")
         result = CertificationService._record_to_response(rec)
         # 附带认证名称和评估记录信息
         cert = db.query(Certification).filter(Certification.id == rec.certification_id).first()
@@ -268,6 +342,18 @@ class CertificationService:
         evaluation = rec.rule_evaluation or {}
         if not evaluation.get("passed", False):
             return bad_request(message="规则评估未通过，无法批准")
+
+        assessment = db.query(AssessmentRecord).filter(
+            AssessmentRecord.id == rec.assessment_record_id,
+        ).first()
+        if not assessment or assessment.status != AssessmentStatusEnum.COMPLETED.value:
+            return bad_request(message="关联评估已不存在或尚未完成，无法批准")
+        current_evaluation = CertificationService._evaluate_rules(
+            db, rec.certification_id, rec.assessment_record_id,
+        )
+        if not current_evaluation.get("passed", False):
+            return bad_request(message="当前评估结果已不满足发证规则，无法批准", data=current_evaluation)
+        rec.rule_evaluation = current_evaluation
 
         # 生成证书编号
         cert_number = CertificationService._generate_certificate_number(db)
@@ -306,6 +392,51 @@ class CertificationService:
         db.refresh(rec)
         return success(data=CertificationService._record_to_response(rec), message="认证已拒绝")
 
+    @staticmethod
+    def revoke_record(
+        db: Session, record_id: int, reviewer_id: int, comment: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        rec = db.query(CertificationRecord).filter(CertificationRecord.id == record_id).first()
+        if not rec:
+            return not_found(message="认证记录不存在")
+        if rec.status != CertificationStatusEnum.APPROVED.value:
+            return bad_request(message=f"仅能撤销已批准的证书: {rec.status}")
+
+        rec.status = CertificationStatusEnum.REVOKED.value
+        rec.reviewed_by = reviewer_id
+        rec.review_comment = comment
+        db.commit()
+        db.refresh(rec)
+        return success(data=CertificationService._record_to_response(rec), message="证书已撤销")
+
+    @staticmethod
+    def verify_certificate(db: Session, certificate_number: str) -> Dict[str, Any]:
+        CertificationService._sync_expired_records(db)
+        rec = db.query(CertificationRecord).filter(
+            CertificationRecord.certificate_number == certificate_number,
+        ).first()
+        if not rec:
+            return not_found(message="证书编号不存在")
+
+        cert = db.query(Certification).filter(Certification.id == rec.certification_id).first()
+        learner = db.query(LearnerProfile).filter(LearnerProfile.id == rec.learner_id).first()
+        now = datetime.now()
+        is_valid = rec.status == CertificationStatusEnum.APPROVED.value and (
+            rec.expires_at is None or rec.expires_at > now
+        )
+        return success(data={
+            "certificate_number": rec.certificate_number,
+            "status": rec.status,
+            "is_valid": is_valid,
+            "certification_name": cert.name if cert else None,
+            "certification_code": cert.code if cert else None,
+            "certification_level": cert.level if cert else None,
+            "issuer": cert.issuer if cert else None,
+            "learner_name": learner.real_name if learner else None,
+            "issued_at": rec.issued_at.isoformat() if rec.issued_at else None,
+            "expires_at": rec.expires_at.isoformat() if rec.expires_at else None,
+        })
+
     # ===========================================
     # 规则评估引擎（私有）
     # ===========================================
@@ -318,7 +449,7 @@ class CertificationService:
         ).all()
 
         if not rules:
-            return {"passed": True, "details": [], "reason": "无规则，默认通过"}
+            return {"passed": False, "details": [], "reason": "认证未配置发证规则"}
 
         record = db.query(AssessmentRecord).filter(
             AssessmentRecord.id == assessment_record_id
@@ -378,10 +509,21 @@ class CertificationService:
 
         elif rule.rule_type == RuleTypeEnum.ALL_MANDATORY_MET.value:
             allow_gap = cfg.get("allow_gap", 0)
+            mandatory_ids = {
+                item.competency_id for item in db.query(PositionCompetency).filter(
+                    PositionCompetency.position_id == record.position_id,
+                    PositionCompetency.is_mandatory.is_(True),
+                ).all()
+            }
             scores = db.query(CompetencyScore).filter(
                 CompetencyScore.assessment_record_id == record.id,
             ).all()
-            unmet = sum(1 for cs in scores if (cs.gap or 0) > 0)
+            scores_by_competency = {score.competency_id: score for score in scores}
+            unmet = sum(
+                1 for competency_id in mandatory_ids
+                if competency_id not in scores_by_competency
+                or (scores_by_competency[competency_id].gap or 0) > 0
+            )
             passed = unmet <= allow_gap
             return {
                 "passed": passed,
@@ -430,6 +572,20 @@ class CertificationService:
         else:
             seq = 1
         return f"{prefix}{seq:06d}"
+
+    @staticmethod
+    def _sync_expired_records(db: Session) -> None:
+        now = datetime.now()
+        records = db.query(CertificationRecord).filter(
+            CertificationRecord.status == CertificationStatusEnum.APPROVED.value,
+            CertificationRecord.expires_at.isnot(None),
+            CertificationRecord.expires_at <= now,
+        ).all()
+        if not records:
+            return
+        for record in records:
+            record.status = CertificationStatusEnum.EXPIRED.value
+        db.commit()
 
     @staticmethod
     def _certification_to_response(cert: Certification) -> Dict[str, Any]:

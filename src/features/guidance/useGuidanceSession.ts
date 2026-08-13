@@ -20,6 +20,7 @@ import type {
   SubmitDataRaw,
 } from './types'
 import { mapHistoryRecord } from './types'
+import type { TrainingStageContext } from '@/types/training'
 
 interface StartSessionOptions {
   topic?: string
@@ -55,7 +56,7 @@ function normalizeRecommendation(value: GuidanceRecommendation | null | undefine
   }
 }
 
-export function useGuidanceSession(learnerId: number | null) {
+export function useGuidanceSession(learnerId: number | null, trainingContext: TrainingStageContext | null = null) {
   const [state, dispatch] = useReducer(guidanceReducer, initialGuidanceState)
   const [recommendation, setRecommendation] = useState<GuidanceRecommendation | null>(null)
   const [recommendationLoading, setRecommendationLoading] = useState(false)
@@ -233,6 +234,7 @@ export function useGuidanceSession(learnerId: number | null) {
             sessionId: options.sessionConfig.sessionId,
           }
           : {}),
+        ...(trainingContext ? { trainingContext } : {}),
       }
       const response = await coreApi.generateTutoringQuestions(request)
       const questions = response.questions ?? []
@@ -252,7 +254,7 @@ export function useGuidanceSession(learnerId: number | null) {
       dispatch({ type: 'generation_failed', error: toErrorMessage(error, '题目生成失败，请稍后重试') })
       return []
     }
-  }, [learnerId])
+  }, [learnerId, trainingContext])
 
   const startSession = useCallback(async (options: StartSessionOptions = {}) => {
     const topic = options.topic?.trim() || recommendation?.primaryTopic || undefined

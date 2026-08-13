@@ -2,7 +2,7 @@ import { http, PagedData } from '../lib/request'
 import type {
   Position, PositionDetail, Competency, PositionCompetency,
   AssessmentTemplate, AssessmentRecord, AssessmentRecordDetail, GapAnalysis,
-  Certification, CertificationRecord,
+  Certification, CertificationRecord, CertificationVerification,
   TrainingProject, TrainingEnrollment, TrainingPlan,
 } from '../types/training'
 
@@ -85,15 +85,16 @@ export const trainingApi = {
     return http.post<AssessmentTemplate>('/assessments/templates', data)
   },
 
-  startAssessment(data: { template_id: number; learner_id?: number }): Promise<AssessmentRecord> {
+  startAssessment(data: { template_id: number; learner_id: number }): Promise<AssessmentRecord> {
     return http.post<AssessmentRecord>('/assessments/start', data)
   },
 
-  listAssessmentRecords(params?: ListParams & { user_id?: number; position_id?: number; status?: string }): Promise<PagedData<AssessmentRecord>> {
+  listAssessmentRecords(params?: ListParams & { user_id?: number; learner_id?: number; position_id?: number; status?: string }): Promise<PagedData<AssessmentRecord>> {
     return http.get<PagedData<AssessmentRecord>>('/assessments/records', {
       page: params?.page ?? 1,
       page_size: params?.page_size ?? 20,
       user_id: params?.user_id,
+      learner_id: params?.learner_id,
       position_id: params?.position_id,
       status: params?.status,
     })
@@ -132,18 +133,25 @@ export const trainingApi = {
     return http.post<Certification>('/certifications', data)
   },
 
+  addCertificationRule(data: {
+    certification_id: number; rule_type: string; rule_config: Record<string, number>
+  }): Promise<unknown> {
+    return http.post<unknown>('/certifications/rules', data)
+  },
+
   applyCertification(data: {
-    certification_id: number; assessment_record_id: number; learner_id?: number
+    certification_id: number; assessment_record_id: number; learner_id: number
   }): Promise<CertificationRecord> {
     return http.post<CertificationRecord>('/certifications/apply', data)
   },
 
-  listCertificationRecords(params?: ListParams & { status?: string; user_id?: number }): Promise<PagedData<CertificationRecord>> {
+  listCertificationRecords(params?: ListParams & { status?: string; user_id?: number; learner_id?: number }): Promise<PagedData<CertificationRecord>> {
     return http.get<PagedData<CertificationRecord>>('/certifications/records/list', {
       page: params?.page ?? 1,
       page_size: params?.page_size ?? 20,
       status: params?.status,
       user_id: params?.user_id,
+      learner_id: params?.learner_id,
     })
   },
 
@@ -153,6 +161,14 @@ export const trainingApi = {
 
   rejectCertification(recordId: number, data: { comment?: string }): Promise<CertificationRecord> {
     return http.post<CertificationRecord>(`/certifications/records/${recordId}/reject`, data)
+  },
+
+  revokeCertification(recordId: number, data: { comment?: string }): Promise<CertificationRecord> {
+    return http.post<CertificationRecord>(`/certifications/records/${recordId}/revoke`, data)
+  },
+
+  verifyCertification(certificateNumber: string): Promise<CertificationVerification> {
+    return http.get<CertificationVerification>(`/certifications/verify/${encodeURIComponent(certificateNumber)}`)
   },
 
   // ============ Training 域 ============
@@ -184,6 +200,12 @@ export const trainingApi = {
 
   enrollProject(projectId: number, data: { learner_id?: number }): Promise<TrainingEnrollment> {
     return http.post<TrainingEnrollment>(`/training-projects/${projectId}/enroll`, data)
+  },
+
+  getEnrollment(projectId: number, learnerId?: number): Promise<TrainingEnrollment | null> {
+    return http.get<TrainingEnrollment | null>(`/training-projects/${projectId}/enrollment`, {
+      learner_id: learnerId,
+    })
   },
 
   listProjectEnrollments(projectId: number): Promise<PagedData<TrainingEnrollment>> {

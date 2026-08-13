@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react'
+import { useShallow } from 'zustand/react/shallow'
 import { agentApi, coreApi } from '@/api'
+import { useStore } from '@/store'
 import { useTaskSSE } from '@/hooks/useTaskSSE'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
@@ -35,6 +37,7 @@ const STAGE_LABEL: Record<string, string> = {
 }
 
 export default function EmbeddedResourceGeneration({ position, learnerId }: Props) {
+  const trainingContext = useStore(useShallow((state) => state.activeTrainingContext))
   const [topic, setTopic] = useState('')
   const [resourceType, setResourceType] = useState<string>('guide')
   const [industry, setIndustry] = useState<string>('')
@@ -47,10 +50,10 @@ export default function EmbeddedResourceGeneration({ position, learnerId }: Prop
   // 岗位变化时预填主题与行业
   useEffect(() => {
     if (position) {
-      setTopic(position.name)
+      setTopic(trainingContext?.stage.title ?? position.name)
       setIndustry(position.industry ?? '')
     }
-  }, [position])
+  }, [position, trainingContext?.stage.title])
 
   // 挂载或有 learnerId 时拉取已有资源（岗位培训场景下展示历史生成物）
   useEffect(() => {
@@ -115,6 +118,7 @@ export default function EmbeddedResourceGeneration({ position, learnerId }: Prop
         targetTopic: topic.trim(),
         resourceType,
         industry: industry || undefined,
+        ...(trainingContext ? { trainingContext } : {}),
       })
       setTaskId(result.taskId)
     } catch (err) {

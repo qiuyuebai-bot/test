@@ -8,6 +8,11 @@
 ## 难度等级（1-5）
 {difficulty_level}
 
+## 岗位培训阶段上下文
+{training_context}
+
+如果上下文非空，题目必须优先考查当前阶段目标能力，并符合目标等级，不要改为泛化的岗位知识问答。
+
 ## 本等级必须满足的命题标准
 {difficulty_standard}
 

@@ -5,6 +5,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
 from app.domains.position.models import Position, Competency, PositionCompetency
+from app.domains.learner.models import LearnerProfile
 from app.domains.assessment.models import (
     AssessmentTemplate, AssessmentRecord, CompetencyScore,
     AssessmentStatusEnum,
@@ -118,6 +119,13 @@ class TestAssessmentTemplateService:
 
 
 class TestAssessmentRecordService:
+    def _create_learner(self, db, user_id=1):
+        learner = LearnerProfile(user_id=user_id, real_name=f"学习者{user_id}")
+        db.add(learner)
+        db.commit()
+        db.refresh(learner)
+        return learner
+
     def test_start_assessment(self, db, position_with_competencies):
         pos_id, comp_ids = position_with_competencies
         tpl_result = AssessmentService.create_template(db, AssessmentTemplateCreate(
@@ -134,6 +142,21 @@ class TestAssessmentRecordService:
     def test_start_assessment_invalid_template(self, db):
         result = AssessmentService.start_assessment(db, user_id=1, template_id=999, learner_id=None)
         assert result["code"] == 404
+
+    def test_start_assessment_binds_selected_learner(self, db, position_with_competencies):
+        pos_id, comp_ids = position_with_competencies
+        learner = self._create_learner(db, user_id=7)
+        tpl_result = AssessmentService.create_template(db, AssessmentTemplateCreate(
+            position_id=pos_id,
+            name="指定学习者评估",
+            competency_configs=[{"competency_id": cid, "question_count": 3} for cid in comp_ids],
+        ))
+        result = AssessmentService.start_assessment(
+            db, user_id=99, template_id=tpl_result["data"]["id"], learner_id=learner.id,
+        )
+        assert result["code"] == 200
+        assert result["data"]["learner_id"] == learner.id
+        assert result["data"]["user_id"] == 7
 
     def test_submit_assessment(self, db, position_with_competencies):
         pos_id, comp_ids = position_with_competencies
@@ -191,6 +214,20 @@ class TestAssessmentRecordService:
         AssessmentService.start_assessment(db, user_id=2, template_id=tid)
         result = AssessmentService.get_record_list(db, page=1, page_size=10, user_id=1)
         assert result["data"]["total"] == 1
+
+    def test_get_record_list_by_learner(self, db, position_with_competencies):
+        pos_id, _ = position_with_competencies
+        learner_one = self._create_learner(db, user_id=1)
+        learner_two = self._create_learner(db, user_id=2)
+        tpl_result = AssessmentService.create_template(db, AssessmentTemplateCreate(position_id=pos_id, name="模板"))
+        tid = tpl_result["data"]["id"]
+        AssessmentService.start_assessment(db, user_id=99, template_id=tid, learner_id=learner_one.id)
+        AssessmentService.start_assessment(db, user_id=99, template_id=tid, learner_id=learner_two.id)
+        result = AssessmentService.get_record_list(
+            db, page=1, page_size=10, learner_id=learner_two.id, is_staff=True,
+        )
+        assert result["data"]["total"] == 1
+        assert result["data"]["items"][0]["learner_id"] == learner_two.id
 
 
 class TestGapAnalysisService:

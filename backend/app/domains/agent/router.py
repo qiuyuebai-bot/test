@@ -38,12 +38,18 @@ from app.models import (
     LearnerProfile,
     LearningResource,
 )
+from app.domains.training.service import TrainingService
 from app.utils.logger import LoggerUtil
 from app.utils.auth import get_current_user, CurrentUser
 from app.utils.metrics import MetricsUtil
 from app.services.metric_service import MetricService
 
 router = APIRouter(prefix="/agent", tags=["Agent协同调度"])
+
+
+def _validate_training_context(db: Session, learner_id: int, context: Optional[Dict]) -> Optional[str]:
+    """Validate client-provided training context against persisted plan data."""
+    return TrainingService.validate_training_context(db, learner_id, context)
 
 
 def _check_task_permission(db: Session, current_user: CurrentUser, task: AgentTask) -> bool:
@@ -1139,6 +1145,9 @@ def run_full_pipeline(
         if not current_user.is_admin:
             if not LearnerService.check_data_permission(db, current_user.user_id, request.learner_id):
                 return unauthorized("无权限为该学习者启动流水线")
+        context_error = _validate_training_context(db, request.learner_id, request.training_context)
+        if context_error:
+            return bad_request(context_error)
 
         # 创建任务
         task = AgentTask(
@@ -1152,6 +1161,7 @@ def run_full_pipeline(
                 "target_topic": request.target_topic,
                 "resource_type": request.resource_type,
                 "industry": request.industry,
+                "training_context": request.training_context,
             }, ensure_ascii=False),
             status="pending",
             progress=0,
@@ -1170,6 +1180,7 @@ def run_full_pipeline(
                     target_topic=request.target_topic,
                     resource_type=request.resource_type,
                     industry=request.industry,
+                    training_context=request.training_context,
                 )
             except Exception as e:
                 logger.error(f"完整流水线执行失败: task_id={task_id}, error={e}")

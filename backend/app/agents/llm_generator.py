@@ -51,9 +51,11 @@ class LLMGenerator:
         profile: Dict[str, Any],
         topic: str,
         variation_seed: str | int | None = None,
+        training_context: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         return cls._generate_resource(
-            "guide", diagnosis, knowledge, profile, topic, variation_seed=variation_seed
+            "guide", diagnosis, knowledge, profile, topic, variation_seed=variation_seed,
+            training_context=training_context,
         )
 
     @classmethod
@@ -64,9 +66,11 @@ class LLMGenerator:
         profile: Dict[str, Any],
         topic: str,
         variation_seed: str | int | None = None,
+        training_context: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         return cls._generate_resource(
-            "lecture", diagnosis, knowledge, profile, topic, variation_seed=variation_seed
+            "lecture", diagnosis, knowledge, profile, topic, variation_seed=variation_seed,
+            training_context=training_context,
         )
 
     @classmethod
@@ -81,6 +85,7 @@ class LLMGenerator:
         excluded_questions: List[str] | None = None,
         difficulty_standard: str | None = None,
         multiple_choice_count: int | None = None,
+        training_context: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         difficulty = cls._difficulty(diagnosis)
         question_count = max(1, min(10, question_count or 10))
@@ -98,6 +103,7 @@ class LLMGenerator:
                 "excluded_questions": "\n".join(
                     f"- {question[:300]}" for question in (excluded_questions or [])[:20]
                 ) or "无",
+                "training_context": json.dumps(training_context or {}, ensure_ascii=False),
             },
             temperature=0.7,
             use_cache=False,
@@ -118,6 +124,7 @@ class LLMGenerator:
         profile: Dict[str, Any],
         topic: str,
         variation_seed: str | int | None = None,
+        training_context: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         difficulty = cls._difficulty(diagnosis)
         response, _ = AIContentService.call_with_prompt_template(
@@ -130,6 +137,7 @@ class LLMGenerator:
                 "reference_knowledge": cls._reference_text(knowledge),
                 "variation_seed": variation_seed or "",
                 "variation_hint": cls._variation_hint(resource_type, variation_seed),
+                "training_context": json.dumps(training_context or {}, ensure_ascii=False),
             },
             temperature=0.7,
             use_cache=False,

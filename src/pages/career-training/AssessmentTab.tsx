@@ -18,13 +18,17 @@ const STATUS_LABEL: Record<string, string> = {
 }
 
 export default function AssessmentTab() {
-  const { positions, assessmentRecords, assessmentRecordsLoading, fetchPositions, fetchAssessmentRecords, user } = useStore(
+  const { positions, assessmentRecords, assessmentRecordsLoading, fetchPositions, fetchAssessmentRecords, learners, currentLearner, fetchLearners, setCurrentLearner, user } = useStore(
     useShallow((s) => ({
       positions: s.positions,
       assessmentRecords: s.assessmentRecords,
       assessmentRecordsLoading: s.assessmentRecordsLoading,
       fetchPositions: s.fetchPositions,
       fetchAssessmentRecords: s.fetchAssessmentRecords,
+      learners: s.learners,
+      currentLearner: s.currentLearner,
+      fetchLearners: s.fetchLearners,
+      setCurrentLearner: s.setCurrentLearner,
       user: s.user,
     })),
   )
@@ -37,12 +41,20 @@ export default function AssessmentTab() {
   const [submitting, setSubmitting] = useState(false)
   const [scoreForm, setScoreForm] = useState<Record<number, { level: number; score: number }>>({})
   const [showCreateTemplate, setShowCreateTemplate] = useState(false)
+  const [selectedLearnerId, setSelectedLearnerId] = useState<number | null>(null)
   const canEdit = user?.role === 'admin' || user?.role === 'teacher'
+  const learnerId = canEdit ? selectedLearnerId : currentLearner?.id
 
   useEffect(() => {
     void fetchPositions()
-    void fetchAssessmentRecords()
-  }, [fetchPositions, fetchAssessmentRecords])
+    void fetchLearners()
+  }, [fetchPositions, fetchLearners])
+
+  useEffect(() => {
+    if (!canEdit || learnerId) {
+      void fetchAssessmentRecords(canEdit ? { learnerId: learnerId ?? undefined } : undefined)
+    }
+  }, [canEdit, learnerId, fetchAssessmentRecords])
 
   const handleSelectPosition = async (p: Position) => {
     setSelectedPosition(p)
@@ -59,9 +71,9 @@ export default function AssessmentTab() {
   }
 
   const handleStartAssessment = async () => {
-    if (!selectedTemplate) return
+    if (!selectedTemplate || !learnerId || !canEdit) return
     try {
-      const record = await trainingApi.startAssessment({ template_id: selectedTemplate.id })
+      const record = await trainingApi.startAssessment({ template_id: selectedTemplate.id, learner_id: learnerId })
       setActiveRecord(record)
       const configs = selectedTemplate.competencyConfigs ?? selectedTemplate.competency_configs
       const initial: Record<number, { level: number; score: number }> = {}
@@ -90,7 +102,7 @@ export default function AssessmentTab() {
       const gap = await trainingApi.getGapAnalysis(activeRecord.id)
       setGapAnalysis(gap)
       setActiveRecord(null)
-      void fetchAssessmentRecords()
+      void fetchAssessmentRecords(canEdit ? { learnerId: learnerId ?? undefined } : undefined)
     } catch (err) {
       console.error('submitAssessment failed:', err)
     } finally {
@@ -117,9 +129,33 @@ export default function AssessmentTab() {
     <div className="space-y-4">
       <h2 className="text-lg font-medium text-text-primary">能力评估</h2>
 
-      {/* 步骤 1：选岗位 */}
+      {canEdit && (
+        <Card>
+          <h3 className="text-sm font-medium text-text-primary mb-2">步骤 1：选择学习者</h3>
+          <select
+            aria-label="评估学习者"
+            value={learnerId ?? ''}
+            onChange={(event) => {
+              const learner = learners.find((item) => item.id === Number(event.target.value))
+              setSelectedLearnerId(learner?.id ?? null)
+              setCurrentLearner(learner ?? null)
+              setActiveRecord(null)
+              setGapAnalysis(null)
+            }}
+            className="w-full max-w-md h-10 px-3 bg-bg-secondary border border-border rounded-input text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
+          >
+            <option value="">请选择学习者</option>
+            {learners.map((learner) => (
+              <option key={learner.id} value={learner.id}>{learner.realName}（#{learner.id}）</option>
+            ))}
+          </select>
+          {!learnerId && <p className="text-xs text-text-tertiary mt-2">选择学习者后，才能开始并录入该学习者的能力评估。</p>}
+        </Card>
+      )}
+
+      {/* 选岗位 */}
       <Card>
-        <h3 className="text-sm font-medium text-text-primary mb-2">步骤 1：选择岗位</h3>
+        <h3 className="text-sm font-medium text-text-primary mb-2">步骤 {canEdit ? '2' : '1'}：选择岗位</h3>
         <div className="flex flex-wrap gap-2">
           {positions.map((p) => (
             <button
@@ -137,11 +173,11 @@ export default function AssessmentTab() {
         </div>
       </Card>
 
-      {/* 步骤 2：选模板 */}
+      {/* 选模板 */}
       {selectedPosition && (
         <Card>
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-medium text-text-primary">步骤 2：选择评估模板</h3>
+            <h3 className="text-sm font-medium text-text-primary">步骤 {canEdit ? '3' : '2'}：选择评估模板</h3>
             {canEdit && (
               <Button size="sm" variant="secondary" onClick={() => setShowCreateTemplate(true)}>新增模板</Button>
             )}
@@ -170,9 +206,12 @@ export default function AssessmentTab() {
                   </p>
                 </div>
               ))}
-              {selectedTemplate && (
-                <Button onClick={handleStartAssessment} className="mt-2">开始评估</Button>
+              {canEdit && selectedTemplate && (
+                <Button onClick={handleStartAssessment} className="mt-2" disabled={!learnerId}>
+                  开始评估
+                </Button>
               )}
+              {!canEdit && <p className="text-xs text-text-tertiary mt-2">评估成绩由管理员或教师录入，当前账号只能查看评估结果。</p>}
             </div>
           )}
         </Card>
@@ -194,6 +233,9 @@ export default function AssessmentTab() {
                   <Badge variant="default" className="ml-2">{STATUS_LABEL[r.status] ?? r.status}</Badge>
                 </div>
                 <div className="flex items-center gap-3">
+                  {canEdit && (r.learnerId ?? r.learner_id) != null && (
+                    <span className="text-xs text-text-tertiary">学习者 #{r.learnerId ?? r.learner_id}</span>
+                  )}
                   {(r.overallScore ?? r.overall_score) != null && (
                     <span className="text-sm text-text-secondary">综合分：{r.overallScore ?? r.overall_score}</span>
                   )}

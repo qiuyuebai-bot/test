@@ -50,7 +50,7 @@ class CertificationApplyRequest(BaseModel):
     """申请认证请求"""
     certification_id: int = Field(..., description="认证ID")
     assessment_record_id: int = Field(..., description="评估记录ID")
-    learner_id: Optional[int] = Field(None, description="学习者画像ID")
+    learner_id: int = Field(..., description="学习者画像ID")
 
 
 class CertificationReviewRequest(BaseModel):

@@ -16,9 +16,11 @@ from app.domains.assessment.schemas import (
     AssessmentStartRequest, AssessmentSubmitRequest,
 )
 from app.domains.position.models import Position, Competency, PositionCompetency
+from app.domains.learner.models import LearnerProfile
 from app.schemas.response import (
     success as _success,
     bad_request as _bad_request,
+    forbidden as _forbidden,
     not_found as _not_found,
 )
 from app.utils.logger import LoggerUtil
@@ -35,6 +37,10 @@ def success(data: Any = None, message: str = "操作成功") -> Dict[str, Any]:
 
 def bad_request(message: str = "请求参数错误", data: Any = None) -> Dict[str, Any]:
     return _unwrap(_bad_request(message=message, data=data))
+
+
+def forbidden(message: str = "禁止访问") -> Dict[str, Any]:
+    return _unwrap(_forbidden(message=message))
 
 
 def not_found(message: str = "资源不存在") -> Dict[str, Any]:
@@ -136,9 +142,16 @@ class AssessmentService:
         if not tpl.is_active:
             return bad_request(message="评估模板已停用")
 
+        record_user_id = user_id
+        if learner_id is not None:
+            learner = db.query(LearnerProfile).filter(LearnerProfile.id == learner_id).first()
+            if not learner:
+                return not_found(message="学习者不存在")
+            record_user_id = learner.user_id
+
         record = AssessmentRecord(
             template_id=template_id,
-            user_id=user_id,
+            user_id=record_user_id,
             learner_id=learner_id,
             position_id=tpl.position_id,
             status=AssessmentStatusEnum.IN_PROGRESS.value,
@@ -208,21 +221,28 @@ class AssessmentService:
         return success(data=AssessmentService._record_detail_to_response(db, record), message="评估已提交")
 
     @staticmethod
-    def get_record_detail(db: Session, record_id: int) -> Dict[str, Any]:
+    def get_record_detail(
+        db: Session, record_id: int, user_id: Optional[int] = None, is_staff: bool = False,
+    ) -> Dict[str, Any]:
         record = db.query(AssessmentRecord).filter(AssessmentRecord.id == record_id).first()
         if not record:
             return not_found(message="评估记录不存在")
+        if user_id is not None and not is_staff and record.user_id != user_id:
+            return forbidden(message="无权查看此评估记录")
         return success(data=AssessmentService._record_detail_to_response(db, record))
 
     @staticmethod
     def get_record_list(
         db: Session, page: int = 1, page_size: int = 20,
         user_id: Optional[int] = None, position_id: Optional[int] = None,
-        status: Optional[str] = None
+        status: Optional[str] = None, learner_id: Optional[int] = None,
+        is_staff: bool = False,
     ) -> Dict[str, Any]:
         query = db.query(AssessmentRecord)
         if user_id:
             query = query.filter(AssessmentRecord.user_id == user_id)
+        if learner_id:
+            query = query.filter(AssessmentRecord.learner_id == learner_id)
         if position_id:
             query = query.filter(AssessmentRecord.position_id == position_id)
         if status:
@@ -241,10 +261,14 @@ class AssessmentService:
     # ===========================================
 
     @staticmethod
-    def get_gap_analysis(db: Session, record_id: int) -> Dict[str, Any]:
+    def get_gap_analysis(
+        db: Session, record_id: int, user_id: Optional[int] = None, is_staff: bool = False,
+    ) -> Dict[str, Any]:
         record = db.query(AssessmentRecord).filter(AssessmentRecord.id == record_id).first()
         if not record:
             return not_found(message="评估记录不存在")
+        if user_id is not None and not is_staff and record.user_id != user_id:
+            return forbidden(message="无权查看此评估结果")
         if record.status != AssessmentStatusEnum.COMPLETED.value:
             return bad_request(message="评估尚未完成，无法生成差距分析")
 

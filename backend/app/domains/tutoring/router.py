@@ -18,6 +18,7 @@ from app.schemas.response import (
 )
 from app.schemas.core import GenerateTutoringQuestionsRequest, SubmitAnswerRequest
 from app.services.tutoring_service import AdaptiveTutoringService
+from app.domains.training.service import TrainingService
 from app.domains.learner.service import LearnerService
 from app.models import LearnerProfile, AnswerRecord
 from app.utils.logger import LoggerUtil
@@ -71,6 +72,9 @@ def generate_tutoring_questions(
     """生成服务端保存的练习题；浏览器不会收到正确答案。"""
     if not current_user.is_admin and not LearnerService.check_data_permission(db, current_user.user_id, request.learner_id):
         return unauthorized("无权限为该学习者生成题目")
+    context_error = TrainingService.validate_training_context(db, request.learner_id, request.training_context)
+    if context_error:
+        return bad_request(context_error)
     try:
         questions = AdaptiveTutoringService.generate_dynamic_questions(
             current_user.user_id,
@@ -81,6 +85,7 @@ def generate_tutoring_questions(
             request.replace_pending,
             assessment_mode=request.assessment_mode,
             session_id=request.session_id,
+            training_context=request.training_context,
         )
         return success(data={"questions": questions, "generation_method": questions[0].get("generationMethod", "deterministic_fallback") if questions else "deterministic_fallback"})
     except ValueError as e:

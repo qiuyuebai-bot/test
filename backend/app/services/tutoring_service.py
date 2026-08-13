@@ -377,6 +377,7 @@ class AdaptiveTutoringService(BaseService):
         ability_dimension: Optional[str] = None,
         diagnostic_session_id: Optional[str] = None,
         session_id: Optional[str] = None,
+        training_context: Optional[Dict[str, Any]] = None,
     ) -> List[Dict[str, Any]]:
         """Issue server-owned questions; answer keys never leave this service."""
         if assessment_mode == "batch_practice" and not session_id:
@@ -426,6 +427,7 @@ class AdaptiveTutoringService(BaseService):
                     knowledge,
                     variation_seed=f"{learner_id}-{normalized_topic}-{uuid.uuid4().hex}",
                     excluded_questions=excluded_questions,
+                    training_context=training_context,
                 )
             except Exception as exc:
                 logger.warning(f"[自适应导学] LLM 动态出题失败，使用题库兜底: {exc}")

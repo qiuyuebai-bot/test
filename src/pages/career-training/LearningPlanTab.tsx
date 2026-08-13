@@ -21,7 +21,7 @@ const PROJECT_STATUS_LABEL: Record<string, string> = {
 }
 
 export default function LearningPlanTab() {
-  const { trainingProjects, trainingProjectsLoading, assessmentRecords, fetchTrainingProjects, fetchAssessmentRecords, positions, certifications, fetchPositions, fetchCertifications, user } = useStore(
+  const { trainingProjects, trainingProjectsLoading, assessmentRecords, fetchTrainingProjects, fetchAssessmentRecords, positions, certifications, fetchPositions, fetchCertifications, learners, currentLearner, fetchLearners, setCurrentLearner, setTrainingContext, clearTrainingContext, user } = useStore(
     useShallow((s) => ({
       trainingProjects: s.trainingProjects,
       trainingProjectsLoading: s.trainingProjectsLoading,
@@ -32,6 +32,12 @@ export default function LearningPlanTab() {
       certifications: s.certifications,
       fetchPositions: s.fetchPositions,
       fetchCertifications: s.fetchCertifications,
+      learners: s.learners,
+      currentLearner: s.currentLearner,
+      fetchLearners: s.fetchLearners,
+      setCurrentLearner: s.setCurrentLearner,
+      setTrainingContext: s.setTrainingContext,
+      clearTrainingContext: s.clearTrainingContext,
       user: s.user,
     })),
   )
@@ -42,48 +48,86 @@ export default function LearningPlanTab() {
   const [showAssessmentPicker, setShowAssessmentPicker] = useState(false)
   const [showCreateProject, setShowCreateProject] = useState(false)
   const [selectedAssessmentRecord, setSelectedAssessmentRecord] = useState<AssessmentRecord | null>(null)
+  const [selectedStageNumber, setSelectedStageNumber] = useState(1)
   const canEdit = user?.role === 'admin' || user?.role === 'teacher'
+  const learnerId = currentLearner?.id
+  const currentUserId = user?.userId ?? (user as { id?: number } | null)?.id
 
   useEffect(() => {
     void fetchTrainingProjects()
     void fetchAssessmentRecords()
+    void fetchLearners()
     if (canEdit) {
       void fetchPositions()
       void fetchCertifications()
     }
-  }, [fetchTrainingProjects, fetchAssessmentRecords, fetchPositions, fetchCertifications, canEdit])
+  }, [fetchTrainingProjects, fetchAssessmentRecords, fetchPositions, fetchCertifications, fetchLearners, canEdit])
 
   const handleSelectProject = async (p: TrainingProject) => {
     setSelectedProject(p)
     setEnrollment(null)
     setPlan(null)
+    setSelectedAssessmentRecord(null)
+    setSelectedStageNumber(1)
+    clearTrainingContext()
     try {
-      const enroll = await trainingApi.enrollProject(p.id, {})
-      setEnrollment(enroll)
+      const existingEnrollment = await trainingApi.getEnrollment(p.id, learnerId)
+      if (!existingEnrollment) return
+      setEnrollment(existingEnrollment)
       try {
-        const existingPlan = await trainingApi.getPlan(enroll.id)
+        const existingPlan = await trainingApi.getPlan(existingEnrollment.id)
         if (existingPlan) {
           setPlan(existingPlan)
+          syncTrainingContext(existingPlan, 1, p, existingEnrollment)
           return
         }
       } catch {
         // 尚未生成计划
       }
-      // 无已有计划，尝试用已完成评估记录自动生成
-      const completedRecord = assessmentRecords.find((r) => r.status === 'completed')
-      if (completedRecord) {
-        try {
-          const newPlan = await trainingApi.generatePlan(enroll.id, {
-            assessment_record_id: completedRecord.id,
-          })
-          setPlan(newPlan)
-        } catch (err) {
-          console.error('auto generatePlan failed:', err)
-          // 自动生成失败时静默，用户可手动选择评估记录生成
-        }
-      }
     } catch (err) {
-      console.error('enrollProject failed:', err)
+      console.error('getEnrollment failed:', err)
+    }
+  }
+
+  const syncTrainingContext = (
+    nextPlan: TrainingPlan,
+    stageNumber: number,
+    project: TrainingProject,
+    nextEnrollment: TrainingEnrollment,
+  ) => {
+    const stages = nextPlan.planContent ?? nextPlan.plan_content ?? []
+    const stage = stages.find((item) => item.stage === stageNumber) ?? stages[0]
+    if (!stage) return
+    setSelectedStageNumber(stage.stage)
+    setTrainingContext({
+      projectId: project.id,
+      enrollmentId: nextEnrollment.id,
+      planId: nextPlan.id,
+      positionId: project.positionId ?? project.position_id,
+      learnerId: nextEnrollment.learnerId ?? nextEnrollment.learner_id,
+      assessmentRecordId: nextPlan.assessmentRecordId ?? nextPlan.assessment_record_id,
+      stage,
+    })
+  }
+
+  const handleEnroll = async () => {
+    if (!selectedProject) return
+    if (canEdit && !learnerId) {
+      toast.warning('请先选择学习者', '为他人报名时需要先指定学习者画像')
+      return
+    }
+    setBusy(true)
+    try {
+      const nextEnrollment = await trainingApi.enrollProject(selectedProject.id, {
+        learner_id: learnerId,
+      })
+      setEnrollment(nextEnrollment)
+      toast.success('报名成功', '现在可以选择匹配的评估记录生成计划')
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : '报名失败，请稍后重试'
+      toast.error('报名失败', msg)
+    } finally {
+      setBusy(false)
     }
   }
 
@@ -98,6 +142,7 @@ export default function LearningPlanTab() {
         assessment_record_id: selectedAssessmentRecord.id,
       })
       setPlan(newPlan)
+      if (selectedProject && enrollment) syncTrainingContext(newPlan, 1, selectedProject, enrollment)
       setShowAssessmentPicker(false)
       toast.success('计划已生成', '学习计划已根据评估结果生成')
     } catch (err) {
@@ -109,11 +154,28 @@ export default function LearningPlanTab() {
     }
   }
 
+  const handlePublishProject = async () => {
+    if (!selectedProject || selectedProject.status !== 'draft') return
+    setBusy(true)
+    try {
+      const published = await trainingApi.updateTrainingProject(selectedProject.id, { status: 'active' })
+      setSelectedProject(published)
+      await fetchTrainingProjects()
+      toast.success('项目已发布', '学习者现在可以报名该培训项目')
+    } catch (err) {
+      const msg = err instanceof ApiError ? err.message : '发布失败，请稍后重试'
+      toast.error('发布失败', msg)
+    } finally {
+      setBusy(false)
+    }
+  }
+
   const handleUpdateProgress = async (completedStages: number) => {
     if (!plan) return
     try {
       const updated = await trainingApi.updateProgress(plan.id, { completed_stages: completedStages })
       setPlan(updated)
+      if (selectedProject && enrollment) syncTrainingContext(updated, Math.min(completedStages + 1, updated.totalStages ?? updated.total_stages), selectedProject, enrollment)
     } catch (err) {
       console.error('updateProgress failed:', err)
     }
@@ -128,6 +190,18 @@ export default function LearningPlanTab() {
       console.error('completeTraining failed:', err)
     }
   }
+
+  const matchingAssessmentRecords = selectedProject && enrollment
+    ? assessmentRecords.filter((record) => {
+      if (record.status !== 'completed') return false
+      const recordPositionId = record.positionId ?? record.position_id
+      if (recordPositionId !== (selectedProject.positionId ?? selectedProject.position_id)) return false
+      const recordLearnerId = record.learnerId ?? record.learner_id
+      const enrollmentLearnerId = enrollment.learnerId ?? enrollment.learner_id
+      if (enrollmentLearnerId != null) return recordLearnerId === enrollmentLearnerId
+      return recordLearnerId == null && (record.userId ?? record.user_id) === currentUserId
+    })
+    : []
 
   if (trainingProjectsLoading && trainingProjects.length === 0) return <LoadingState />
   if (trainingProjects.length === 0) {
@@ -158,9 +232,23 @@ export default function LearningPlanTab() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-medium text-text-primary">学习计划</h2>
-        {canEdit && (
-          <Button size="sm" variant="secondary" onClick={() => setShowCreateProject(true)}>新增培训项目</Button>
-        )}
+        <div className="flex items-center gap-2">
+          {canEdit && learners.length > 0 && (
+            <select
+              aria-label="当前学习者"
+              value={learnerId ?? ''}
+              onChange={(event) => {
+                const learner = learners.find((item) => item.id === Number(event.target.value))
+                if (learner) setCurrentLearner(learner)
+              }}
+              className="h-9 px-2 border border-border rounded-input bg-bg-secondary text-sm"
+            >
+              <option value="">选择学习者</option>
+              {learners.map((learner) => <option key={learner.id} value={learner.id}>{learner.realName}</option>)}
+            </select>
+          )}
+          {canEdit && <Button size="sm" variant="secondary" onClick={() => setShowCreateProject(true)}>新增培训项目</Button>}
+        </div>
       </div>
 
       {/* 项目列表 */}
@@ -189,15 +277,32 @@ export default function LearningPlanTab() {
       {selectedProject && (
         <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <Button variant="ghost" size="sm" onClick={() => { setSelectedProject(null); setPlan(null) }}>← 返回</Button>
+            <Button variant="ghost" size="sm" onClick={() => { setSelectedProject(null); setEnrollment(null); setPlan(null); setSelectedAssessmentRecord(null); clearTrainingContext() }}>← 返回</Button>
             <h3 className="text-base font-medium text-text-primary">{selectedProject.name}</h3>
+            {canEdit && selectedProject.status === 'draft' && (
+              <Button size="sm" onClick={handlePublishProject} loading={busy}>发布项目</Button>
+            )}
           </div>
 
           {!plan && (
             <Card>
               <div className="text-center py-6">
-                <p className="text-sm text-text-secondary mb-3">尚未生成学习计划</p>
-                <Button onClick={() => setShowAssessmentPicker(true)}>选择评估记录并生成计划</Button>
+                {selectedProject.status === 'draft' ? (
+                  <>
+                    <p className="text-sm text-text-secondary mb-3">该培训项目尚未发布，发布后学习者可报名</p>
+                    {canEdit && <Button onClick={handlePublishProject} loading={busy}>发布项目</Button>}
+                  </>
+                ) : !enrollment ? (
+                  <>
+                    <p className="text-sm text-text-secondary mb-3">尚未报名该培训项目</p>
+                    <Button onClick={handleEnroll} loading={busy} disabled={canEdit && !learnerId}>报名培训项目</Button>
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-text-secondary mb-3">已报名，选择同岗位的已完成评估生成学习计划</p>
+                    <Button onClick={() => setShowAssessmentPicker(true)}>选择评估记录并生成计划</Button>
+                  </>
+                )}
               </div>
             </Card>
           )}
@@ -214,10 +319,13 @@ export default function LearningPlanTab() {
               <PlanTimeline
                 stages={plan.planContent ?? plan.plan_content}
                 completedStages={plan.completedStages ?? plan.completed_stages}
-                onStageClick={(stage) => handleUpdateProgress(stage)}
+                onStageClick={(stage) => {
+                  setSelectedStageNumber(stage)
+                  if (selectedProject && enrollment) syncTrainingContext(plan, stage, selectedProject, enrollment)
+                }}
               />
               <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-border">
-                {(plan.completedStages ?? plan.completed_stages) < (plan.totalStages ?? plan.total_stages) && (
+            {selectedStageNumber === (plan.completedStages ?? plan.completed_stages) + 1 && (plan.completedStages ?? plan.completed_stages) < (plan.totalStages ?? plan.total_stages) && (
                   <Button variant="secondary" size="sm" onClick={() => handleUpdateProgress((plan.completedStages ?? plan.completed_stages) + 1)}>
                     标记下一阶段完成
                   </Button>
@@ -243,12 +351,12 @@ export default function LearningPlanTab() {
       >
         <h3 className="text-lg font-semibold text-text-primary mb-4 pr-8">选择评估记录</h3>
         <div className="space-y-2">
-          {assessmentRecords.filter((r) => r.status === 'completed').length === 0 ? (
+          {matchingAssessmentRecords.length === 0 ? (
             <p className="text-sm text-text-tertiary py-4 text-center">
               暂无已完成的评估记录。请先到"能力评估"完成一次评估，再来生成学习计划。
             </p>
           ) : (
-            assessmentRecords.filter((r) => r.status === 'completed').map((r) => (
+            matchingAssessmentRecords.map((r) => (
               <div
                 key={r.id}
                 className={`p-3 border rounded-lg cursor-pointer transition-colors ${
@@ -268,7 +376,7 @@ export default function LearningPlanTab() {
             <Button
               onClick={handleGeneratePlan}
               loading={busy}
-              disabled={!selectedAssessmentRecord || assessmentRecords.filter((r) => r.status === 'completed').length === 0}
+              disabled={!selectedAssessmentRecord || matchingAssessmentRecords.length === 0}
               title={!selectedAssessmentRecord ? '请先选择一条评估记录' : undefined}
             >
               生成计划

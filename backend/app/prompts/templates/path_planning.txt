@@ -5,4 +5,4 @@
 {learner_context}
 
 输出 JSON：
-{{"nodes": [{{"name": "阶段名称", "difficulty": 1-5, "estimated_time": "2小时", "resources": [{{"resource_id": 1}}], "description": "学习目标", "depends_on": ["前置阶段名称"]}}]}}
+{{"nodes": [{{"name": "阶段名称", "competency_ids": [1], "difficulty": 1-5, "estimated_time": "2小时", "resources": [{{"resource_id": 1}}], "description": "学习目标", "depends_on": ["前置阶段名称"]}}]}}

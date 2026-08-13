@@ -201,6 +201,11 @@ export interface Certification {
   is_active: boolean
   created_at: string
   updated_at: string
+  positionId?: number
+  validityPeriodMonths?: number
+  isActive?: boolean
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface CertificationRecord {
@@ -217,6 +222,38 @@ export interface CertificationRecord {
   review_comment?: string
   created_at: string
   updated_at: string
+  certificationId?: number
+  userId?: number
+  learnerId?: number
+  assessmentRecordId?: number
+  certificateNumber?: string
+  issuedAt?: string
+  expiresAt?: string
+  reviewedBy?: number
+  reviewComment?: string
+  createdAt?: string
+  updatedAt?: string
+}
+
+export interface CertificationVerification {
+  certificate_number?: string
+  status: string
+  is_valid?: boolean
+  certification_name?: string
+  certification_code?: string
+  certification_level?: string
+  issuer?: string
+  learner_name?: string
+  issued_at?: string
+  expires_at?: string
+  certificateNumber?: string
+  isValid?: boolean
+  certificationName?: string
+  certificationCode?: string
+  certificationLevel?: string
+  learnerName?: string
+  issuedAt?: string
+  expiresAt?: string
 }
 
 // ============ Training 域 ============
@@ -284,6 +321,16 @@ export interface PlanStage {
   competencyIds?: number[]
   estimatedHours?: number
   targetLevel?: number
+}
+
+export interface TrainingStageContext {
+  projectId: number
+  enrollmentId: number
+  planId: number
+  positionId: number
+  learnerId?: number
+  assessmentRecordId?: number
+  stage: PlanStage
 }
 
 export interface TrainingPlan {

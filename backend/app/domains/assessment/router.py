@@ -12,6 +12,7 @@ from app.domains.assessment.schemas import (
     AssessmentStartRequest, AssessmentSubmitRequest,
 )
 from app.domains.assessment.service import AssessmentService
+from app.models.user import UserRoleEnum
 from app.utils.auth import get_current_user, CurrentUser, require_teacher
 
 router = APIRouter(prefix="/assessments", tags=["能力评估"])
@@ -78,7 +79,7 @@ def delete_template(
 def start_assessment(
     data: AssessmentStartRequest,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_teacher),
 ) -> BaseResponse:
     return AssessmentService.start_assessment(db, current_user.user_id, data.template_id, data.learner_id)
 
@@ -90,10 +91,17 @@ def get_records(
     user_id: Optional[int] = Query(None),
     position_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
+    learner_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> BaseResponse:
-    return AssessmentService.get_record_list(db, page, page_size, user_id, position_id, status)
+    is_staff = current_user.role in (UserRoleEnum.ADMIN.value, UserRoleEnum.TEACHER.value)
+    if not is_staff:
+        user_id = current_user.user_id
+        learner_id = None
+    return AssessmentService.get_record_list(
+        db, page, page_size, user_id, position_id, status, learner_id, is_staff=is_staff,
+    )
 
 
 @router.get("/records/{record_id}", summary="评估记录详情（含评分明细）")
@@ -102,7 +110,8 @@ def get_record_detail(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> BaseResponse:
-    return AssessmentService.get_record_detail(db, record_id)
+    is_staff = current_user.role in (UserRoleEnum.ADMIN.value, UserRoleEnum.TEACHER.value)
+    return AssessmentService.get_record_detail(db, record_id, current_user.user_id, is_staff=is_staff)
 
 
 @router.post("/records/{record_id}/submit", summary="提交评估答案")
@@ -110,7 +119,7 @@ def submit_assessment(
     record_id: int,
     data: AssessmentSubmitRequest,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
+    current_user: CurrentUser = Depends(require_teacher),
 ) -> BaseResponse:
     return AssessmentService.submit_assessment(db, record_id, data)
 
@@ -121,4 +130,5 @@ def get_gap_analysis(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> BaseResponse:
-    return AssessmentService.get_gap_analysis(db, record_id)
+    is_staff = current_user.role in (UserRoleEnum.ADMIN.value, UserRoleEnum.TEACHER.value)
+    return AssessmentService.get_gap_analysis(db, record_id, current_user.user_id, is_staff=is_staff)

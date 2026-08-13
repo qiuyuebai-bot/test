@@ -73,12 +73,15 @@ const defaults: State = {
   certificationRecordsLoading: false,
   trainingProjects: [],
   trainingProjectsLoading: false,
+  activeTrainingContext: null,
   fetchPositions: () => Promise.resolve(),
   fetchCompetencies: () => Promise.resolve(),
   fetchAssessmentRecords: () => Promise.resolve(),
   fetchCertifications: () => Promise.resolve(),
   fetchCertificationRecords: () => Promise.resolve(),
   fetchTrainingProjects: () => Promise.resolve(),
+  setTrainingContext: () => {},
+  clearTrainingContext: () => {},
 }
 
 export const mockStoreState: State = { ...defaults }

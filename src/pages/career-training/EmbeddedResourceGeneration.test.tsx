@@ -58,6 +58,8 @@ describe('EmbeddedResourceGeneration', () => {
   beforeEach(() => {
     resetMockStore()
     vi.clearAllMocks()
+    vi.mocked(agentApi.runFullPipeline).mockResolvedValue({ taskId: 42 })
+    vi.mocked(coreApi.getResourceList).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20, totalPages: 0 })
     vi.mocked(useTaskSSE).mockReturnValue({
       events: [],
       currentStage: null,

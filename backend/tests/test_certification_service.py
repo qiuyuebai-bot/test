@@ -6,6 +6,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.database import Base
 from app.domains.position.models import Position, Competency, PositionCompetency
+from app.domains.learner.models import LearnerProfile
 from app.domains.assessment.models import (
     AssessmentTemplate, AssessmentRecord, CompetencyScore,
     AssessmentStatusEnum,
@@ -51,6 +52,11 @@ def completed_assessment(db):
     db.add(pc)
     db.commit()
 
+    learner = LearnerProfile(user_id=1, real_name="测试学习者")
+    db.add(learner)
+    db.commit()
+    db.refresh(learner)
+
     tpl = AssessmentTemplate(position_id=pos.id, name="评估模板", pass_threshold=60.0)
     db.add(tpl)
     db.commit()
@@ -59,6 +65,7 @@ def completed_assessment(db):
     record = AssessmentRecord(
         template_id=tpl.id,
         user_id=1,
+        learner_id=learner.id,
         position_id=pos.id,
         status=AssessmentStatusEnum.COMPLETED.value,
         overall_score=80.0,
@@ -144,6 +151,18 @@ class TestCertificationCRUD:
         result = CertificationService.update_certification(db, cert_id, CertificationUpdate(name="新名称"))
         assert result["code"] == 200
         assert result["data"]["name"] == "新名称"
+
+    def test_activate_certification_requires_rules(self, db, completed_assessment):
+        pos_id, _, _ = completed_assessment
+        created = CertificationService.create_certification(db, CertificationCreate(
+            position_id=pos_id, name="待配置认证", code="U-002"
+        ))
+
+        result = CertificationService.update_certification(
+            db, created["data"]["id"], CertificationUpdate(is_active=True),
+        )
+
+        assert result["code"] == 400
 
     def test_delete_certification(self, db, completed_assessment):
         pos_id, _, _ = completed_assessment
@@ -253,19 +272,75 @@ class TestCertificationRule:
 
 
 class TestCertificationRecord:
+    def test_apply_rejects_assessment_from_another_learner(self, db, completed_assessment):
+        pos_id, _, ar_id = completed_assessment
+        other_learner = LearnerProfile(user_id=2, real_name="Other Learner")
+        db.add(other_learner)
+        db.commit()
+        db.refresh(other_learner)
+        cert = CertificationService.create_certification(db, CertificationCreate(
+            position_id=pos_id, name="Ownership Certification", code="AR-OWN-001"
+        ))
+        cert_id = cert["data"]["id"]
+        CertificationService.add_rule(db, CertificationRuleCreate(
+            certification_id=cert_id, rule_type="overall_score", rule_config={"min_score": 75}
+        ))
+
+        result = CertificationService.apply_for_certification(db, 2, CertificationApplyRequest(
+            certification_id=cert_id, assessment_record_id=ar_id, learner_id=other_learner.id
+        ))
+
+        assert result["code"] == 403
+
+    def test_apply_rejects_duplicate_assessment(self, db, completed_assessment):
+        pos_id, _, ar_id = completed_assessment
+        cert = CertificationService.create_certification(db, CertificationCreate(
+            position_id=pos_id, name="Duplicate Certification", code="AR-DUP-001"
+        ))
+        cert_id = cert["data"]["id"]
+        CertificationService.add_rule(db, CertificationRuleCreate(
+            certification_id=cert_id, rule_type="overall_score", rule_config={"min_score": 75}
+        ))
+        request = CertificationApplyRequest(
+            certification_id=cert_id, assessment_record_id=ar_id, learner_id=1
+        )
+
+        first_result = CertificationService.apply_for_certification(db, 1, request)
+        second_result = CertificationService.apply_for_certification(db, 1, request)
+
+        assert first_result["code"] == 200
+        assert second_result["code"] == 400
+
+    def test_record_detail_rejects_another_user(self, db, completed_assessment):
+        pos_id, _, ar_id = completed_assessment
+        cert = CertificationService.create_certification(db, CertificationCreate(
+            position_id=pos_id, name="Scoped Certification", code="AR-OWN-002"
+        ))
+        cert_id = cert["data"]["id"]
+        CertificationService.add_rule(db, CertificationRuleCreate(
+            certification_id=cert_id, rule_type="overall_score", rule_config={"min_score": 75}
+        ))
+        apply_result = CertificationService.apply_for_certification(db, 1, CertificationApplyRequest(
+            certification_id=cert_id, assessment_record_id=ar_id, learner_id=1
+        ))
+
+        result = CertificationService.get_record_detail(
+            db, apply_result["data"]["id"], user_id=2, is_staff=False,
+        )
+
+        assert result["code"] == 403
+
     def test_apply_with_no_rules(self, db, completed_assessment):
-        """无规则时默认通过"""
+        """无规则时不能申请"""
         pos_id, _, ar_id = completed_assessment
         cert = CertificationService.create_certification(db, CertificationCreate(
             position_id=pos_id, name="认证", code="AR-001"
         ))
         cert_id = cert["data"]["id"]
         result = CertificationService.apply_for_certification(db, 1, CertificationApplyRequest(
-            certification_id=cert_id, assessment_record_id=ar_id
+            certification_id=cert_id, assessment_record_id=ar_id, learner_id=1
         ))
-        assert result["code"] == 200
-        assert result["data"]["status"] == "pending"
-        assert result["data"]["rule_evaluation"]["passed"] is True
+        assert result["code"] == 400
 
     def test_apply_with_passing_score(self, db, completed_assessment):
         """overall_score 规则通过（得分80 >= 75）"""
@@ -278,7 +353,7 @@ class TestCertificationRecord:
             certification_id=cert_id, rule_type="overall_score", rule_config={"min_score": 75}
         ))
         result = CertificationService.apply_for_certification(db, 1, CertificationApplyRequest(
-            certification_id=cert_id, assessment_record_id=ar_id
+            certification_id=cert_id, assessment_record_id=ar_id, learner_id=1
         ))
         assert result["code"] == 200
         assert result["data"]["rule_evaluation"]["passed"] is True
@@ -294,10 +369,10 @@ class TestCertificationRecord:
             certification_id=cert_id, rule_type="overall_score", rule_config={"min_score": 90}
         ))
         result = CertificationService.apply_for_certification(db, 1, CertificationApplyRequest(
-            certification_id=cert_id, assessment_record_id=ar_id
+            certification_id=cert_id, assessment_record_id=ar_id, learner_id=1
         ))
-        assert result["code"] == 200
-        assert result["data"]["rule_evaluation"]["passed"] is False
+        assert result["code"] == 400
+        assert result["data"]["passed"] is False
 
     def test_apply_with_competency_level_pass(self, db, completed_assessment):
         """competency_level 规则通过（等级4 >= 3）"""
@@ -312,7 +387,7 @@ class TestCertificationRecord:
             rule_config={"competency_id": comp_id, "min_level": 3},
         ))
         result = CertificationService.apply_for_certification(db, 1, CertificationApplyRequest(
-            certification_id=cert_id, assessment_record_id=ar_id
+            certification_id=cert_id, assessment_record_id=ar_id, learner_id=1
         ))
         assert result["code"] == 200
         assert result["data"]["rule_evaluation"]["passed"] is True
@@ -330,7 +405,7 @@ class TestCertificationRecord:
             rule_config={"allow_gap": 0},
         ))
         result = CertificationService.apply_for_certification(db, 1, CertificationApplyRequest(
-            certification_id=cert_id, assessment_record_id=ar_id
+            certification_id=cert_id, assessment_record_id=ar_id, learner_id=1
         ))
         assert result["code"] == 200
         assert result["data"]["rule_evaluation"]["passed"] is True
@@ -348,7 +423,7 @@ class TestCertificationRecord:
         ))
         cert_id = cert["data"]["id"]
         result = CertificationService.apply_for_certification(db, 1, CertificationApplyRequest(
-            certification_id=cert_id, assessment_record_id=ar_id
+            certification_id=cert_id, assessment_record_id=ar_id, learner_id=1
         ))
         assert result["code"] == 400
 
@@ -359,8 +434,11 @@ class TestCertificationRecord:
             position_id=pos_id, name="认证", code="AP-001", validity_period_months=12
         ))
         cert_id = cert["data"]["id"]
+        CertificationService.add_rule(db, CertificationRuleCreate(
+            certification_id=cert_id, rule_type="overall_score", rule_config={"min_score": 75}
+        ))
         apply_result = CertificationService.apply_for_certification(db, 1, CertificationApplyRequest(
-            certification_id=cert_id, assessment_record_id=ar_id
+            certification_id=cert_id, assessment_record_id=ar_id, learner_id=1
         ))
         record_id = apply_result["data"]["id"]
         result = CertificationService.approve_record(db, record_id, reviewer_id=2, comment="通过")
@@ -382,11 +460,10 @@ class TestCertificationRecord:
             certification_id=cert_id, rule_type="overall_score", rule_config={"min_score": 90}
         ))
         apply_result = CertificationService.apply_for_certification(db, 1, CertificationApplyRequest(
-            certification_id=cert_id, assessment_record_id=ar_id
+            certification_id=cert_id, assessment_record_id=ar_id, learner_id=1
         ))
-        record_id = apply_result["data"]["id"]
-        result = CertificationService.approve_record(db, record_id, reviewer_id=2)
-        assert result["code"] == 400
+        assert apply_result["code"] == 400
+        assert apply_result["data"]["passed"] is False
 
     def test_reject_record(self, db, completed_assessment):
         """拒绝认证"""
@@ -395,8 +472,11 @@ class TestCertificationRecord:
             position_id=pos_id, name="认证", code="AP-003"
         ))
         cert_id = cert["data"]["id"]
+        CertificationService.add_rule(db, CertificationRuleCreate(
+            certification_id=cert_id, rule_type="overall_score", rule_config={"min_score": 75}
+        ))
         apply_result = CertificationService.apply_for_certification(db, 1, CertificationApplyRequest(
-            certification_id=cert_id, assessment_record_id=ar_id
+            certification_id=cert_id, assessment_record_id=ar_id, learner_id=1
         ))
         record_id = apply_result["data"]["id"]
         result = CertificationService.reject_record(db, record_id, reviewer_id=2, comment="不达标")
@@ -404,14 +484,63 @@ class TestCertificationRecord:
         assert result["data"]["status"] == "rejected"
         assert result["data"]["review_comment"] == "不达标"
 
+    def test_approve_rechecks_current_assessment(self, db, completed_assessment):
+        pos_id, _, ar_id = completed_assessment
+        cert = CertificationService.create_certification(db, CertificationCreate(
+            position_id=pos_id, name="Recheck Certification", code="AP-RECHECK-001"
+        ))
+        cert_id = cert["data"]["id"]
+        CertificationService.add_rule(db, CertificationRuleCreate(
+            certification_id=cert_id, rule_type="overall_score", rule_config={"min_score": 75}
+        ))
+        apply_result = CertificationService.apply_for_certification(db, 1, CertificationApplyRequest(
+            certification_id=cert_id, assessment_record_id=ar_id, learner_id=1
+        ))
+        assessment = db.query(AssessmentRecord).filter(AssessmentRecord.id == ar_id).first()
+        assessment.overall_score = 50
+        db.commit()
+
+        result = CertificationService.approve_record(db, apply_result["data"]["id"], reviewer_id=2)
+
+        assert result["code"] == 400
+
+    def test_revoke_and_verify_certificate(self, db, completed_assessment):
+        pos_id, _, ar_id = completed_assessment
+        cert = CertificationService.create_certification(db, CertificationCreate(
+            position_id=pos_id, name="Verification Certification", code="AP-VERIFY-001"
+        ))
+        cert_id = cert["data"]["id"]
+        CertificationService.add_rule(db, CertificationRuleCreate(
+            certification_id=cert_id, rule_type="overall_score", rule_config={"min_score": 75}
+        ))
+        apply_result = CertificationService.apply_for_certification(db, 1, CertificationApplyRequest(
+            certification_id=cert_id, assessment_record_id=ar_id, learner_id=1
+        ))
+        record_id = apply_result["data"]["id"]
+        approved = CertificationService.approve_record(db, record_id, reviewer_id=2)
+        certificate_number = approved["data"]["certificate_number"]
+
+        verified = CertificationService.verify_certificate(db, certificate_number)
+        revoked = CertificationService.revoke_record(db, record_id, reviewer_id=2, comment="撤销测试")
+        verified_after_revoke = CertificationService.verify_certificate(db, certificate_number)
+
+        assert verified["code"] == 200
+        assert verified["data"]["is_valid"] is True
+        assert revoked["code"] == 200
+        assert revoked["data"]["status"] == "revoked"
+        assert verified_after_revoke["data"]["is_valid"] is False
+
     def test_get_record_list(self, db, completed_assessment):
         pos_id, _, ar_id = completed_assessment
         cert = CertificationService.create_certification(db, CertificationCreate(
             position_id=pos_id, name="认证", code="AL-001"
         ))
         cert_id = cert["data"]["id"]
+        CertificationService.add_rule(db, CertificationRuleCreate(
+            certification_id=cert_id, rule_type="overall_score", rule_config={"min_score": 75}
+        ))
         CertificationService.apply_for_certification(db, 1, CertificationApplyRequest(
-            certification_id=cert_id, assessment_record_id=ar_id
+            certification_id=cert_id, assessment_record_id=ar_id, learner_id=1
         ))
         result = CertificationService.get_record_list(db, user_id=1)
         assert result["code"] == 200
@@ -423,8 +552,11 @@ class TestCertificationRecord:
             position_id=pos_id, name="详情认证", code="AD-001"
         ))
         cert_id = cert["data"]["id"]
+        CertificationService.add_rule(db, CertificationRuleCreate(
+            certification_id=cert_id, rule_type="overall_score", rule_config={"min_score": 75}
+        ))
         apply_result = CertificationService.apply_for_certification(db, 1, CertificationApplyRequest(
-            certification_id=cert_id, assessment_record_id=ar_id
+            certification_id=cert_id, assessment_record_id=ar_id, learner_id=1
         ))
         record_id = apply_result["data"]["id"]
         result = CertificationService.get_record_detail(db, record_id)

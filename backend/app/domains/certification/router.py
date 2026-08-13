@@ -13,6 +13,7 @@ from app.domains.certification.schemas import (
     CertificationReviewRequest,
 )
 from app.domains.certification.service import CertificationService
+from app.models.user import UserRoleEnum
 from app.utils.auth import get_current_user, CurrentUser, require_teacher
 
 router = APIRouter(prefix="/certifications", tags=["认证发证"])
@@ -112,7 +113,10 @@ def apply_for_certification(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> BaseResponse:
-    return CertificationService.apply_for_certification(db, current_user.user_id, data)
+    is_staff = current_user.role in (UserRoleEnum.ADMIN.value, UserRoleEnum.TEACHER.value)
+    return CertificationService.apply_for_certification(
+        db, current_user.user_id, data, is_staff=is_staff,
+    )
 
 
 @router.get("/records/list", summary="认证记录列表")
@@ -121,10 +125,17 @@ def get_records(
     page_size: int = Query(20, ge=1, le=100),
     user_id: Optional[int] = Query(None),
     status: Optional[str] = Query(None),
+    learner_id: Optional[int] = Query(None),
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> BaseResponse:
-    return CertificationService.get_record_list(db, page, page_size, user_id, status)
+    is_staff = current_user.role in (UserRoleEnum.ADMIN.value, UserRoleEnum.TEACHER.value)
+    if not is_staff:
+        user_id = current_user.user_id
+        learner_id = None
+    return CertificationService.get_record_list(
+        db, page, page_size, user_id, status, learner_id, is_staff=is_staff,
+    )
 
 
 @router.get("/records/{record_id}", summary="认证记录详情")
@@ -133,7 +144,10 @@ def get_record_detail(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
 ) -> BaseResponse:
-    return CertificationService.get_record_detail(db, record_id)
+    is_staff = current_user.role in (UserRoleEnum.ADMIN.value, UserRoleEnum.TEACHER.value)
+    return CertificationService.get_record_detail(
+        db, record_id, current_user.user_id, is_staff=is_staff,
+    )
 
 
 @router.post("/records/{record_id}/approve", summary="批准认证")
@@ -154,3 +168,21 @@ def reject_record(
     current_user: CurrentUser = Depends(require_teacher),
 ) -> BaseResponse:
     return CertificationService.reject_record(db, record_id, current_user.user_id, data.comment)
+
+
+@router.post("/records/{record_id}/revoke", summary="撤销已发证书")
+def revoke_record(
+    record_id: int,
+    data: CertificationReviewRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_teacher),
+) -> BaseResponse:
+    return CertificationService.revoke_record(db, record_id, current_user.user_id, data.comment)
+
+
+@router.get("/verify/{certificate_number}", summary="公开验真证书")
+def verify_certificate(
+    certificate_number: str,
+    db: Session = Depends(get_db),
+) -> BaseResponse:
+    return CertificationService.verify_certificate(db, certificate_number)
