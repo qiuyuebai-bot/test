@@ -68,7 +68,7 @@ export const ENDPOINTS = {
   },
   trainings: {
     method: 'GET',
-    path: '/api/v1/trainings?page=1&page_size=10',
+    path: '/api/v1/training-projects?page=1&page_size=10',
     weight: 10,
     authRequired: true,
   },

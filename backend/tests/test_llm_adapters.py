@@ -298,7 +298,7 @@ def test_generation_agent_passes_unique_variation_seed(monkeypatch):
 
     captured = {"guide": [], "exercise": [], "lecture": []}
 
-    def fake_guide(cls, diagnosis, knowledge, profile, topic, variation_seed=None):
+    def fake_guide(cls, diagnosis, knowledge, profile, topic, variation_seed=None, training_context=None):
         captured["guide"].append(variation_seed)
         return {
             "content": "guide content",
@@ -309,7 +309,7 @@ def test_generation_agent_passes_unique_variation_seed(monkeypatch):
             "source_doc_ids": [1],
         }
 
-    def fake_exercises(cls, diagnosis, knowledge, profile, topic, question_count=None, variation_seed=None):
+    def fake_exercises(cls, diagnosis, knowledge, profile, topic, question_count=None, variation_seed=None, training_context=None):
         captured["exercise"].append(variation_seed)
         return {
             "content": "exercise content",
@@ -320,7 +320,7 @@ def test_generation_agent_passes_unique_variation_seed(monkeypatch):
             "source_doc_ids": [1],
         }
 
-    def fake_lecture(cls, diagnosis, knowledge, profile, topic, variation_seed=None):
+    def fake_lecture(cls, diagnosis, knowledge, profile, topic, variation_seed=None, training_context=None):
         captured["lecture"].append(variation_seed)
         return {
             "content": "lecture content",
