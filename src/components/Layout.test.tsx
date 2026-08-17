@@ -27,7 +27,6 @@ describe('Layout navigation', () => {
     expect(screen.queryByText('隐私合规')).not.toBeInTheDocument()
     expect(screen.queryByText('部署说明')).not.toBeInTheDocument()
     expect(screen.getAllByText('运行监控').length).toBeGreaterThan(0)
-    // 新增：就业培训入口可见
     expect(screen.getAllByRole('link', { name: '就业培训' }).length).toBeGreaterThan(0)
   })
 
@@ -66,5 +65,6 @@ describe('Layout navigation', () => {
     expect(navigation.queryByRole('link', { name: '多智能体' })).not.toBeInTheDocument()
     expect(navigation.queryByRole('link', { name: '量化指标' })).not.toBeInTheDocument()
     expect(navigation.queryByRole('link', { name: '运行监控' })).not.toBeInTheDocument()
+    expect(navigation.queryByRole('link', { name: '就业培训' })).not.toBeInTheDocument()
   })
 })

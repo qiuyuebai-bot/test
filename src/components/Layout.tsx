@@ -28,6 +28,7 @@ type NavigationItem = {
   name: string
   href: string
   icon: LucideIcon
+  adminOnly?: boolean
 }
 
 type NavigationGroup = {
@@ -54,7 +55,7 @@ const navigationGroups: NavigationGroup[] = [
       { name: '自适应导学', href: '/guidance', icon: GraduationCap },
       { name: '资源生成', href: '/resources', icon: FileText },
       { name: '学情报告', href: '/report', icon: BarChart3 },
-      { name: '就业培训', href: '/career-training/position', icon: Briefcase },
+      { name: '就业培训', href: '/career-training/position', icon: Briefcase, adminOnly: true },
     ],
   },
   {
@@ -101,7 +102,9 @@ export default function Layout() {
     navigate('/login', { replace: true })
   }
 
-  const visibleNavigationGroups = navigationGroups.filter((group) => !group.adminOnly || user?.role === 'admin')
+  const visibleNavigationGroups = navigationGroups.filter(
+    (group) => !group.adminOnly || user?.role === 'admin',
+  )
   const currentNavigationItem = navigationGroups
     .flatMap((group) => group.items)
     .find((item) => item.href === location.pathname)
@@ -146,26 +149,32 @@ export default function Layout() {
               <h2 className="px-3 pb-2 text-xs font-medium text-text-tertiary">{group.name}</h2>
             )}
             <div className="space-y-1">
-              {group.items.map((item) => {
-                const isActive = location.pathname === item.href
-                return (
-                  <Link
-                    key={item.name}
-                    to={item.href}
-                    aria-label={item.name}
-                    title={isSidebarCollapsed ? item.name : undefined}
-                    className={clsx(
-                      'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-250',
-                      isActive
-                        ? 'bg-primary-light text-primary font-medium'
-                        : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary'
-                    )}
-                  >
-                    <item.icon className={clsx('w-5 h-5 flex-shrink-0', isActive && 'text-primary')} />
-                    {!isSidebarCollapsed && <span className="text-sm whitespace-nowrap">{item.name}</span>}
-                  </Link>
-                )
-              })}
+              {group.items
+                .filter((item) => !item.adminOnly || user?.role === 'admin')
+                .map((item) => {
+                  const isActive = location.pathname === item.href
+                  return (
+                    <Link
+                      key={item.name}
+                      to={item.href}
+                      aria-label={item.name}
+                      title={isSidebarCollapsed ? item.name : undefined}
+                      className={clsx(
+                        'flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-250',
+                        isActive
+                          ? 'bg-primary-light text-primary font-medium'
+                          : 'text-text-secondary hover:bg-bg-secondary hover:text-text-primary',
+                      )}
+                    >
+                      <item.icon
+                        className={clsx('w-5 h-5 flex-shrink-0', isActive && 'text-primary')}
+                      />
+                      {!isSidebarCollapsed && (
+                        <span className="text-sm whitespace-nowrap">{item.name}</span>
+                      )}
+                    </Link>
+                  )
+                })}
             </div>
           </section>
         ))}
@@ -199,7 +208,7 @@ export default function Layout() {
       <aside
         className={clsx(
           'hidden lg:flex flex-col bg-bg-card border-r border-border transition-all duration-250',
-          isSidebarCollapsed ? 'w-[72px]' : 'w-[260px]'
+          isSidebarCollapsed ? 'w-[72px]' : 'w-[260px]',
         )}
       >
         {sidebarContent}
@@ -209,7 +218,7 @@ export default function Layout() {
       <aside
         className={clsx(
           'fixed inset-y-0 left-0 z-50 flex flex-col bg-bg-card border-r border-border transition-transform duration-250 w-[260px] lg:hidden',
-          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full'
+          mobileMenuOpen ? 'translate-x-0' : '-translate-x-full',
         )}
       >
         {sidebarContent}
@@ -228,8 +237,7 @@ export default function Layout() {
               <Menu className="w-5 h-5" />
             </button>
             <h1 className="text-base md:text-lg font-medium text-text-primary truncate">
-              {currentNavigationItem?.name ||
-               '领域知识个性化生成与多智能体协同决策系统'}
+              {currentNavigationItem?.name || '领域知识个性化生成与多智能体协同决策系统'}
             </h1>
           </div>
           <div className="flex items-center gap-2 md:gap-3 flex-shrink-0">
@@ -260,13 +268,20 @@ export default function Layout() {
                     {roleMap[user?.role || ''] || user?.role || ''}
                   </p>
                 </div>
-                <ChevronDown className={clsx('w-4 h-4 text-text-tertiary transition-transform hidden md:block', userMenuOpen && 'rotate-180')} />
+                <ChevronDown
+                  className={clsx(
+                    'w-4 h-4 text-text-tertiary transition-transform hidden md:block',
+                    userMenuOpen && 'rotate-180',
+                  )}
+                />
               </button>
               {userMenuOpen && (
                 <div className="absolute right-0 top-full mt-2 w-48 bg-bg-card rounded-xl border border-border shadow-lg py-1 z-50">
                   <div className="px-4 py-2 border-b border-border">
                     <p className="text-sm font-medium text-text-primary">{user?.username}</p>
-                    <p className="text-xs text-text-tertiary">{roleMap[user?.role || ''] || user?.role}</p>
+                    <p className="text-xs text-text-tertiary">
+                      {roleMap[user?.role || ''] || user?.role}
+                    </p>
                   </div>
                   <button
                     onClick={handleLogout}

@@ -95,9 +95,30 @@ function App() {
             <Route path="resources" element={<ResourceGeneration />} />
             <Route path="report" element={<LearningReport />} />
             <Route path="guidance" element={<AdaptiveGuidance />} />
-            <Route path="career-training" element={<CareerTraining />} />
-            <Route path="career-training/:tab" element={<CareerTraining />} />
-            <Route path="enterprise" element={<Navigate to="/career-training/position" replace />} />
+            <Route
+              path="career-training"
+              element={
+                <ProtectedRoute roles={['admin']}>
+                  <CareerTraining />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="career-training/:tab"
+              element={
+                <ProtectedRoute roles={['admin']}>
+                  <CareerTraining />
+                </ProtectedRoute>
+              }
+            />
+            <Route
+              path="enterprise"
+              element={
+                <ProtectedRoute roles={['admin']}>
+                  <Navigate to="/career-training/position" replace />
+                </ProtectedRoute>
+              }
+            />
             <Route path="privacy" element={<Navigate to="/dashboard" replace />} />
             <Route
               path="monitoring"

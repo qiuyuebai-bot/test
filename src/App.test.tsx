@@ -19,7 +19,8 @@ describe('hidden legacy routes', () => {
   })
 
   it.each(['/privacy', '/deployment'])(
-    'redirects %s to the dashboard for authenticated users', async (path) => {
+    'redirects %s to the dashboard for authenticated users',
+    async (path) => {
       window.history.replaceState({}, '', path)
       render(<App />)
 
@@ -41,12 +42,19 @@ describe('hidden legacy routes', () => {
     await waitFor(() => expect(window.location.pathname).toBe('/monitoring'))
   })
 
-  it.each(['/ops', '/multi-agent', '/metrics', '/monitoring'])
-    ('redirects non-admin users away from %s', async (path) => {
-      setMockStore({ user: { id: 2, username: 'learner', role: 'learner' } })
-      window.history.replaceState({}, '', path)
-      render(<App />)
+  it.each([
+    '/ops',
+    '/multi-agent',
+    '/metrics',
+    '/monitoring',
+    '/career-training',
+    '/career-training/position',
+    '/enterprise',
+  ])('redirects non-admin users away from %s', async (path) => {
+    setMockStore({ user: { id: 2, username: 'learner', role: 'learner' } })
+    window.history.replaceState({}, '', path)
+    render(<App />)
 
-      await waitFor(() => expect(window.location.pathname).toBe('/dashboard'))
-    })
+    await waitFor(() => expect(window.location.pathname).toBe('/dashboard'))
+  })
 })
