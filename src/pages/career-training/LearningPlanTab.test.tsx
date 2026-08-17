@@ -10,6 +10,10 @@ vi.mock('@/store', async () => {
 
 vi.mock('@/api', () => ({
   trainingApi: {
+    getTrainingProject: vi.fn(),
+    updateTrainingProject: vi.fn(),
+    deleteTrainingProject: vi.fn(),
+    listProjectEnrollments: vi.fn(),
     getEnrollment: vi.fn(),
     enrollProject: vi.fn(),
     generatePlan: vi.fn(),
@@ -71,6 +75,29 @@ describe('LearningPlanTab', () => {
     await userEvent.click(screen.getByRole('button', { name: '生成计划' }))
     await waitFor(() => {
       expect(screen.getByText('阶段1')).toBeInTheDocument()
+    })
+  })
+
+  it('teacher can edit a training project from its detail view', async () => {
+    setMockStore({
+      user: { id: 9, userId: 9, username: 'teacher', role: 'teacher' },
+      positions: [{ id: 1, code: 'FE-001', name: '前端工程师' }],
+      certifications: [],
+    })
+    vi.mocked(trainingApi.getTrainingProject).mockResolvedValueOnce({
+      id: 1, name: '前端入职培训', position_id: 1, status: 'active', created_at: '', updated_at: '', enrollment_count: 0,
+    })
+    vi.mocked(trainingApi.getEnrollment).mockResolvedValueOnce(null)
+    vi.mocked(trainingApi.updateTrainingProject).mockResolvedValueOnce({
+      id: 1, name: '前端入职培训', position_id: 1, status: 'active', created_at: '', updated_at: '', enrollment_count: 0,
+    })
+    render(<MemoryRouter><LearningPlanTab /></MemoryRouter>)
+    await userEvent.click(screen.getByText('前端入职培训'))
+    await userEvent.click(await screen.findByRole('button', { name: '编辑' }))
+    await userEvent.click(await screen.findByRole('button', { name: '保存培训项目' }))
+
+    await waitFor(() => {
+      expect(trainingApi.updateTrainingProject).toHaveBeenCalledWith(1, expect.objectContaining({ name: '前端入职培训' }))
     })
   })
 })

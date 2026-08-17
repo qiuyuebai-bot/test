@@ -97,4 +97,47 @@ describe('trainingApi', () => {
     await trainingApi.verifyCertification('CERT/001')
     expect(http.get).toHaveBeenCalledWith('/certifications/verify/CERT%2F001')
   })
+
+  it('maps position and competency maintenance endpoints', async () => {
+    await trainingApi.updateCompetency(3, { name: 'React' })
+    expect(http.put).toHaveBeenCalledWith('/competencies/3', { name: 'React' })
+
+    await trainingApi.updatePositionCompetency(5, 3, { required_level: 4, weight: 1.5, is_mandatory: true })
+    expect(http.put).toHaveBeenCalledWith('/positions/5/competencies/3', {
+      required_level: 4,
+      weight: 1.5,
+      is_mandatory: true,
+    })
+  })
+
+  it('maps assessment and certification maintenance endpoints', async () => {
+    await trainingApi.getAssessmentTemplate(4)
+    expect(http.get).toHaveBeenCalledWith('/assessments/templates/4')
+    await trainingApi.updateAssessmentTemplate(4, { is_active: false })
+    expect(http.put).toHaveBeenCalledWith('/assessments/templates/4', { is_active: false })
+    await trainingApi.deleteAssessmentTemplate(4)
+    expect(http.delete).toHaveBeenCalledWith('/assessments/templates/4')
+
+    await trainingApi.getCertification(6)
+    expect(http.get).toHaveBeenCalledWith('/certifications/6')
+    await trainingApi.updateCertification(6, { is_active: false })
+    expect(http.put).toHaveBeenCalledWith('/certifications/6', { is_active: false })
+    await trainingApi.deleteCertification(6)
+    expect(http.delete).toHaveBeenCalledWith('/certifications/6')
+    await trainingApi.listCertificationRules(6)
+    expect(http.get).toHaveBeenCalledWith('/certifications/6/rules')
+    await trainingApi.deleteCertificationRule(8)
+    expect(http.delete).toHaveBeenCalledWith('/certifications/rules/8')
+    await trainingApi.getCertificationRecord(9)
+    expect(http.get).toHaveBeenCalledWith('/certifications/records/9')
+  })
+
+  it('maps training project maintenance endpoints', async () => {
+    await trainingApi.getTrainingProject(2)
+    expect(http.get).toHaveBeenCalledWith('/training-projects/2')
+    await trainingApi.listProjectEnrollments(2)
+    expect(http.get).toHaveBeenCalledWith('/training-projects/2/enrollments')
+    await trainingApi.deleteTrainingProject(2)
+    expect(http.delete).toHaveBeenCalledWith('/training-projects/2')
+  })
 })

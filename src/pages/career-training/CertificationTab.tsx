@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useStore } from '@/store'
 import { trainingApi } from '@/api'
+import { ApiError } from '@/lib/request'
+import { toast } from '@/components/toastStore'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
@@ -10,7 +12,10 @@ import { FormField } from '@/components/FormField'
 import Input from '@/components/Input'
 import Textarea from '@/components/Textarea'
 import LoadingState from '@/components/LoadingState'
-import type { Certification, AssessmentRecord, CertificationVerification, Position } from '@/types/training'
+import type {
+  Certification, CertificationDetail, CertificationRecordDetail, CertificationRule,
+  AssessmentRecord, CertificationVerification, Position,
+} from '@/types/training'
 
 const STATUS_LABEL: Record<string, string> = {
   pending: '待审核', approved: '已批准', rejected: '已拒绝', expired: '已过期', revoked: '已撤销',
@@ -49,6 +54,9 @@ export default function CertificationTab() {
   const [submitting, setSubmitting] = useState(false)
   const [verificationResult, setVerificationResult] = useState<CertificationVerification | null>(null)
   const [showCreateCertification, setShowCreateCertification] = useState(false)
+  const [editingCertification, setEditingCertification] = useState<CertificationDetail | null>(null)
+  const [rulesCertification, setRulesCertification] = useState<CertificationDetail | null>(null)
+  const [recordDetail, setRecordDetail] = useState<CertificationRecordDetail | null>(null)
   const canReview = user?.role === 'admin' || user?.role === 'teacher'
   const learnerId = canReview ? selectedLearnerId : currentLearner?.id
 
@@ -128,6 +136,56 @@ export default function CertificationTab() {
     }
   }
 
+  const handleViewRecord = async (recordId: number) => {
+    try {
+      const detail = await trainingApi.getCertificationRecord(recordId)
+      setRecordDetail(detail)
+    } catch (err) {
+      toast.error('获取认证记录详情失败', err instanceof ApiError ? err.message : '请稍后重试')
+    }
+  }
+
+  const handleEditCertification = async (certification: Certification) => {
+    try {
+      const detail = await trainingApi.getCertification(certification.id)
+      setEditingCertification(detail)
+    } catch (err) {
+      toast.error('获取认证定义失败', err instanceof ApiError ? err.message : '请稍后重试')
+    }
+  }
+
+  const handleManageRules = async (certification: Certification) => {
+    try {
+      const [detail, rules] = await Promise.all([
+        trainingApi.getCertification(certification.id),
+        trainingApi.listCertificationRules(certification.id),
+      ])
+      setRulesCertification({ ...detail, rules })
+    } catch (err) {
+      toast.error('获取认证规则失败', err instanceof ApiError ? err.message : '请稍后重试')
+    }
+  }
+
+  const handleToggleCertification = async (certification: Certification) => {
+    try {
+      await trainingApi.updateCertification(certification.id, { is_active: !(certification.is_active ?? certification.isActive) })
+      void fetchCertifications()
+    } catch (err) {
+      toast.error('更新认证状态失败', err instanceof ApiError ? err.message : '请稍后重试')
+    }
+  }
+
+  const handleDeleteCertification = async (certification: Certification) => {
+    if (!confirm(`确定要删除认证"${certification.name}"吗？此操作不可撤销。`)) return
+    try {
+      await trainingApi.deleteCertification(certification.id)
+      void fetchCertifications()
+      toast.success('认证已删除')
+    } catch (err) {
+      toast.error('删除认证失败', err instanceof ApiError ? err.message : '请稍后重试')
+    }
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -172,7 +230,7 @@ export default function CertificationTab() {
           <p className="text-sm text-text-tertiary">暂无认证定义</p>
         ) : (
           <div className="space-y-2">
-            {certifications.filter((certification) => certification.is_active ?? certification.isActive).map((c) => (
+            {certifications.filter((certification) => canReview || Boolean(certification.is_active ?? certification.isActive)).map((c) => (
               <div key={c.id} className="flex items-center justify-between py-2 border-b border-border last:border-0">
                 <div>
                   <span className="text-sm font-medium text-text-primary">{c.name}</span>
@@ -188,10 +246,18 @@ export default function CertificationTab() {
                       setApplyTarget(c)
                       setSelectedRecord(null)
                     }}
-                    disabled={!learnerId}
+                    disabled={!learnerId || !(c.is_active ?? c.isActive)}
                   >
                     申请
                   </Button>
+                  {canReview && (
+                    <>
+                      <Button variant="ghost" size="sm" onClick={() => void handleEditCertification(c)}>编辑</Button>
+                      <Button variant="ghost" size="sm" onClick={() => void handleManageRules(c)}>规则</Button>
+                      <Button variant="ghost" size="sm" onClick={() => void handleToggleCertification(c)}>{(c.is_active ?? c.isActive) ? '停用' : '启用'}</Button>
+                      <Button variant="ghost" size="sm" onClick={() => void handleDeleteCertification(c)} className="text-error hover:text-error-dark">删除</Button>
+                    </>
+                  )}
                 </div>
               </div>
             ))}
@@ -230,6 +296,7 @@ export default function CertificationTab() {
                     {canReview && (r.learner_id ?? r.learnerId) != null && (
                       <span className="text-xs text-text-tertiary">学习者 #{r.learner_id ?? r.learnerId}</span>
                     )}
+                    <Button variant="ghost" size="sm" onClick={() => void handleViewRecord(r.id)}>查看详情</Button>
                     {canReview && r.status === 'pending' && (
                       <>
                         <Button variant="secondary" size="sm" onClick={() => handleApprove(r.id)}>批准</Button>
@@ -306,6 +373,51 @@ export default function CertificationTab() {
         )}
       </Modal>
 
+      <Modal
+        isOpen={!!recordDetail}
+        onClose={() => setRecordDetail(null)}
+        maxWidth="max-w-lg"
+        className="p-6"
+      >
+        {recordDetail && (
+          <div className="space-y-3">
+            <h3 className="text-lg font-semibold text-text-primary pr-8">认证记录详情 #{recordDetail.id}</h3>
+            <div className="text-sm text-text-secondary space-y-1">
+              <p>认证：{recordDetail.certificationName ?? recordDetail.certification_name ?? '-'}</p>
+              <p>状态：{STATUS_LABEL[recordDetail.status] ?? recordDetail.status}</p>
+              <p>评估分数：{recordDetail.assessmentScore ?? recordDetail.assessment_score ?? '-'}</p>
+              <p>评估等级：{recordDetail.assessmentLevel ?? recordDetail.assessment_level ?? '-'}</p>
+              <p>证书编号：{recordDetail.certificateNumber ?? recordDetail.certificate_number ?? '-'}</p>
+              <p>审核意见：{recordDetail.reviewComment ?? recordDetail.review_comment ?? '-'}</p>
+            </div>
+            {(recordDetail.ruleEvaluation ?? recordDetail.rule_evaluation) && (
+              <pre className="rounded-input bg-bg-secondary p-3 text-xs text-text-secondary whitespace-pre-wrap break-all">
+                {JSON.stringify(recordDetail.ruleEvaluation ?? recordDetail.rule_evaluation, null, 2)}
+              </pre>
+            )}
+          </div>
+        )}
+      </Modal>
+      {canReview && editingCertification && (
+        <EditCertificationModal
+          certification={editingCertification}
+          onClose={() => setEditingCertification(null)}
+          onSaved={() => {
+            setEditingCertification(null)
+            void fetchCertifications()
+          }}
+        />
+      )}
+      {canReview && rulesCertification && (
+        <CertificationRulesModal
+          certification={rulesCertification}
+          onClose={() => setRulesCertification(null)}
+          onChanged={() => {
+            void fetchCertifications()
+          }}
+        />
+      )}
+
       {canReview && showCreateCertification && (
         <CreateCertificationModal
           positions={positions}
@@ -317,6 +429,164 @@ export default function CertificationTab() {
         />
       )}
     </div>
+  )
+}
+
+function EditCertificationModal({ certification, onClose, onSaved }: {
+  certification: CertificationDetail
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [form, setForm] = useState({
+    name: certification.name,
+    level: certification.level ?? '',
+    description: certification.description ?? '',
+    validityMonths: String(certification.validityPeriodMonths ?? certification.validity_period_months ?? 0),
+    issuer: certification.issuer ?? '',
+    isActive: certification.isActive ?? certification.is_active,
+  })
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleSubmit = async () => {
+    if (!form.name.trim()) return
+    setSubmitting(true)
+    try {
+      await trainingApi.updateCertification(certification.id, {
+        name: form.name.trim(),
+        level: form.level || undefined,
+        description: form.description.trim() || undefined,
+        validity_period_months: Number(form.validityMonths) || 0,
+        issuer: form.issuer.trim() || undefined,
+        is_active: form.isActive,
+      })
+      onSaved()
+    } catch (err) {
+      toast.error('认证更新失败', err instanceof ApiError ? err.message : '请稍后重试')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Modal isOpen onClose={onClose} maxWidth="max-w-lg" className="p-6">
+      <h3 className="text-lg font-semibold text-text-primary mb-4 pr-8">编辑认证定义</h3>
+      <div className="space-y-3">
+        <p className="text-xs text-text-tertiary">编码：{certification.code}（编码和岗位不可修改）</p>
+        <FormField label="认证名称" required>
+          <Input value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} />
+        </FormField>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          <FormField label="认证级别">
+            <Input value={form.level} onChange={(event) => setForm({ ...form, level: event.target.value })} />
+          </FormField>
+          <FormField label="有效期（月）">
+            <Input type="number" min="0" value={form.validityMonths} onChange={(event) => setForm({ ...form, validityMonths: event.target.value })} />
+          </FormField>
+          <FormField label="发证机构">
+            <Input value={form.issuer} onChange={(event) => setForm({ ...form, issuer: event.target.value })} />
+          </FormField>
+        </div>
+        <FormField label="认证说明">
+          <Textarea value={form.description} onChange={(event) => setForm({ ...form, description: event.target.value })} rows={3} />
+        </FormField>
+        <label className="flex items-center gap-2 text-sm text-text-primary cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.isActive}
+            onChange={(event) => setForm({ ...form, isActive: event.target.checked })}
+            className="w-4 h-4 rounded border-border"
+          />
+          启用认证
+        </label>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="ghost" onClick={onClose}>取消</Button>
+          <Button onClick={handleSubmit} loading={submitting} disabled={!form.name.trim()}>保存</Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function CertificationRulesModal({ certification, onClose, onChanged }: {
+  certification: CertificationDetail
+  onClose: () => void
+  onChanged: () => void
+}) {
+  const [rules, setRules] = useState<CertificationRule[]>(certification.rules ?? [])
+  const [ruleType, setRuleType] = useState('overall_score')
+  const [minScore, setMinScore] = useState('60')
+  const [allowGap, setAllowGap] = useState('0')
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleAdd = async () => {
+    setSubmitting(true)
+    try {
+      await trainingApi.addCertificationRule({
+        certification_id: certification.id,
+        rule_type: ruleType,
+        rule_config: ruleType === 'overall_score'
+          ? { min_score: Number(minScore) }
+          : { allow_gap: Number(allowGap) },
+      })
+      setRules(await trainingApi.listCertificationRules(certification.id))
+      onChanged()
+    } catch (err) {
+      toast.error('新增认证规则失败', err instanceof ApiError ? err.message : '请稍后重试')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleDelete = async (rule: CertificationRule) => {
+    if (!confirm('确定要删除这条认证规则吗？')) return
+    try {
+      await trainingApi.deleteCertificationRule(rule.id)
+      setRules(await trainingApi.listCertificationRules(certification.id))
+      onChanged()
+    } catch (err) {
+      toast.error('删除认证规则失败', err instanceof ApiError ? err.message : '请稍后重试')
+    }
+  }
+
+  return (
+    <Modal isOpen onClose={onClose} maxWidth="max-w-2xl" className="p-6">
+      <h3 className="text-lg font-semibold text-text-primary mb-4 pr-8">认证规则：{certification.name}</h3>
+      <div className="space-y-2">
+        {rules.length === 0 ? (
+          <p className="text-sm text-text-tertiary">暂无认证规则</p>
+        ) : rules.map((rule) => (
+          <div key={rule.id} className="flex items-start justify-between gap-3 py-2 border-b border-border last:border-0">
+            <div className="text-sm text-text-secondary">
+              <div className="font-medium text-text-primary">{rule.ruleType ?? rule.rule_type}</div>
+              <pre className="mt-1 whitespace-pre-wrap text-xs">{JSON.stringify(rule.ruleConfig ?? rule.rule_config)}</pre>
+            </div>
+            <Button variant="ghost" size="sm" onClick={() => void handleDelete(rule)} className="text-error hover:text-error-dark">删除</Button>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 border-t border-border pt-4 space-y-3">
+        <h4 className="text-sm font-medium text-text-primary">新增规则</h4>
+        <FormField label="规则类型" required>
+          <select value={ruleType} onChange={(event) => setRuleType(event.target.value)} className="w-full h-10 px-3 bg-bg-secondary border border-border rounded-input text-text-primary">
+            <option value="overall_score">综合成绩达标</option>
+            <option value="all_mandatory_met">所有必修能力达标</option>
+          </select>
+        </FormField>
+        {ruleType === 'overall_score' ? (
+          <FormField label="最低综合成绩" required>
+            <Input type="number" min="0" max="100" value={minScore} onChange={(event) => setMinScore(event.target.value)} />
+          </FormField>
+        ) : (
+          <FormField label="允许未达标必修能力数" required>
+            <Input type="number" min="0" value={allowGap} onChange={(event) => setAllowGap(event.target.value)} />
+          </FormField>
+        )}
+        <div className="flex justify-end gap-2">
+          <Button variant="ghost" onClick={onClose}>关闭</Button>
+          <Button onClick={handleAdd} loading={submitting}>新增规则</Button>
+        </div>
+      </div>
+    </Modal>
   )
 }
 

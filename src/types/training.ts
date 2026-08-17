@@ -9,6 +9,9 @@ export interface Competency {
   is_active: boolean
   created_at: string
   updated_at: string
+  isActive?: boolean
+  createdAt?: string
+  updatedAt?: string
 }
 
 export interface PositionCompetency {
@@ -99,6 +102,14 @@ export interface CompetencyScore {
   assessment_method?: string
   evidence?: unknown[]
   created_at: string
+  competencyId?: number
+  competencyName?: string
+  competencyCode?: string
+  currentLevel?: number
+  currentScore?: number
+  requiredLevel?: number
+  assessmentMethod?: string
+  createdAt?: string
 }
 
 export interface AssessmentRecord {
@@ -208,6 +219,22 @@ export interface Certification {
   updatedAt?: string
 }
 
+export interface CertificationRule {
+  id: number
+  certification_id: number
+  rule_type: string
+  rule_config: Record<string, unknown>
+  created_at: string
+  certificationId?: number
+  ruleType?: string
+  ruleConfig?: Record<string, unknown>
+  createdAt?: string
+}
+
+export interface CertificationDetail extends Certification {
+  rules: CertificationRule[]
+}
+
 export interface CertificationRecord {
   id: number
   certification_id: number
@@ -220,6 +247,7 @@ export interface CertificationRecord {
   expires_at?: string
   reviewed_by?: number
   review_comment?: string
+  rule_evaluation?: Record<string, unknown>
   created_at: string
   updated_at: string
   certificationId?: number
@@ -231,8 +259,20 @@ export interface CertificationRecord {
   expiresAt?: string
   reviewedBy?: number
   reviewComment?: string
+  ruleEvaluation?: Record<string, unknown>
   createdAt?: string
   updatedAt?: string
+}
+
+export interface CertificationRecordDetail extends CertificationRecord {
+  certification_name?: string
+  certification_code?: string
+  assessment_score?: number
+  assessment_level?: number
+  certificationName?: string
+  certificationCode?: string
+  assessmentScore?: number
+  assessmentLevel?: number
 }
 
 export interface CertificationVerification {
@@ -272,6 +312,9 @@ export interface TrainingProject {
   created_by?: number
   created_at: string
   updated_at: string
+  position_name?: string
+  certification_name?: string
+  enrollment_count?: number
   // http 客户端 keysToCamel 转换后的运行时字段
   positionId?: number
   certificationId?: number
@@ -282,6 +325,9 @@ export interface TrainingProject {
   createdBy?: number
   createdAt?: string
   updatedAt?: string
+  positionName?: string
+  certificationName?: string
+  enrollmentCount?: number
 }
 
 export interface TrainingEnrollment {

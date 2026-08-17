@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useStore } from '@/store'
 import { trainingApi } from '@/api'
+import { ApiError } from '@/lib/request'
+import { toast } from '@/components/toastStore'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
@@ -11,7 +13,7 @@ import Input from '@/components/Input'
 import Textarea from '@/components/Textarea'
 import LoadingState from '@/components/LoadingState'
 import CompetencyRadar, { type RadarItem } from '@/components/career-training/CompetencyRadar'
-import type { Position, PositionDetail, AssessmentTemplate, AssessmentRecord, GapAnalysis } from '@/types/training'
+import type { Position, PositionDetail, AssessmentTemplate, AssessmentRecord, AssessmentRecordDetail, GapAnalysis } from '@/types/training'
 
 const STATUS_LABEL: Record<string, string> = {
   draft: '草稿', in_progress: '进行中', completed: '已完成', expired: '已过期',
@@ -41,6 +43,9 @@ export default function AssessmentTab() {
   const [submitting, setSubmitting] = useState(false)
   const [scoreForm, setScoreForm] = useState<Record<number, { level: number; score: number }>>({})
   const [showCreateTemplate, setShowCreateTemplate] = useState(false)
+  const [editingTemplate, setEditingTemplate] = useState<AssessmentTemplate | null>(null)
+  const [templateDetailLoading, setTemplateDetailLoading] = useState(false)
+  const [recordDetail, setRecordDetail] = useState<AssessmentRecordDetail | null>(null)
   const [selectedLearnerId, setSelectedLearnerId] = useState<number | null>(null)
   const canEdit = user?.role === 'admin' || user?.role === 'teacher'
   const learnerId = canEdit ? selectedLearnerId : currentLearner?.id
@@ -116,6 +121,47 @@ export default function AssessmentTab() {
       setGapAnalysis(gap)
     } catch (err) {
       console.error('getGapAnalysis failed:', err)
+    }
+  }
+
+  const handleViewRecord = async (record: AssessmentRecord) => {
+    try {
+      const detail = await trainingApi.getAssessmentRecord(record.id)
+      setRecordDetail(detail)
+    } catch (err) {
+      toast.error('获取评估详情失败', err instanceof ApiError ? err.message : '请稍后重试')
+    }
+  }
+
+  const handleEditTemplate = async (template: AssessmentTemplate) => {
+    setTemplateDetailLoading(true)
+    try {
+      const detail = await trainingApi.getAssessmentTemplate(template.id)
+      setEditingTemplate(detail)
+    } catch (err) {
+      toast.error('获取评估模板失败', err instanceof ApiError ? err.message : '请稍后重试')
+    } finally {
+      setTemplateDetailLoading(false)
+    }
+  }
+
+  const handleToggleTemplate = async (template: AssessmentTemplate) => {
+    try {
+      await trainingApi.updateAssessmentTemplate(template.id, { is_active: !(template.isActive ?? template.is_active) })
+      if (selectedPosition) await handleSelectPosition(selectedPosition)
+    } catch (err) {
+      toast.error('更新评估模板状态失败', err instanceof ApiError ? err.message : '请稍后重试')
+    }
+  }
+
+  const handleDeleteTemplate = async (template: AssessmentTemplate) => {
+    if (!confirm(`确定要删除评估模板"${template.name}"吗？此操作不可撤销。`)) return
+    try {
+      await trainingApi.deleteAssessmentTemplate(template.id)
+      if (selectedPosition) await handleSelectPosition(selectedPosition)
+      toast.success('评估模板已删除')
+    } catch (err) {
+      toast.error('删除评估模板失败', err instanceof ApiError ? err.message : '请稍后重试')
     }
   }
 
@@ -204,6 +250,13 @@ export default function AssessmentTab() {
                     {(t.competencyConfigs ?? t.competency_configs).length} 个胜任力维度
                     {(t.durationMinutes ?? t.duration_minutes) ? ` · ${(t.durationMinutes ?? t.duration_minutes)} 分钟` : ''}
                   </p>
+                  {canEdit && (
+                    <div className="flex items-center gap-2 mt-2" onClick={(event) => event.stopPropagation()}>
+                      <Button variant="ghost" size="sm" onClick={() => void handleEditTemplate(t)}>编辑</Button>
+                      <Button variant="ghost" size="sm" onClick={() => void handleToggleTemplate(t)}>{(t.isActive ?? t.is_active) ? '停用' : '启用'}</Button>
+                      <Button variant="ghost" size="sm" onClick={() => void handleDeleteTemplate(t)} className="text-error hover:text-error-dark">删除</Button>
+                    </div>
+                  )}
                 </div>
               ))}
               {canEdit && selectedTemplate && (
@@ -239,6 +292,7 @@ export default function AssessmentTab() {
                   {(r.overallScore ?? r.overall_score) != null && (
                     <span className="text-sm text-text-secondary">综合分：{r.overallScore ?? r.overall_score}</span>
                   )}
+                  <Button variant="ghost" size="sm" onClick={() => void handleViewRecord(r)}>查看详情</Button>
                   {r.status === 'completed' && (
                     <Button variant="ghost" size="sm" onClick={() => handleViewGap(r)}>查看差距</Button>
                   )}
@@ -348,6 +402,39 @@ export default function AssessmentTab() {
       </Modal>
 
       {/* 新增评估模板 Modal */}
+      <Modal
+        isOpen={!!recordDetail}
+        onClose={() => setRecordDetail(null)}
+        maxWidth="max-w-2xl"
+        className="p-6 max-h-[90vh] overflow-y-auto"
+      >
+        {recordDetail && (
+          <div className="space-y-4">
+            <h3 className="text-lg font-semibold text-text-primary pr-8">评估记录详情 #{recordDetail.id}</h3>
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div><span className="text-text-tertiary">模板：</span>{recordDetail.templateName ?? recordDetail.template_name ?? '-'}</div>
+              <div><span className="text-text-tertiary">岗位：</span>{recordDetail.positionName ?? recordDetail.position_name ?? '-'}</div>
+              <div><span className="text-text-tertiary">状态：</span>{STATUS_LABEL[recordDetail.status] ?? recordDetail.status}</div>
+              <div><span className="text-text-tertiary">综合分：</span>{recordDetail.overallScore ?? recordDetail.overall_score ?? '-'}</div>
+            </div>
+            <div>
+              <h4 className="text-sm font-medium text-text-primary mb-2">评分明细</h4>
+              <div className="space-y-1">
+                {(recordDetail.competencyScores ?? recordDetail.competency_scores).map((score) => (
+                  <div key={score.id} className="flex items-center justify-between py-2 border-b border-border last:border-0 text-sm">
+                    <span>{score.competencyName ?? score.competency_name ?? `胜任力 #${score.competencyId ?? score.competency_id}`}</span>
+                    <span className="text-text-secondary">等级 L{score.currentLevel ?? score.current_level ?? '-'} / 分数 {score.currentScore ?? score.current_score ?? '-'} / 要求 L{score.requiredLevel ?? score.required_level}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            {recordDetail.aiDiagnosis ?? recordDetail.ai_diagnosis ? (
+              <div className="text-sm text-text-secondary whitespace-pre-wrap">{recordDetail.aiDiagnosis ?? recordDetail.ai_diagnosis}</div>
+            ) : null}
+          </div>
+        )}
+      </Modal>
+
       {canEdit && showCreateTemplate && selectedPosition && (
         <CreateAssessmentTemplateModal
           position={selectedPosition}
@@ -355,6 +442,18 @@ export default function AssessmentTab() {
           onCreated={() => {
             setShowCreateTemplate(false)
             // 复用选岗位逻辑刷新模板列表
+            void handleSelectPosition(selectedPosition)
+          }}
+        />
+      )}
+      {canEdit && templateDetailLoading && <LoadingState />}
+      {canEdit && editingTemplate && selectedPosition && (
+        <CreateAssessmentTemplateModal
+          position={selectedPosition}
+          template={editingTemplate}
+          onClose={() => setEditingTemplate(null)}
+          onCreated={() => {
+            setEditingTemplate(null)
             void handleSelectPosition(selectedPosition)
           }}
         />
@@ -368,16 +467,22 @@ const ASSESSMENT_METHOD_LABEL: Record<string, string> = {
 }
 
 function CreateAssessmentTemplateModal({
-  position, onClose, onCreated,
+  position, template, onClose, onCreated,
 }: {
   position: Position
+  template?: AssessmentTemplate
   onClose: () => void
   onCreated: () => void
 }) {
-  const [form, setForm] = useState({
-    name: '', description: '',
-    pass_threshold: '60', duration_minutes: '',
-  })
+  const isEditing = !!template
+  const [form, setForm] = useState(() => ({
+    name: template?.name ?? '',
+    description: template?.description ?? '',
+    pass_threshold: String(template?.passThreshold ?? template?.pass_threshold ?? 60),
+    duration_minutes: template?.durationMinutes != null
+      ? String(template.durationMinutes)
+      : template?.duration_minutes != null ? String(template.duration_minutes) : '',
+  }))
   // 加载岗位详情获取胜任力矩阵
   const [positionDetail, setPositionDetail] = useState<PositionDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
@@ -396,15 +501,27 @@ function CreateAssessmentTemplateModal({
         const initial: Record<number, {
           question_count: number; difficulty: number; assessment_method: string
         }> = {}
+        const existingConfigs = template?.competencyConfigs ?? template?.competency_configs ?? []
+        const existingConfigMap = new Map(existingConfigs.map((config) => [
+          (config.competencyId ?? config.competency_id) as number,
+          config,
+        ]))
         detail.competencies.forEach((c) => {
           const cid = (c.competencyId ?? c.competency_id) as number
-          initial[cid] = { question_count: 5, difficulty: 3, assessment_method: 'quiz' }
+          const existing = existingConfigMap.get(cid)
+          initial[cid] = {
+            question_count: existing?.questionCount ?? existing?.question_count ?? 5,
+            difficulty: existing?.difficulty ?? 3,
+            assessment_method: existing?.assessmentMethod ?? existing?.assessment_method ?? 'quiz',
+          }
         })
-        setConfigs(initial)
+        setConfigs(template ? Object.fromEntries(
+          Object.entries(initial).filter(([cid]) => existingConfigMap.has(Number(cid))),
+        ) : initial)
       })
       .catch((err) => console.error('getPosition failed:', err))
       .finally(() => setDetailLoading(false))
-  }, [position.id])
+  }, [position.id, template])
 
   const toggleCompetency = (competencyId: number) => {
     setConfigs((prev) => {
@@ -441,17 +558,21 @@ function CreateAssessmentTemplateModal({
     }
     setSubmitting(true)
     try {
-      await trainingApi.createAssessmentTemplate({
-        position_id: position.id,
+      const data = {
         name: form.name,
         description: form.description || undefined,
         competency_configs: competencyConfigs,
         pass_threshold: Number(form.pass_threshold) || 60,
         duration_minutes: form.duration_minutes ? Number(form.duration_minutes) : undefined,
-      })
+      }
+      if (template) {
+        await trainingApi.updateAssessmentTemplate(template.id, data)
+      } else {
+        await trainingApi.createAssessmentTemplate({ position_id: position.id, ...data })
+      }
       onCreated()
     } catch (err) {
-      console.error('createAssessmentTemplate failed:', err)
+      toast.error(isEditing ? '评估模板更新失败' : '评估模板创建失败', err instanceof ApiError ? err.message : '请稍后重试')
     } finally {
       setSubmitting(false)
     }
@@ -459,7 +580,7 @@ function CreateAssessmentTemplateModal({
 
   return (
     <Modal isOpen onClose={onClose} maxWidth="max-w-2xl" className="p-6 max-h-[90vh] overflow-y-auto">
-      <h3 className="text-lg font-semibold text-text-primary mb-1 pr-8">新增评估模板</h3>
+      <h3 className="text-lg font-semibold text-text-primary mb-1 pr-8">{isEditing ? '编辑评估模板' : '新增评估模板'}</h3>
       <p className="text-xs text-text-tertiary mb-4">关联岗位：{position.name}（{position.code}）</p>
 
       <div className="space-y-3">
@@ -484,7 +605,7 @@ function CreateAssessmentTemplateModal({
             <LoadingState />
           ) : !positionDetail || positionDetail.competencies.length === 0 ? (
             <p className="text-sm text-text-tertiary py-2">
-              该岗位尚未关联胜任力，请先在"岗位与胜任力"中关联胜任力后再创建评估模板。
+              该岗位尚未关联胜任力，请先在&quot;岗位与胜任力&quot;中关联胜任力后再创建评估模板。
             </p>
           ) : (
             <div className="space-y-2">
@@ -553,8 +674,10 @@ function CreateAssessmentTemplateModal({
             onClick={handleSubmit}
             loading={submitting}
             disabled={!form.name || Object.keys(configs).length === 0}
+            aria-label={isEditing ? '保存评估模板' : '创建评估模板'}
+            title={isEditing ? '保存评估模板' : '创建评估模板'}
           >
-            创建
+            {isEditing ? '保存' : '创建'}
           </Button>
         </div>
       </div>

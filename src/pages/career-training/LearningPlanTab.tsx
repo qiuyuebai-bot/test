@@ -47,6 +47,11 @@ export default function LearningPlanTab() {
   const [busy, setBusy] = useState(false)
   const [showAssessmentPicker, setShowAssessmentPicker] = useState(false)
   const [showCreateProject, setShowCreateProject] = useState(false)
+  const [editingProject, setEditingProject] = useState<TrainingProject | null>(null)
+  const [showEnrollments, setShowEnrollments] = useState(false)
+  const [projectEnrollments, setProjectEnrollments] = useState<TrainingEnrollment[]>([])
+  const [enrollmentsLoading, setEnrollmentsLoading] = useState(false)
+  const [projectEnrollmentCount, setProjectEnrollmentCount] = useState<number | null>(null)
   const [selectedAssessmentRecord, setSelectedAssessmentRecord] = useState<AssessmentRecord | null>(null)
   const [selectedStageNumber, setSelectedStageNumber] = useState(1)
   const canEdit = user?.role === 'admin' || user?.role === 'teacher'
@@ -69,16 +74,28 @@ export default function LearningPlanTab() {
     setPlan(null)
     setSelectedAssessmentRecord(null)
     setSelectedStageNumber(1)
+    setProjectEnrollmentCount(null)
     clearTrainingContext()
+    let project = p
+    if (canEdit) {
+      try {
+        const detail = await trainingApi.getTrainingProject(p.id)
+        project = detail
+        setSelectedProject(detail)
+        setProjectEnrollmentCount(detail.enrollmentCount ?? detail.enrollment_count ?? null)
+      } catch (err) {
+        console.error('getTrainingProject failed:', err)
+      }
+    }
     try {
-      const existingEnrollment = await trainingApi.getEnrollment(p.id, learnerId)
+      const existingEnrollment = await trainingApi.getEnrollment(project.id, learnerId)
       if (!existingEnrollment) return
       setEnrollment(existingEnrollment)
       try {
         const existingPlan = await trainingApi.getPlan(existingEnrollment.id)
         if (existingPlan) {
           setPlan(existingPlan)
-          syncTrainingContext(existingPlan, 1, p, existingEnrollment)
+          syncTrainingContext(existingPlan, 1, project, existingEnrollment)
           return
         }
       } catch {
@@ -165,6 +182,47 @@ export default function LearningPlanTab() {
     } catch (err) {
       const msg = err instanceof ApiError ? err.message : '发布失败，请稍后重试'
       toast.error('发布失败', msg)
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  const handleLoadEnrollments = async () => {
+    if (!selectedProject) return
+    setEnrollmentsLoading(true)
+    try {
+      const result = await trainingApi.listProjectEnrollments(selectedProject.id)
+      setProjectEnrollments(result.items)
+      setProjectEnrollmentCount(result.total)
+      setShowEnrollments(true)
+    } catch (err) {
+      toast.error('获取项目学员失败', err instanceof ApiError ? err.message : '请稍后重试')
+    } finally {
+      setEnrollmentsLoading(false)
+    }
+  }
+
+  const handleDeleteProject = async () => {
+    if (!selectedProject || !confirm(`确定要删除培训项目"${selectedProject.name}"吗？`)) return
+    setBusy(true)
+    try {
+      const enrollments = await trainingApi.listProjectEnrollments(selectedProject.id)
+      if (enrollments.total > 0) {
+        if (!confirm(`该项目已有 ${enrollments.total} 名学员报名，是否改为归档？`)) return
+        const archived = await trainingApi.updateTrainingProject(selectedProject.id, { status: 'archived' })
+        setSelectedProject(archived)
+        toast.success('项目已归档', '已有报名记录的项目不会被强制删除')
+      } else {
+        await trainingApi.deleteTrainingProject(selectedProject.id)
+        setSelectedProject(null)
+        setEnrollment(null)
+        setPlan(null)
+        clearTrainingContext()
+        toast.success('项目已删除')
+      }
+      await fetchTrainingProjects()
+    } catch (err) {
+      toast.error('删除培训项目失败', err instanceof ApiError ? err.message : '请稍后重试')
     } finally {
       setBusy(false)
     }
@@ -279,6 +337,14 @@ export default function LearningPlanTab() {
           <div className="flex items-center justify-between">
             <Button variant="ghost" size="sm" onClick={() => { setSelectedProject(null); setEnrollment(null); setPlan(null); setSelectedAssessmentRecord(null); clearTrainingContext() }}>← 返回</Button>
             <h3 className="text-base font-medium text-text-primary">{selectedProject.name}</h3>
+            {canEdit && (
+              <div className="flex items-center gap-2">
+                <Button variant="ghost" size="sm" onClick={() => setEditingProject(selectedProject)}>编辑</Button>
+                <Button variant="ghost" size="sm" onClick={() => void handleLoadEnrollments()} loading={enrollmentsLoading}>学员列表</Button>
+                {projectEnrollmentCount != null && <span className="text-xs text-text-tertiary">{projectEnrollmentCount} 名学员</span>}
+                <Button variant="ghost" size="sm" onClick={() => void handleDeleteProject()} loading={busy} className="text-error hover:text-error-dark">删除</Button>
+              </div>
+            )}
             {canEdit && selectedProject.status === 'draft' && (
               <Button size="sm" onClick={handlePublishProject} loading={busy}>发布项目</Button>
             )}
@@ -353,7 +419,7 @@ export default function LearningPlanTab() {
         <div className="space-y-2">
           {matchingAssessmentRecords.length === 0 ? (
             <p className="text-sm text-text-tertiary py-4 text-center">
-              暂无已完成的评估记录。请先到"能力评估"完成一次评估，再来生成学习计划。
+              暂无已完成的评估记录。请先到&quot;能力评估&quot;完成一次评估，再来生成学习计划。
             </p>
           ) : (
             matchingAssessmentRecords.map((r) => (
@@ -386,6 +452,40 @@ export default function LearningPlanTab() {
       </Modal>
 
       {/* 新增培训项目 Modal */}
+      <Modal
+        isOpen={showEnrollments}
+        onClose={() => setShowEnrollments(false)}
+        maxWidth="max-w-2xl"
+        className="p-6"
+      >
+        <h3 className="text-lg font-semibold text-text-primary mb-4 pr-8">项目学员</h3>
+        {projectEnrollments.length === 0 ? (
+          <p className="text-sm text-text-tertiary">暂无报名学员</p>
+        ) : (
+          <div className="space-y-1">
+            {projectEnrollments.map((item) => (
+              <div key={item.id} className="flex items-center justify-between py-2 border-b border-border last:border-0 text-sm">
+                <span>学员 #{item.learnerId ?? item.learner_id ?? item.userId ?? item.user_id}</span>
+                <span className="text-text-secondary">{item.status}{item.finalScore != null || item.final_score != null ? ` / 成绩 ${item.finalScore ?? item.final_score}` : ''}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Modal>
+      {canEdit && editingProject && (
+        <CreateTrainingProjectModal
+          project={editingProject}
+          positions={positions}
+          certifications={certifications}
+          onClose={() => setEditingProject(null)}
+          onSaved={(updated) => {
+            setEditingProject(null)
+            setSelectedProject(updated)
+            setProjectEnrollmentCount(updated.enrollmentCount ?? updated.enrollment_count ?? projectEnrollmentCount)
+            void fetchTrainingProjects()
+          }}
+        />
+      )}
       {canEdit && showCreateProject && (
         <CreateTrainingProjectModal
           positions={positions}
@@ -409,38 +509,56 @@ const PROJECT_TYPE_OPTIONS = [
 ]
 
 function CreateTrainingProjectModal({
-  positions, certifications, onClose, onCreated,
+  project, positions, certifications, onClose, onCreated, onSaved,
 }: {
+  project?: TrainingProject
   positions: Position[]
   certifications: Certification[]
   onClose: () => void
-  onCreated: () => void
+  onCreated?: () => void
+  onSaved?: (updated: TrainingProject) => void
 }) {
-  const [form, setForm] = useState({
-    name: '', description: '',
-    position_id: '', certification_id: '',
-    project_type: 'onboarding', enterprise_name: '',
-    start_date: '', end_date: '',
-  })
+  const isEditing = !!project
+  const projectType = project?.projectType ?? project?.project_type
+  const [form, setForm] = useState(() => ({
+    name: project?.name ?? '',
+    description: project?.description ?? '',
+    position_id: project ? String(project.positionId ?? project.position_id) : '',
+    certification_id: project?.certificationId != null
+      ? String(project.certificationId)
+      : project?.certification_id != null ? String(project.certification_id) : '',
+    project_type: projectType === 'onboard' ? 'onboarding'
+      : projectType === 'transfer' ? 'reskilling'
+        : projectType === 'upskill' ? 'upskilling'
+          : projectType === 'compliance' ? 'certification' : projectType ?? 'onboarding',
+    enterprise_name: project?.enterpriseName ?? project?.enterprise_name ?? '',
+    start_date: project?.startDate ?? project?.start_date ?? '',
+    end_date: project?.endDate ?? project?.end_date ?? '',
+  }))
   const [submitting, setSubmitting] = useState(false)
 
   const handleSubmit = async () => {
     if (!form.name || !form.position_id) return
     setSubmitting(true)
     try {
-      await trainingApi.createTrainingProject({
+      const data = {
         name: form.name,
         description: form.description || undefined,
-        position_id: Number(form.position_id),
         certification_id: form.certification_id ? Number(form.certification_id) : undefined,
         project_type: form.project_type || undefined,
         enterprise_name: form.enterprise_name || undefined,
         start_date: form.start_date || undefined,
         end_date: form.end_date || undefined,
-      })
-      onCreated()
+      }
+      if (project) {
+        const updated = await trainingApi.updateTrainingProject(project.id, data)
+        onSaved?.(updated)
+      } else {
+        await trainingApi.createTrainingProject({ ...data, position_id: Number(form.position_id) })
+        onCreated?.()
+      }
     } catch (err) {
-      console.error('createTrainingProject failed:', err)
+      toast.error(isEditing ? '培训项目更新失败' : '培训项目创建失败', err instanceof ApiError ? err.message : '请稍后重试')
     } finally {
       setSubmitting(false)
     }
@@ -448,7 +566,7 @@ function CreateTrainingProjectModal({
 
   return (
     <Modal isOpen onClose={onClose} maxWidth="max-w-2xl" className="p-6 max-h-[90vh] overflow-y-auto">
-      <h3 className="text-lg font-semibold text-text-primary mb-4 pr-8">新增培训项目</h3>
+       <h3 className="text-lg font-semibold text-text-primary mb-4 pr-8">{isEditing ? '编辑培训项目' : '新增培训项目'}</h3>
       <div className="space-y-3">
         <FormField label="项目名称" required>
           <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="如 2026年Q1前端工程师入职培训" />
@@ -461,6 +579,7 @@ function CreateTrainingProjectModal({
             <select
               value={form.position_id}
               onChange={(e) => setForm({ ...form, position_id: e.target.value })}
+              disabled={isEditing}
               className="w-full h-10 px-3 bg-bg-secondary border border-border rounded-input text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary"
             >
               <option value="">请选择岗位</option>
@@ -508,7 +627,15 @@ function CreateTrainingProjectModal({
         </div>
         <div className="flex justify-end gap-2 pt-2 border-t border-border">
           <Button variant="ghost" onClick={onClose}>取消</Button>
-          <Button onClick={handleSubmit} loading={submitting} disabled={!form.name || !form.position_id}>创建</Button>
+           <Button
+             onClick={handleSubmit}
+             loading={submitting}
+             disabled={!form.name || !form.position_id}
+             aria-label={isEditing ? '保存培训项目' : '创建培训项目'}
+             title={isEditing ? '保存培训项目' : '创建培训项目'}
+           >
+             {isEditing ? '保存' : '创建'}
+           </Button>
         </div>
       </div>
     </Modal>

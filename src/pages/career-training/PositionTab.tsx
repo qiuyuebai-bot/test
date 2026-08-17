@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useStore } from '@/store'
 import { trainingApi } from '@/api'
+import { ApiError } from '@/lib/request'
+import { toast } from '@/components/toastStore'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
@@ -12,11 +14,21 @@ import Textarea from '@/components/Textarea'
 import EmptyState from '@/components/EmptyState'
 import LoadingState from '@/components/LoadingState'
 import CompetencyRadar, { type RadarItem } from '@/components/career-training/CompetencyRadar'
-import type { Position, PositionDetail, Competency } from '@/types/training'
+import type { Position, PositionDetail, PositionCompetency, Competency } from '@/types/training'
 
 const CATEGORY_LABEL: Record<string, string> = {
   technical: '技术', management: '管理', operation: '运营', design: '设计', other: '其他',
 }
+
+const CATEGORY_OPTIONS = Object.entries(CATEGORY_LABEL).map(([value, label]) => ({ value, label }))
+const LEVEL_OPTIONS = [
+  { value: 'junior', label: '初级' },
+  { value: 'mid', label: '中级' },
+  { value: 'senior', label: '高级' },
+  { value: 'expert', label: '专家' },
+]
+
+const selectClassName = 'w-full h-10 px-3 bg-bg-secondary border border-border rounded-input text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary'
 
 export default function PositionTab() {
   const { positions, positionsLoading, fetchPositions, fetchCompetencies, competencies, user } = useStore(
@@ -35,6 +47,9 @@ export default function PositionTab() {
   const [showCreateCompetency, setShowCreateCompetency] = useState(false)
   const [showLinkCompetency, setShowLinkCompetency] = useState(false)
   const [showCompetencyManager, setShowCompetencyManager] = useState(false)
+  const [editingPosition, setEditingPosition] = useState<PositionDetail | null>(null)
+  const [editingCompetency, setEditingCompetency] = useState<Competency | null>(null)
+  const [editingRequirement, setEditingRequirement] = useState<PositionCompetency | null>(null)
   const canEdit = user?.role === 'admin' || user?.role === 'teacher'
 
   useEffect(() => {
@@ -63,6 +78,7 @@ export default function PositionTab() {
       setSelected(detail)
     } catch (err) {
       console.error('removePositionCompetency failed:', err)
+      toast.error('移除关联失败', err instanceof ApiError ? err.message : '请稍后重试')
     }
   }
 
@@ -74,6 +90,7 @@ export default function PositionTab() {
       void fetchPositions()
     } catch (err) {
       console.error('deletePosition failed:', err)
+      toast.error('删除岗位失败', err instanceof ApiError ? err.message : '请稍后重试')
     }
   }
 
@@ -83,42 +100,56 @@ export default function PositionTab() {
   }))
 
   if (positionsLoading && positions.length === 0) return <LoadingState />
-  if (positions.length === 0) {
-    return <EmptyState type="default" title="暂无岗位" description="请先创建岗位定义" />
-  }
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
-        <h2 className="text-lg font-medium text-text-primary">岗位列表</h2>
-        {canEdit && (
-          <div className="flex gap-2">
-            <Button variant="secondary" size="sm" onClick={() => setShowCompetencyManager(true)}>胜任力管理</Button>
-            <Button variant="secondary" size="sm" onClick={() => setShowCreateCompetency(true)}>新增胜任力</Button>
-            <Button size="sm" onClick={() => setShowCreatePosition(true)}>新增岗位</Button>
-          </div>
-        )}
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-        {positions.map((p) => (
-          <Card
-            key={p.id}
-            className="cursor-pointer hover:border-primary transition-colors"
-            onClick={() => handleSelectPosition(p)}
-          >
-            <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <h3 className="font-medium text-text-primary">{p.name}</h3>
-                {p.category && <Badge variant="default">{CATEGORY_LABEL[p.category] ?? p.category}</Badge>}
-              </div>
-              <p className="text-xs text-text-tertiary">编码：<span>{p.code}</span></p>
-              {p.level && <p className="text-xs text-text-secondary">层级：{p.level}</p>}
-              {p.industry && <p className="text-xs text-text-secondary">行业：{p.industry}</p>}
+      {positions.length === 0 ? (
+        <EmptyState
+          type="default"
+          title="暂无岗位"
+          description="请先创建岗位定义"
+          action={canEdit ? (
+            <div className="flex gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setShowCompetencyManager(true)}>胜任力管理</Button>
+              <Button variant="secondary" size="sm" onClick={() => setShowCreateCompetency(true)}>新增胜任力</Button>
+              <Button size="sm" onClick={() => setShowCreatePosition(true)}>新增岗位</Button>
             </div>
-          </Card>
-        ))}
-      </div>
+          ) : undefined}
+        />
+      ) : (
+        <>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-medium text-text-primary">岗位列表</h2>
+            {canEdit && (
+              <div className="flex gap-2">
+                <Button variant="secondary" size="sm" onClick={() => setShowCompetencyManager(true)}>胜任力管理</Button>
+                <Button variant="secondary" size="sm" onClick={() => setShowCreateCompetency(true)}>新增胜任力</Button>
+                <Button size="sm" onClick={() => setShowCreatePosition(true)}>新增岗位</Button>
+              </div>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+            {positions.map((p) => (
+              <Card
+                key={p.id}
+                className="cursor-pointer hover:border-primary transition-colors"
+                onClick={() => handleSelectPosition(p)}
+              >
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <h3 className="font-medium text-text-primary">{p.name}</h3>
+                    {p.category && <Badge variant="default">{CATEGORY_LABEL[p.category] ?? p.category}</Badge>}
+                  </div>
+                  <p className="text-xs text-text-tertiary">编码：<span>{p.code}</span></p>
+                  {p.level && <p className="text-xs text-text-secondary">层级：{p.level}</p>}
+                  {p.industry && <p className="text-xs text-text-secondary">行业：{p.industry}</p>}
+                </div>
+              </Card>
+            ))}
+          </div>
+        </>
+      )}
 
       {/* 岗位详情 Modal */}
       <Modal
@@ -131,7 +162,10 @@ export default function PositionTab() {
           <LoadingState />
         ) : selected ? (
           <div className="space-y-4">
-            <h3 className="text-lg font-semibold text-text-primary pr-8">{selected.name}</h3>
+             <h3 className="text-lg font-semibold text-text-primary pr-8">{selected.name}</h3>
+             {canEdit && (
+               <Button size="sm" variant="secondary" onClick={() => setEditingPosition(selected)}>编辑岗位</Button>
+             )}
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div><span className="text-text-tertiary">编码：</span>{selected.code}</div>
               <div><span className="text-text-tertiary">类别：</span>{CATEGORY_LABEL[selected.category ?? ''] ?? selected.category}</div>
@@ -164,12 +198,20 @@ export default function PositionTab() {
                         <span className="text-text-tertiary ml-2">(权重 {c.weight})</span>
                       </div>
                       {canEdit && (
-                        <button
-                          onClick={() => void handleRemoveCompetency(selected.id, (c.competencyId ?? c.competency_id) as number)}
-                          className="text-xs text-error hover:text-error-dark transition-colors"
-                        >
-                          移除
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <button
+                            onClick={() => setEditingRequirement(c)}
+                            className="text-xs text-primary hover:text-primary-hover transition-colors"
+                          >
+                            编辑
+                          </button>
+                          <button
+                            onClick={() => void handleRemoveCompetency(selected.id, (c.competencyId ?? c.competency_id) as number)}
+                            className="text-xs text-error hover:text-error-dark transition-colors"
+                          >
+                            移除
+                          </button>
+                        </div>
                       )}
                     </div>
                   </div>
@@ -227,6 +269,39 @@ export default function PositionTab() {
           competencies={competencies}
           onClose={() => setShowCompetencyManager(false)}
           onChanged={() => { void fetchCompetencies() }}
+          onEdit={setEditingCompetency}
+        />
+      )}
+      {canEdit && editingPosition && (
+        <EditPositionModal
+          position={editingPosition}
+          onClose={() => setEditingPosition(null)}
+          onSaved={(updated) => {
+            setSelected((current) => current ? { ...current, ...updated } : current)
+            setEditingPosition(null)
+            void fetchPositions()
+          }}
+        />
+      )}
+      {canEdit && editingCompetency && (
+        <EditCompetencyModal
+          competency={editingCompetency}
+          onClose={() => setEditingCompetency(null)}
+          onSaved={() => {
+            setEditingCompetency(null)
+            void fetchCompetencies()
+            if (selected) void handleSelectPosition(selected)
+          }}
+        />
+      )}
+      {canEdit && editingRequirement && selected && (
+        <EditPositionCompetencyModal
+          requirement={editingRequirement}
+          onClose={() => setEditingRequirement(null)}
+          onSaved={() => {
+            setEditingRequirement(null)
+            void handleSelectPosition(selected)
+          }}
         />
       )}
     </div>
@@ -260,12 +335,99 @@ function CreatePositionModal({ onClose, onCreated }: {
   }
 
   return (
-    <Modal isOpen onClose={onClose} maxWidth="max-w-lg" className="p-6">
-      <h3 className="text-lg font-semibold text-text-primary mb-4 pr-8">新增岗位</h3>
-      <div className="space-y-3">
+    <Modal
+      isOpen
+      onClose={onClose}
+      maxWidth="max-w-2xl"
+      className="px-6 py-5"
+      header={<h3 className="text-lg font-semibold text-text-primary">新增岗位</h3>}
+      footer={(
+        <div className="flex justify-end gap-2 px-6 py-4">
+          <Button variant="ghost" onClick={onClose}>取消</Button>
+          <Button onClick={handleSubmit} loading={submitting} disabled={!form.code || !form.name}>创建</Button>
+        </div>
+      )}
+    >
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
         <FormField label="岗位编码" required>
           <Input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="如 FE-001" />
         </FormField>
+        <FormField label="岗位名称" required>
+          <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        </FormField>
+        <FormField label="类别">
+          <select
+            aria-label="类别"
+            value={form.category}
+            onChange={(e) => setForm({ ...form, category: e.target.value })}
+            className={selectClassName}
+          >
+            {CATEGORY_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </FormField>
+        <FormField label="层级">
+          <select
+            aria-label="层级"
+            value={form.level}
+            onChange={(e) => setForm({ ...form, level: e.target.value })}
+            className={selectClassName}
+          >
+            {LEVEL_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </FormField>
+        <FormField label="行业">
+          <Input value={form.industry} onChange={(e) => setForm({ ...form, industry: e.target.value })} />
+        </FormField>
+        <FormField label="描述">
+          <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={2} />
+        </FormField>
+      </div>
+    </Modal>
+  )
+}
+
+function EditPositionModal({ position, onClose, onSaved }: {
+  position: Position
+  onClose: () => void
+  onSaved: (updated: Position) => void
+}) {
+  const [form, setForm] = useState({
+    name: position.name,
+    category: position.category ?? '',
+    level: position.level ?? '',
+    industry: position.industry ?? '',
+    description: position.description ?? '',
+  })
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleSubmit = async () => {
+    if (!form.name.trim()) return
+    setSubmitting(true)
+    try {
+      const updated = await trainingApi.updatePosition(position.id, {
+        name: form.name.trim(),
+        category: form.category || undefined,
+        level: form.level || undefined,
+        industry: form.industry || undefined,
+        description: form.description || undefined,
+      })
+      onSaved(updated)
+    } catch (err) {
+      toast.error('岗位更新失败', err instanceof ApiError ? err.message : '请稍后重试')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Modal isOpen onClose={onClose} maxWidth="max-w-lg" className="p-6">
+      <h3 className="text-lg font-semibold text-text-primary mb-4 pr-8">编辑岗位</h3>
+      <div className="space-y-3">
+        <p className="text-xs text-text-tertiary">编码：{position.code}（编码不可修改）</p>
         <FormField label="岗位名称" required>
           <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
         </FormField>
@@ -274,7 +436,7 @@ function CreatePositionModal({ onClose, onCreated }: {
             <Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
           </FormField>
           <FormField label="层级">
-            <Input value={form.level} onChange={(e) => setForm({ ...form, level: e.target.value })} placeholder="junior/mid/senior/expert" />
+            <Input value={form.level} onChange={(e) => setForm({ ...form, level: e.target.value })} />
           </FormField>
         </div>
         <FormField label="行业">
@@ -285,7 +447,129 @@ function CreatePositionModal({ onClose, onCreated }: {
         </FormField>
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="ghost" onClick={onClose}>取消</Button>
-          <Button onClick={handleSubmit} loading={submitting} disabled={!form.code || !form.name}>创建</Button>
+          <Button onClick={handleSubmit} loading={submitting} disabled={!form.name.trim()}>保存</Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function EditCompetencyModal({ competency, onClose, onSaved }: {
+  competency: Competency
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const [form, setForm] = useState({
+    name: competency.name,
+    category: competency.category ?? '',
+    description: competency.description ?? '',
+    isActive: competency.isActive ?? competency.is_active,
+  })
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleSubmit = async () => {
+    if (!form.name.trim()) return
+    setSubmitting(true)
+    try {
+      await trainingApi.updateCompetency(competency.id, {
+        name: form.name.trim(),
+        category: form.category || undefined,
+        description: form.description || undefined,
+        is_active: form.isActive,
+      })
+      onSaved()
+    } catch (err) {
+      toast.error('胜任力更新失败', err instanceof ApiError ? err.message : '请稍后重试')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Modal isOpen onClose={onClose} maxWidth="max-w-lg" className="p-6">
+      <h3 className="text-lg font-semibold text-text-primary mb-4 pr-8">编辑胜任力</h3>
+      <div className="space-y-3">
+        <p className="text-xs text-text-tertiary">编码：{competency.code}（编码不可修改）</p>
+        <FormField label="名称" required>
+          <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
+        </FormField>
+        <FormField label="类别">
+          <Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} />
+        </FormField>
+        <FormField label="描述">
+          <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
+        </FormField>
+        <label className="flex items-center gap-2 text-sm text-text-primary cursor-pointer">
+          <input
+            type="checkbox"
+            checked={form.isActive}
+            onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+            className="w-4 h-4 rounded border-border"
+          />
+          启用胜任力
+        </label>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="ghost" onClick={onClose}>取消</Button>
+          <Button onClick={handleSubmit} loading={submitting} disabled={!form.name.trim()}>保存</Button>
+        </div>
+      </div>
+    </Modal>
+  )
+}
+
+function EditPositionCompetencyModal({ requirement, onClose, onSaved }: {
+  requirement: PositionCompetency
+  onClose: () => void
+  onSaved: () => void
+}) {
+  const positionId = requirement.positionId ?? requirement.position_id
+  const competencyId = requirement.competencyId ?? requirement.competency_id
+  const [requiredLevel, setRequiredLevel] = useState(String(requirement.requiredLevel ?? requirement.required_level))
+  const [weight, setWeight] = useState(String(requirement.weight))
+  const [isMandatory, setIsMandatory] = useState(requirement.isMandatory ?? requirement.is_mandatory)
+  const [submitting, setSubmitting] = useState(false)
+
+  const handleSubmit = async () => {
+    setSubmitting(true)
+    try {
+      await trainingApi.updatePositionCompetency(positionId, competencyId, {
+        required_level: Number(requiredLevel),
+        weight: Number(weight),
+        is_mandatory: isMandatory,
+      })
+      onSaved()
+    } catch (err) {
+      toast.error('岗位胜任力要求更新失败', err instanceof ApiError ? err.message : '请稍后重试')
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  return (
+    <Modal isOpen onClose={onClose} maxWidth="max-w-md" className="p-6">
+      <h3 className="text-lg font-semibold text-text-primary mb-4 pr-8">编辑胜任力要求</h3>
+      <div className="space-y-3">
+        <p className="text-sm text-text-primary">{requirement.competencyName ?? requirement.competency_name}</p>
+        <div className="grid grid-cols-2 gap-3">
+          <FormField label="要求等级（1-5）" required>
+            <Input type="number" min={1} max={5} value={requiredLevel} onChange={(e) => setRequiredLevel(e.target.value)} />
+          </FormField>
+          <FormField label="权重" required>
+            <Input type="number" min={0} step={0.1} value={weight} onChange={(e) => setWeight(e.target.value)} />
+          </FormField>
+        </div>
+        <label className="flex items-center gap-2 text-sm text-text-primary cursor-pointer">
+          <input
+            type="checkbox"
+            checked={isMandatory}
+            onChange={(e) => setIsMandatory(e.target.checked)}
+            className="w-4 h-4 rounded border-border"
+          />
+          必修胜任力
+        </label>
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="ghost" onClick={onClose}>取消</Button>
+          <Button onClick={handleSubmit} loading={submitting} disabled={!requiredLevel || !weight}>保存</Button>
         </div>
       </div>
     </Modal>
@@ -379,7 +663,7 @@ function LinkCompetencyModal({
       <h3 className="text-lg font-semibold text-text-primary mb-4 pr-8">关联胜任力</h3>
       {available.length === 0 ? (
         <div className="text-sm text-text-secondary py-4 text-center">
-          所有胜任力已关联，请先在右上角"新增胜任力"创建更多胜任力项。
+          所有胜任力已关联，请先点击“新增胜任力”创建更多胜任力项。
         </div>
       ) : (
         <div className="space-y-3">
@@ -423,11 +707,12 @@ function LinkCompetencyModal({
 }
 
 function CompetencyManagerModal({
-  competencies, onClose, onChanged,
+  competencies, onClose, onChanged, onEdit,
 }: {
   competencies: Competency[]
   onClose: () => void
   onChanged: () => void
+  onEdit: (competency: Competency) => void
 }) {
   const [deletingId, setDeletingId] = useState<number | null>(null)
 
@@ -439,6 +724,7 @@ function CompetencyManagerModal({
       onChanged()
     } catch (err) {
       console.error('deleteCompetency failed:', err)
+      toast.error('删除胜任力失败', err instanceof ApiError ? err.message : '请稍后重试')
     } finally {
       setDeletingId(null)
     }
@@ -449,7 +735,7 @@ function CompetencyManagerModal({
       <h3 className="text-lg font-semibold text-text-primary mb-4 pr-8">胜任力管理</h3>
       {competencies.length === 0 ? (
         <div className="text-sm text-text-secondary py-6 text-center">
-          暂无胜任力，请先在右上角"新增胜任力"创建。
+          暂无胜任力，请先点击“新增胜任力”创建。
         </div>
       ) : (
         <div className="space-y-1">
@@ -464,20 +750,28 @@ function CompetencyManagerModal({
                   {c.category && (
                     <Badge variant="default">{CATEGORY_LABEL[c.category] ?? c.category}</Badge>
                   )}
-                  {!c.is_active && <Badge variant="error">已停用</Badge>}
+                  {!(c.isActive ?? c.is_active) && <Badge variant="error">已停用</Badge>}
                 </div>
                 <div className="text-xs text-text-tertiary mt-0.5">
                   编码：<span>{c.code}</span>
                   {c.description && <span className="ml-2">· {c.description}</span>}
                 </div>
               </div>
-              <button
+              <div className="ml-3 flex items-center gap-2">
+                <button
+                  onClick={() => onEdit(c)}
+                  className="text-xs text-primary hover:text-primary-hover transition-colors"
+                >
+                  编辑
+                </button>
+                <button
                 onClick={() => void handleDelete(c.id, c.name)}
                 disabled={deletingId === c.id}
                 className="ml-3 text-xs text-error hover:text-error-dark transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {deletingId === c.id ? '删除中…' : '删除'}
-              </button>
+                </button>
+              </div>
             </div>
           ))}
         </div>

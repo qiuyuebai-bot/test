@@ -2,7 +2,8 @@ import { http, PagedData } from '../lib/request'
 import type {
   Position, PositionDetail, Competency, PositionCompetency,
   AssessmentTemplate, AssessmentRecord, AssessmentRecordDetail, GapAnalysis,
-  Certification, CertificationRecord, CertificationVerification,
+  Certification, CertificationDetail, CertificationRule, CertificationRecord,
+  CertificationRecordDetail, CertificationVerification,
   TrainingProject, TrainingEnrollment, TrainingPlan,
 } from '../types/training'
 
@@ -43,6 +44,12 @@ export const trainingApi = {
     return http.post<PositionCompetency>(`/positions/${positionId}/competencies`, data)
   },
 
+  updatePositionCompetency(positionId: number, competencyId: number, data: {
+    required_level?: number; weight?: number; is_mandatory?: boolean
+  }): Promise<PositionCompetency> {
+    return http.put<PositionCompetency>(`/positions/${positionId}/competencies/${competencyId}`, data)
+  },
+
   removePositionCompetency(positionId: number, competencyId: number): Promise<void> {
     return http.delete<void>(`/positions/${positionId}/competencies/${competencyId}`)
   },
@@ -59,6 +66,13 @@ export const trainingApi = {
 
   createCompetency(data: { code: string; name: string; category?: string; description?: string }): Promise<Competency> {
     return http.post<Competency>('/competencies', data)
+  },
+
+  updateCompetency(id: number, data: {
+    name?: string; category?: string; description?: string;
+    level_descriptions?: Record<string, string>; is_active?: boolean
+  }): Promise<Competency> {
+    return http.put<Competency>(`/competencies/${id}`, data)
   },
 
   deleteCompetency(id: number): Promise<void> {
@@ -83,6 +97,22 @@ export const trainingApi = {
     pass_threshold?: number; duration_minutes?: number
   }): Promise<AssessmentTemplate> {
     return http.post<AssessmentTemplate>('/assessments/templates', data)
+  },
+
+  getAssessmentTemplate(id: number): Promise<AssessmentTemplate> {
+    return http.get<AssessmentTemplate>(`/assessments/templates/${id}`)
+  },
+
+  updateAssessmentTemplate(id: number, data: {
+    name?: string; description?: string; competency_configs?: Array<{
+      competency_id: number; question_count: number; difficulty: number; assessment_method: string
+    }>; pass_threshold?: number; duration_minutes?: number; is_active?: boolean
+  }): Promise<AssessmentTemplate> {
+    return http.put<AssessmentTemplate>(`/assessments/templates/${id}`, data)
+  },
+
+  deleteAssessmentTemplate(id: number): Promise<void> {
+    return http.delete<void>(`/assessments/templates/${id}`)
   },
 
   startAssessment(data: { template_id: number; learner_id: number }): Promise<AssessmentRecord> {
@@ -133,10 +163,33 @@ export const trainingApi = {
     return http.post<Certification>('/certifications', data)
   },
 
+  getCertification(id: number): Promise<CertificationDetail> {
+    return http.get<CertificationDetail>(`/certifications/${id}`)
+  },
+
+  updateCertification(id: number, data: {
+    name?: string; level?: string; description?: string;
+    validity_period_months?: number; issuer?: string; is_active?: boolean
+  }): Promise<Certification> {
+    return http.put<Certification>(`/certifications/${id}`, data)
+  },
+
+  deleteCertification(id: number): Promise<void> {
+    return http.delete<void>(`/certifications/${id}`)
+  },
+
+  listCertificationRules(certificationId: number): Promise<CertificationRule[]> {
+    return http.get<CertificationRule[]>(`/certifications/${certificationId}/rules`)
+  },
+
   addCertificationRule(data: {
     certification_id: number; rule_type: string; rule_config: Record<string, number>
   }): Promise<unknown> {
     return http.post<unknown>('/certifications/rules', data)
+  },
+
+  deleteCertificationRule(ruleId: number): Promise<void> {
+    return http.delete<void>(`/certifications/rules/${ruleId}`)
   },
 
   applyCertification(data: {
@@ -153,6 +206,10 @@ export const trainingApi = {
       user_id: params?.user_id,
       learner_id: params?.learner_id,
     })
+  },
+
+  getCertificationRecord(id: number): Promise<CertificationRecordDetail> {
+    return http.get<CertificationRecordDetail>(`/certifications/records/${id}`)
   },
 
   approveCertification(recordId: number, data: { comment?: string }): Promise<CertificationRecord> {
@@ -196,6 +253,10 @@ export const trainingApi = {
 
   updateTrainingProject(id: number, data: Partial<TrainingProject>): Promise<TrainingProject> {
     return http.put<TrainingProject>(`/training-projects/${id}`, data)
+  },
+
+  deleteTrainingProject(id: number): Promise<void> {
+    return http.delete<void>(`/training-projects/${id}`)
   },
 
   enrollProject(projectId: number, data: { learner_id?: number }): Promise<TrainingEnrollment> {

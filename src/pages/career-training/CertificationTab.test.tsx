@@ -10,6 +10,12 @@ vi.mock('@/store', async () => {
 
 vi.mock('@/api', () => ({
   trainingApi: {
+    getCertification: vi.fn(),
+    updateCertification: vi.fn(),
+    deleteCertification: vi.fn(),
+    listCertificationRules: vi.fn(),
+    deleteCertificationRule: vi.fn(),
+    getCertificationRecord: vi.fn(),
     createCertification: vi.fn(),
     addCertificationRule: vi.fn(),
     applyCertification: vi.fn(),
@@ -172,5 +178,44 @@ describe('CertificationTab', () => {
       expect(trainingApi.verifyCertification).toHaveBeenCalledWith('CERT-202608-000001')
       expect(trainingApi.revokeCertification).toHaveBeenCalledWith(1, { comment: '管理员撤销证书' })
     })
+  })
+
+  it('admin can edit a certification definition', async () => {
+    vi.mocked(trainingApi.getCertification).mockResolvedValueOnce({
+      id: 1, position_id: 1, name: '前端初级认证', code: 'CERT-FE-J', level: 'junior', validity_period_months: 24, is_active: true, created_at: '', updated_at: '', rules: [],
+    })
+    vi.mocked(trainingApi.updateCertification).mockResolvedValueOnce({
+      id: 1, position_id: 1, name: '前端初级认证', code: 'CERT-FE-J', level: 'junior', validity_period_months: 24, is_active: true, created_at: '', updated_at: '',
+    })
+    render(<MemoryRouter><CertificationTab /></MemoryRouter>)
+    await userEvent.click(screen.getByRole('button', { name: '编辑' }))
+    await userEvent.click(await screen.findByRole('button', { name: '保存' }))
+
+    await waitFor(() => {
+      expect(trainingApi.getCertification).toHaveBeenCalledWith(1)
+      expect(trainingApi.updateCertification).toHaveBeenCalledWith(1, expect.objectContaining({ name: '前端初级认证' }))
+    })
+  })
+
+  it('can manage certification rules and open record details', async () => {
+    vi.mocked(trainingApi.getCertification).mockResolvedValueOnce({
+      id: 1, position_id: 1, name: '前端初级认证', code: 'CERT-FE-J', level: 'junior', validity_period_months: 24, is_active: true, created_at: '', updated_at: '', rules: [],
+    })
+    vi.mocked(trainingApi.listCertificationRules).mockResolvedValueOnce([
+      { id: 7, certification_id: 1, rule_type: 'overall_score', rule_config: { min_score: 60 }, created_at: '' },
+    ])
+    vi.mocked(trainingApi.getCertificationRecord).mockResolvedValueOnce({
+      id: 1, certification_id: 1, user_id: 1, assessment_record_id: 5, status: 'pending', created_at: '', updated_at: '',
+      certification_name: '前端初级认证', assessment_score: 80,
+    })
+    render(<MemoryRouter><CertificationTab /></MemoryRouter>)
+    await userEvent.click(screen.getByRole('button', { name: '规则' }))
+    expect(await screen.findByText('认证规则：前端初级认证')).toBeInTheDocument()
+    expect(trainingApi.listCertificationRules).toHaveBeenCalledWith(1)
+    await userEvent.click(screen.getAllByRole('button', { name: '关闭' })[0])
+    await userEvent.click(screen.getByRole('button', { name: '查看详情' }))
+
+    expect(await screen.findByText('认证记录详情 #1')).toBeInTheDocument()
+    expect(trainingApi.getCertificationRecord).toHaveBeenCalledWith(1)
   })
 })
