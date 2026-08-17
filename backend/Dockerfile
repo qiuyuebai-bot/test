@@ -39,13 +39,8 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# 安装系统安全补丁（与前端 apk upgrade 对等，修复 OS 层 HIGH/CRITICAL 漏洞）
-RUN apt-get update && \
-    apt-get upgrade -y --no-install-recommends && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
-
 # 从构建阶段复制虚拟环境（运行阶段无需额外系统包，Python 自带 urllib 用于健康检查）
+# 注意：CI 中已配置 pull: true 确保拉取最新基础镜像（包含最新安全补丁），无需 apt-get upgrade（arm64 QEMU 下极慢）
 COPY --from=builder /opt/venv /opt/venv
 
 RUN rm -rf /usr/local/lib/python3.11/site-packages/pip* \
