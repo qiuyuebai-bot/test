@@ -39,8 +39,23 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
+# Upgrade only the util-linux package family affected by CVE-2026-53615.
+# A full apt upgrade makes the arm64 QEMU build exceed the CI time budget.
+RUN apt-get update && \
+    apt-get install -y --only-upgrade --no-install-recommends \
+        bsdutils \
+        libblkid1 \
+        liblastlog2-2 \
+        libmount1 \
+        libsmartcols1 \
+        libuuid1 \
+        login \
+        mount \
+        util-linux && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+
 # 从构建阶段复制虚拟环境（运行阶段无需额外系统包，Python 自带 urllib 用于健康检查）
-# 注意：CI 中已配置 pull: true 确保拉取最新基础镜像（包含最新安全补丁），无需 apt-get upgrade（arm64 QEMU 下极慢）
+# CI 同时配置 pull: true；上面的定向升级覆盖基础镜像重建前的安全补丁窗口。
 COPY --from=builder /opt/venv /opt/venv
 
 RUN rm -rf /usr/local/lib/python3.11/site-packages/pip* \
