@@ -22,7 +22,8 @@ COPY requirements-docker.txt requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
     python -m venv /opt/venv && \
     /opt/venv/bin/pip install --upgrade pip && \
-    /opt/venv/bin/pip install --upgrade-strategy eager -r requirements.txt
+    /opt/venv/bin/pip install -r requirements.txt && \
+    /opt/venv/bin/pip install --upgrade cryptography urllib3 certifi idna
 
 # ---- 运行阶段 ----
 FROM python:3.11-slim AS runtime
