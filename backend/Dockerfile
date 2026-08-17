@@ -22,7 +22,7 @@ COPY requirements-docker.txt requirements.txt
 RUN --mount=type=cache,target=/root/.cache/pip \
     python -m venv /opt/venv && \
     /opt/venv/bin/pip install --upgrade pip && \
-    /opt/venv/bin/pip install -r requirements.txt
+    /opt/venv/bin/pip install --upgrade-strategy eager -r requirements.txt
 
 # ---- 运行阶段 ----
 FROM python:3.11-slim AS runtime
@@ -37,6 +37,12 @@ ENV PYTHONUNBUFFERED=1 \
     APP_ENV=production
 
 WORKDIR /app
+
+# 安装系统安全补丁（与前端 apk upgrade 对等，修复 OS 层 HIGH/CRITICAL 漏洞）
+RUN apt-get update && \
+    apt-get upgrade -y --no-install-recommends && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # 从构建阶段复制虚拟环境（运行阶段无需额外系统包，Python 自带 urllib 用于健康检查）
 COPY --from=builder /opt/venv /opt/venv
