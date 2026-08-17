@@ -12,6 +12,16 @@ from app.constants import BLIND_AREA_CRITICAL_THRESHOLD, BLIND_AREA_WARNING_THRE
 from app.models import (
     LearnerProfile,
     AnswerRecord,
+    AgentTask,
+    AssessmentRecord,
+    BatchSubmission,
+    CertificationRecord,
+    DiagnosticSession,
+    IssuedTutoringQuestion,
+    LearningPath,
+    LearningResource,
+    TrainingEnrollment,
+    TrainingPlan,
     User,
     AnonymizedData,
     UserRoleEnum,
@@ -284,9 +294,44 @@ class LearnerService:
         
         if not learner:
             return False
-        
-        db.delete(learner)
-        db.commit()
+
+        try:
+            # Keep business/audit history that can exist without a profile.
+            for model in (
+                AgentTask,
+                AssessmentRecord,
+                CertificationRecord,
+                TrainingEnrollment,
+                TrainingPlan,
+            ):
+                db.query(model).filter(model.learner_id == learner_id).update(
+                    {model.learner_id: None}, synchronize_session=False
+                )
+
+            # Profile-owned records cannot outlive the profile. Delete children
+            # before parents to satisfy databases with foreign keys enabled.
+            for model in (
+                AnswerRecord,
+                BatchSubmission,
+                IssuedTutoringQuestion,
+                DiagnosticSession,
+                LearningPath,
+            ):
+                db.query(model).filter(model.learner_id == learner_id).delete(
+                    synchronize_session=False
+                )
+
+            resources = db.query(LearningResource).filter(
+                LearningResource.learner_id == learner_id
+            ).all()
+            for resource in resources:
+                db.delete(resource)
+
+            db.delete(learner)
+            db.commit()
+        except Exception:
+            db.rollback()
+            raise
         
         logger.info(f"删除学习者画像: id={learner_id}")
         

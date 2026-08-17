@@ -15,6 +15,10 @@ from app.domains.learner.schemas import (
     AnswerRecordCreate,
 )
 from app.models import (
+    AgentTask,
+    DiagnosticSession,
+    LearningResource,
+    ResourceSection,
     LearnerProfile,
     User,
     UserRoleEnum,
@@ -96,6 +100,46 @@ class TestLearnerProfileCRUD:
         result = LearnerService.delete_learner(db_session, sample_learner_profile.id)
         
         assert result is True
+
+    def test_delete_learner_with_related_data(
+        self,
+        db_session: Session,
+        sample_learner_profile: LearnerProfile,
+    ):
+        """删除画像时清理画像数据，并保留已解除关联的任务历史。"""
+        diagnostic = DiagnosticSession(
+            id="delete-profile-diagnostic",
+            user_id=sample_learner_profile.user_id,
+            learner_id=sample_learner_profile.id,
+        )
+        task = AgentTask(
+            learner_id=sample_learner_profile.id,
+            task_name="画像删除回归测试",
+            task_type="diagnosis",
+            agent_type="diagnosis",
+        )
+        resource = LearningResource(
+            learner_id=sample_learner_profile.id,
+            title="画像删除回归资源",
+            resource_type="guide",
+            content="测试内容",
+        )
+        resource.sections.append(ResourceSection(title="测试章节", content="测试内容"))
+        db_session.add_all([diagnostic, task, resource])
+        db_session.commit()
+        diagnostic_id = diagnostic.id
+        task_id = task.id
+        resource_id = resource.id
+
+        result = LearnerService.delete_learner(db_session, sample_learner_profile.id)
+
+        assert result is True
+        assert db_session.get(LearnerProfile, sample_learner_profile.id) is None
+        assert db_session.get(DiagnosticSession, diagnostic_id) is None
+        assert db_session.get(LearningResource, resource_id) is None
+        preserved_task = db_session.get(AgentTask, task_id)
+        assert preserved_task is not None
+        assert preserved_task.learner_id is None
 
 
 class TestLearnerAnalysis:
