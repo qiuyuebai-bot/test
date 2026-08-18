@@ -134,6 +134,7 @@ class TaskRepository:
         stage: str,
         progress: int,
         description: str,
+        duration_ms: Optional[float] = None,
     ) -> None:
         """更新任务阶段到数据库（权威数据源）"""
         log_entry = {
@@ -142,6 +143,8 @@ class TaskRepository:
             "description": description,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
+        if duration_ms is not None:
+            log_entry["previous_stage_duration_ms"] = duration_ms
         try:
             with get_db_context() as db:
                 task = db.query(AgentTask).filter(AgentTask.id == task_id).first()
@@ -200,9 +203,13 @@ class TaskRepository:
         task_id: int,
         round_num: int,
         debate_data: Dict[str, Any],
+        final_review: bool = False,
     ) -> None:
         """保存辩论记录到数据库"""
         with get_db_context() as db:
+            if not db.query(AgentTask.id).filter(AgentTask.id == task_id).first():
+                logger.warning(f"[TaskRepo] 跳过无效任务的辩论记录: task_id={task_id}")
+                return
             record = DebateRecord(
                 task_id=task_id,
                 debate_round=round_num,
@@ -240,9 +247,12 @@ class TaskRepository:
                     p.get("type") == "hallucination_evidence"
                     for p in debate_data.get("conflict_points", [])
                 ),
-                resolution_status="resolved" if debate_data.get(
-                    "final_decision"
-                ) == "approved" else "unresolved",
+                resolution_status=(
+                    "resolved"
+                    if final_review
+                    or debate_data.get("final_decision") in {"approved", "rejected"}
+                    else "unresolved"
+                ),
                 corrected_content=debate_data.get("corrected_content", ""),
                 correction_reason=json.dumps(
                     [c.get("description", "") for c in debate_data.get("corrections", [])],
@@ -255,6 +265,12 @@ class TaskRepository:
                     ensure_ascii=False,
                     default=str,
                 ),
+                resolved_at=datetime.now()
+                if (
+                    final_review
+                    or debate_data.get("final_decision") in {"approved", "rejected"}
+                )
+                else None,
             )
             db.add(record)
             db.commit()
@@ -282,6 +298,8 @@ class TaskRepository:
         content_json = dict(generation_result.get("content_json") or {})
         if generation_result.get("training_context"):
             content_json["training_context"] = generation_result["training_context"]
+        if generation_result.get("match_score_metadata"):
+            content_json["match_score_metadata"] = generation_result["match_score_metadata"]
 
         with get_db_context() as db:
             task = db.query(AgentTask).filter(AgentTask.id == task_id).first()
@@ -313,6 +331,10 @@ class TaskRepository:
                             generated_by_agent="generation_agent",
                             generation_task_id=task_id,
                             generation_method=generation_result.get("generation_method", "deterministic_fallback"),
+                            # This value is calculated by the orchestration
+                            # boundary. Keep the explicit fallback only for
+                            # legacy callers that do not provide it.
+                            match_score=generation_result.get("match_score", 0),
                             is_validated=audit_result.get("passed", False),
                             validation_passed=audit_result.get("passed", False),
                             validation_score=audit_result.get("overall_score", 0),
@@ -327,6 +349,10 @@ class TaskRepository:
                     ).first()
                     if not resource:
                         raise
+            elif generation_result.get("match_score") is not None and not resource.match_score:
+                # Backfill resources created by the old Agent path when the
+                # task is retried after the scoring fix is deployed.
+                resource.match_score = generation_result["match_score"]
             resource_id = resource.id
 
             issued_question_count = 0
@@ -415,6 +441,7 @@ class TaskRepository:
                 "generation_method": resource.generation_method or "deterministic_fallback",
                 "validation_score": resource.validation_score or 0,
                 "hallucination_detected": bool(resource.hallucination_detected),
+                "match_score": resource.match_score,
             }
 
     def save_reused_resource_and_complete(
@@ -436,6 +463,7 @@ class TaskRepository:
             "source_doc_ids": reusable_resource.get("source_doc_ids", []),
             "generation_method": "reused_existing",
             "reused_from_resource_id": reusable_resource.get("id"),
+            "match_score": reusable_resource.get("match_score", 0),
         }
         generation_result["content"] = normalize_resource_content(
             generation_result["content"]

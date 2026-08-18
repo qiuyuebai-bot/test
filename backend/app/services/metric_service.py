@@ -4,6 +4,7 @@ Calculators only read business facts and produce numerator/denominator/value.
 Policies own applicability, sample gates, freshness, and error states.
 """
 
+import json
 from datetime import datetime, timedelta
 from typing import Any, Dict, Iterable, Optional
 
@@ -113,6 +114,90 @@ class MetricCalculator:
             "sample_count": total,
             "value": round(indexed / total * 100, 2) if total else None,
             "has_data": total > 0,
+            "metadata": {
+                "coverage_type": "index",
+                "definition": "indexed knowledge slices / total knowledge slices",
+                "warning": (
+                    "This is vector-index coverage, not generated-content knowledge-point coverage"
+                ),
+            },
+        }
+
+    @classmethod
+    def generated_content_coverage(
+        cls, db: Session, scope: str, scope_id: int | None
+    ) -> Dict[str, Any]:
+        """Measure coverage of source slices by persisted generated content."""
+        query = db.query(LearningResource).filter(
+            LearningResource.status == "ready",
+            LearningResource.validation_passed.is_(True),
+        )
+        learner_id = cls._scope_learner_id(scope, scope_id)
+        if learner_id is not None:
+            query = query.filter(LearningResource.learner_id == learner_id)
+
+        resources = query.all()
+        source_ids: set[int] = set()
+        resource_sources: list[tuple[LearningResource, list[int]]] = []
+        for resource in resources:
+            raw_ids = resource.source_slice_ids or []
+            if isinstance(raw_ids, str):
+                try:
+                    raw_ids = json.loads(raw_ids)
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    raw_ids = []
+            ids = []
+            for value in raw_ids if isinstance(raw_ids, list) else []:
+                try:
+                    ids.append(int(value))
+                except (TypeError, ValueError):
+                    continue
+            if ids:
+                source_ids.update(ids)
+                resource_sources.append((resource, ids))
+
+        if not source_ids:
+            return {
+                "numerator": 0,
+                "denominator": 0,
+                "sample_count": len(resources),
+                "value": None,
+                "has_data": False,
+                "metadata": {"coverage_type": "generated_content", "resources_evaluated": 0},
+            }
+
+        slices = {
+            item.id: item
+            for item in db.query(KnowledgeSlice).filter(KnowledgeSlice.id.in_(source_ids)).all()
+        }
+        covered = 0
+        denominator = 0
+        for resource, ids in resource_sources:
+            content = str(resource.content or "").casefold()
+            for slice_id in ids:
+                source_slice = slices.get(slice_id)
+                if not source_slice:
+                    continue
+                denominator += 1
+                keywords = list(source_slice.keywords or [])
+                if not keywords and source_slice.title:
+                    keywords = [source_slice.title]
+                keywords = [str(item).strip().casefold() for item in keywords if str(item).strip()]
+                if any(keyword in content for keyword in keywords):
+                    covered += 1
+
+        return {
+            "numerator": covered,
+            "denominator": denominator,
+            "sample_count": len(resource_sources),
+            "value": round(covered / denominator * 100, 2) if denominator else None,
+            "has_data": denominator > 0,
+            "metadata": {
+                "coverage_type": "generated_content",
+                "resources_evaluated": len(resource_sources),
+                "source_slice_count": len(source_ids),
+                "definition": "source slices referenced by ready resources and represented in resource content",
+            },
         }
 
     @classmethod
@@ -253,6 +338,7 @@ class MetricCalculator:
             "resource_match_score": cls.resource_match_score,
             "resource_match_effectiveness": cls.resource_match_effectiveness,
             "knowledge_index_coverage": cls.knowledge_index_coverage,
+            "generated_content_coverage": cls.generated_content_coverage,
             "blind_spot_resource_coverage": cls.blind_spot_resource_coverage,
             "answer_accuracy": cls.answer_accuracy,
             "hallucination_rate": cls.hallucination_rate,

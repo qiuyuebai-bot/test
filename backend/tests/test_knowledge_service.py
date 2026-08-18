@@ -173,6 +173,23 @@ class TestKnowledgeSearch:
         
         assert len(results) == 0
 
+    def test_keyword_fallback_ranks_matches_and_rejects_unrelated_topics(
+        self, db_session: Session, sample_knowledge_slices: list
+    ):
+        relevant = KnowledgeService.search(
+            db_session,
+            KnowledgeSearchRequest(query="卷积神经网络", top_k=5, search_type="keyword"),
+        )
+        assert relevant
+        assert relevant[0]["similarity"] >= 0.6
+        assert relevant[0]["similarity"] != 0.5
+
+        unrelated = KnowledgeService.search(
+            db_session,
+            KnowledgeSearchRequest(query="机器人坐标系", top_k=5, search_type="keyword"),
+        )
+        assert unrelated == []
+
 
 class TestKnowledgePreview:
     """知识库预览测试"""

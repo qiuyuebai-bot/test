@@ -245,6 +245,36 @@ class TestRunAgentDecision:
         assert decision["confidence"] <= 0.95
 
 
+class TestDecisionSpecificFeedback:
+    """Fallback feedback must reflect the selected adaptive branch."""
+
+    def test_advance_and_simplify_are_materially_different(
+        self, sample_learner_profile
+    ):
+        advance = AdaptiveTutoringService._generate_simplified_explanation(
+            sample_learner_profile,
+            "反向传播算法",
+            "反向传播的核心作用是什么？",
+            "A",
+            "A",
+            decision="advance",
+        )
+        simplify = AdaptiveTutoringService._generate_simplified_explanation(
+            sample_learner_profile,
+            "反向传播算法",
+            "反向传播的核心作用是什么？",
+            "B",
+            "A",
+            decision="simplify",
+        )
+
+        assert advance["type"] == "advance"
+        assert simplify["type"] == "simplify"
+        assert advance["title"] != simplify["title"]
+        assert advance["simple_explanation"] != simplify["simple_explanation"]
+        assert advance["recommendation"] != simplify["recommendation"]
+
+
 class TestMultipleQuestionGrading:
     def test_requires_all_correct_options_without_extras(
         self, db_session, sample_learner_profile, sample_user, monkeypatch

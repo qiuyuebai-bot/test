@@ -25,6 +25,7 @@ from app.agents.content_corrector import ContentCorrector
 from app.domains.knowledge.service import KnowledgeService
 from app.domains.learner.service import LearnerService
 from app.database import get_db_context
+from app.services.common import ResourceServiceHelper
 from app.utils.resource_content import normalize_resource_content
 
 
@@ -128,7 +129,8 @@ class AgentOrchestrator:
 
         with self._running_tasks_lock:
             self._running_tasks[task_id] = {
-                "stage": "init", "progress": 0, "start_time": time.time(), "logs": [],
+                "stage": "init", "progress": 0, "start_time": time.time(),
+                "stage_started_at": time.time(), "logs": [],
             }
 
         try:
@@ -168,6 +170,33 @@ class AgentOrchestrator:
                 final_audit = self._run_audit(task_id, corrected_content, knowledge_results, debate_round=len(debate_results) + 1)
             if debate_results and debate_results[-1].get("final_decision") == "rejected":
                 final_audit = {**final_audit, "passed": False}
+            if not debate_results:
+                # A passing first audit used to produce no DebateRecord at
+                # all, so the hallucination metric could never reach its
+                # sample gate. Persist the final audit as an evaluated review.
+                final_decision = (
+                    "approved"
+                    if final_audit.get("passed", False)
+                    else "rejected"
+                    if final_audit.get("overall_score", 0) < 60
+                    else "needs_revision"
+                )
+                self.task_repo.save_debate_record(
+                    task_id,
+                    1,
+                    {
+                        "final_decision": final_decision,
+                        "original_content": generation_result.get("content", ""),
+                        "corrected_content": generation_result.get("content", ""),
+                        "reference_content": " ".join(
+                            str(item.get("content", "")) for item in knowledge_results
+                        ),
+                        "conflict_points": final_audit.get("issues", []),
+                        "corrections": final_audit.get("corrections", []),
+                        "confidence": final_audit.get("overall_score", 0) / 100,
+                    },
+                    final_review=True,
+                )
             self._update_running_task(task_id, debate_results=debate_results, corrected_content=corrected_content, final_audit=final_audit)
 
             # 阶段6：最终修正与完成
@@ -200,6 +229,34 @@ class AgentOrchestrator:
                 generation_result.get("content"),
             )
             generation_result["word_count"] = len(generation_result["content"])
+
+            # Every generation entry point must persist the same match score
+            # contract.  The legacy resource service already calculates this
+            # value; the Agent pipeline used to skip it and persisted the DB
+            # default (0), making the metric look collected but meaningless.
+            blind_areas = diagnosis_result.get("knowledge_blind_areas", []) or []
+            recommended_difficulty = diagnosis_result.get(
+                "recommended_difficulty", {}
+            ).get("recommended_difficulty", 3)
+            ability_scores = diagnosis_result.get("ability_scores", {}) or {}
+            normalized_blind_areas = [
+                area.get("name", "") if isinstance(area, dict) else str(area)
+                for area in blind_areas
+            ]
+            generation_result["match_score"] = ResourceServiceHelper.calculate_match_score(
+                recommended_difficulty=recommended_difficulty,
+                resource_difficulty=generation_result.get("difficulty_level", 3),
+                ability_scores=ability_scores,
+                blind_areas=normalized_blind_areas,
+                resource_content=generation_result["content"],
+            )
+            generation_result["match_score_metadata"] = {
+                "formula_version": "difficulty_40_ability_30_blind_spot_30_v1",
+                "source": "agent_generation_pipeline",
+                "recommended_difficulty": recommended_difficulty,
+                "resource_difficulty": generation_result.get("difficulty_level", 3),
+                "blind_area_count": len(normalized_blind_areas),
+            }
 
             final_result = self.task_repo.save_resource_and_complete(
                 task_id,
@@ -259,9 +316,13 @@ class AgentOrchestrator:
     def _retrieve_knowledge(
         self, target_topic: str, diagnosis_result: Dict[str, Any], industry: str = None
     ) -> List[Dict]:
+        started_at = time.perf_counter()
         with get_db_context() as db:
             results = KnowledgeService.search(db=db, query=target_topic, industry=industry, top_k=8)
-        logger.debug(f"[Agent调度中心] 知识库检索: {len(results)} 条结果")
+        duration_ms = round((time.perf_counter() - started_at) * 1000, 1)
+        logger.info(
+            f"[Agent调度中心] 知识库检索: {len(results)} 条结果, duration={duration_ms}ms"
+        )
         return results
 
     def _run_generation(
@@ -349,7 +410,9 @@ class AgentOrchestrator:
 
             if decision == "approved":
                 debate_result["corrected_content"] = current_content
-                self.task_repo.save_debate_record(task_id, current_round, debate_result)
+                self.task_repo.save_debate_record(
+                    task_id, current_round, debate_result, final_review=True
+                )
                 break
 
             self.event_bus.broadcast(task_id, "debate_round", {
@@ -362,7 +425,12 @@ class AgentOrchestrator:
                 current_content, debate_result.get("corrections", []), reference_knowledge
             )
             debate_result["corrected_content"] = current_content
-            self.task_repo.save_debate_record(task_id, current_round, debate_result)
+            self.task_repo.save_debate_record(
+                task_id,
+                current_round,
+                debate_result,
+                final_review=bool(debate_result.get("debate_ended") or decision == "rejected"),
+            )
             if debate_result.get("debate_ended", False) or decision == "rejected":
                 break
             current_round += 1
@@ -391,6 +459,8 @@ class AgentOrchestrator:
         if extra:
             event_data.update(extra)
 
+        duration_ms = None
+
         log_entry = {
             "stage": stage, "progress": progress, "description": description,
             "timestamp": time.strftime("%Y-%m-%d %H:%M:%S"),
@@ -398,12 +468,22 @@ class AgentOrchestrator:
 
         with self._running_tasks_lock:
             if task_id in self._running_tasks:
+                previous_started_at = self._running_tasks[task_id].get("stage_started_at")
+                if previous_started_at is not None:
+                    duration_ms = round((time.time() - previous_started_at) * 1000, 1)
                 self._running_tasks[task_id]["stage"] = stage
                 self._running_tasks[task_id]["progress"] = progress
+                self._running_tasks[task_id]["stage_started_at"] = time.time()
                 self._running_tasks[task_id]["logs"].append(log_entry)
 
+        if duration_ms is not None:
+            event_data["previous_stage_duration_ms"] = duration_ms
+            log_entry["previous_stage_duration_ms"] = duration_ms
+
         self.event_bus.broadcast(task_id, "stage_update", event_data)
-        self.task_repo.update_stage(task_id, stage, progress, description)
+        self.task_repo.update_stage(
+            task_id, stage, progress, description, duration_ms=duration_ms
+        )
 
     def _mark_task_failed(self, task_id: int, error: str) -> None:
         with self._running_tasks_lock:

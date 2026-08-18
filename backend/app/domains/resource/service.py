@@ -89,6 +89,13 @@ class ResourceGenerationService(BaseService):
                     resource_content=res_result.get("content", ""),
                 )
                 res_result["match_score"] = match_score
+                res_result["match_score_metadata"] = {
+                    "formula_version": "difficulty_40_ability_30_blind_spot_30_v1",
+                    "source": "resource_generation_service",
+                    "recommended_difficulty": recommended_diff,
+                    "resource_difficulty": res_result.get("difficulty_level", 3),
+                    "blind_area_count": len(blind_areas),
+                }
                 res_result["resource_type_name"] = cls.RESOURCE_TYPE_NAMES.get(res_type, res_type)
                 total_match_score += match_score
                 
@@ -232,7 +239,14 @@ class ResourceGenerationService(BaseService):
                 difficulty_level=resource_data.get("difficulty_level", 3),
                 version="1.0",
                 content=content,
-                content_json=resource_data.get("content_json", {}),
+                content_json={
+                    **(resource_data.get("content_json") or {}),
+                    **(
+                        {"match_score_metadata": resource_data["match_score_metadata"]}
+                        if resource_data.get("match_score_metadata")
+                        else {}
+                    ),
+                },
                 word_count=len(content),
                 source_slice_ids=resource_data.get("source_slice_ids", []),
                 source_doc_ids=resource_data.get("source_doc_ids", []),

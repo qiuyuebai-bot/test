@@ -268,6 +268,7 @@ class MetricsUtil:
             "hallucination_rate": by_id.get("hallucination_rate", {}).get("value"),
             "resource_match_accuracy": by_id.get("resource_match_score", {}).get("value"),
             "knowledge_coverage_rate": by_id.get("knowledge_index_coverage", {}).get("value"),
+            "generated_content_coverage_rate": by_id.get("generated_content_coverage", {}).get("value"),
         }
         
         logger.info(f"核心指标计算完成: {metrics}")
@@ -391,6 +392,7 @@ class MetricsUtil:
             "hallucination_rate": by_id.get("hallucination_rate", {}).get("value"),
             "resource_match_accuracy": by_id.get("resource_match_score", {}).get("value"),
             "knowledge_coverage_rate": by_id.get("knowledge_index_coverage", {}).get("value"),
+            "generated_content_coverage_rate": by_id.get("generated_content_coverage", {}).get("value"),
             "agent_performance": MetricsUtil.calculate_agent_performance(db),
             "answer_stats": MetricsUtil.calculate_answer_statistics(db),
         }

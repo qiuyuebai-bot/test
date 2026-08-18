@@ -83,6 +83,7 @@ export default function MetricsDashboard() {
   const resourceMatchMetric = findMetric(standardMetrics, 'resource_match_score')
   const resourceEffectivenessMetric = findMetric(standardMetrics, 'resource_match_effectiveness')
   const knowledgeMetric = findMetric(standardMetrics, 'knowledge_index_coverage')
+  const generatedCoverageMetric = findMetric(standardMetrics, 'generated_content_coverage')
   const rawHallucinationRate = hasStandardMetrics ? hallucinationMetric?.value ?? null : systemMetrics?.hallucinationRate
   const hasSufficientHallucinationSample = hasStandardMetrics
     ? metricReady(hallucinationMetric)
@@ -153,23 +154,39 @@ export default function MetricsDashboard() {
       showSampleMetadata: true,
     },
     {
-      label: '知识点覆盖率',
+      label: '知识索引覆盖率',
       value: hasStandardMetrics
         ? formatMetricValue(knowledgeMetric, metricStatusLabel(knowledgeMetric))
         : knowledgeCoverageRate === null ? '暂无数据' : `${knowledgeCoverageRate.toFixed(1)}%`,
       isPending: knowledgeCoverageRate === null,
       pendingLabel: hasStandardMetrics ? metricStatusLabel(knowledgeMetric) : '暂无数据',
-      target: '> 85%',
-      isOnTarget: knowledgeCoverageRate !== null && knowledgeCoverageRate >= 85,
+      target: '≥ 90%',
+      isOnTarget: knowledgeCoverageRate !== null && knowledgeCoverageRate >= 90,
       icon: Brain,
       color: 'text-info',
       bgColor: 'bg-info/10',
       progressValue: knowledgeCoverageRate ?? 0,
       progressMax: 100,
       progressVariant: 'default' as const,
-      description: '衡量知识库对目标领域知识点的覆盖程度。通过知识点图谱自动分析计算。',
-      targetText: '目标值: > 85%',
+      description: '衡量已启用知识切片进入向量索引的比例；不等同于生成内容的知识点覆盖率。',
+      targetText: '比赛口径目标值: ≥ 90%',
     },
+    ...(generatedCoverageMetric ? [{
+      label: '生成内容覆盖率',
+      value: formatMetricValue(generatedCoverageMetric, metricStatusLabel(generatedCoverageMetric)),
+      isPending: !metricReady(generatedCoverageMetric),
+      pendingLabel: metricStatusLabel(generatedCoverageMetric),
+      target: '≥ 90%',
+      isOnTarget: metricReady(generatedCoverageMetric) && (generatedCoverageMetric.value ?? 0) >= 90,
+      icon: Brain,
+      color: 'text-info',
+      bgColor: 'bg-info/10',
+      progressValue: metricProgressValue(generatedCoverageMetric),
+      progressMax: 100,
+      progressVariant: 'default' as const,
+      description: '按生成资源引用的知识切片统计实际被内容覆盖的比例。',
+      targetText: '比赛口径目标值: ≥ 90%',
+    }] : []),
     ...(hasStandardMetrics ? [{
       label: '资源匹配效果',
       value: formatMetricValue(resourceEffectivenessMetric, metricStatusLabel(resourceEffectivenessMetric)),
@@ -287,7 +304,7 @@ export default function MetricsDashboard() {
                   <Area
                     type="monotone"
                     dataKey="knowledgeCoverageRate"
-                    name="知识点覆盖率"
+                    name="知识索引覆盖率"
                     stroke={CHART_COLORS.secondary}
                     fillOpacity={1}
                     fill="url(#colorCoverage)"
@@ -329,7 +346,7 @@ export default function MetricsDashboard() {
                 <Legend />
                 <Bar dataKey="hallucinationRate" name="幻觉率" fill="var(--color-error)" radius={[0, 4, 4, 0]} />
                 <Bar dataKey="resourceMatchAccuracy" name="资源匹配准确率" fill={CHART_COLORS.primary} radius={[0, 4, 4, 0]} />
-                <Bar dataKey="knowledgeCoverageRate" name="知识点覆盖率" fill={CHART_COLORS.secondary} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="knowledgeCoverageRate" name="知识索引覆盖率" fill={CHART_COLORS.secondary} radius={[0, 4, 4, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>

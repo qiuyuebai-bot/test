@@ -43,6 +43,14 @@ METRIC_REGISTRY: Dict[str, MetricDefinition] = {
         source=("knowledge_slices.is_indexed",),
         minimum_sample_size=1,
     ),
+    "generated_content_coverage": MetricDefinition(
+        metric_id="generated_content_coverage",
+        display_name="生成内容覆盖率",
+        unit="%",
+        formula="source slices referenced by ready resources and represented in resource content",
+        source=("learning_resources.source_slice_ids", "learning_resources.content", "knowledge_slices.keywords"),
+        minimum_sample_size=1,
+    ),
     "blind_spot_resource_coverage": MetricDefinition(
         metric_id="blind_spot_resource_coverage",
         display_name="\u76f2\u533a\u8d44\u6e90\u8986\u76d6\u7387",

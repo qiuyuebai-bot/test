@@ -511,6 +511,7 @@ class ReportService(BaseService):
                 "answer_accuracy": by_id.get("answer_accuracy", {}).get("value"),
                 "knowledge_coverage_rate": by_id.get("knowledge_index_coverage", {}).get("value"),
                 "knowledge_index_coverage_rate": by_id.get("knowledge_index_coverage", {}).get("value"),
+                "generated_content_coverage_rate": by_id.get("generated_content_coverage", {}).get("value"),
                 "learning_blind_spot_coverage_rate": by_id.get("blind_spot_resource_coverage", {}).get("value"),
                 "metrics_status": metrics_status,
                 "metrics_source": "realtime",

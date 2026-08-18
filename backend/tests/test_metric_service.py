@@ -20,6 +20,8 @@ def test_empty_database_reports_no_data_instead_of_zero(db_session):
     assert metrics["knowledge_index_coverage"]["status"] == "no_data"
     assert metrics["answer_accuracy"]["value"] is None
     assert metrics["answer_accuracy"]["status"] == "no_data"
+    assert metrics["generated_content_coverage"]["value"] is None
+    assert metrics["generated_content_coverage"]["status"] == "no_data"
 
 
 def test_zero_is_a_ready_metric_value(db_session, sample_learning_resource):
@@ -105,6 +107,7 @@ def test_metrics_api_exposes_registry_and_standard_results(client):
         "resource_match_score",
         "resource_match_effectiveness",
         "knowledge_index_coverage",
+        "generated_content_coverage",
         "blind_spot_resource_coverage",
         "answer_accuracy",
         "hallucination_rate",
@@ -119,4 +122,4 @@ def test_metrics_api_exposes_registry_and_standard_results(client):
     }
     definitions = client.get("/api/v1/report/metrics/definitions")
     assert definitions.status_code == 200
-    assert len(definitions.json()["data"]) == 6
+    assert len(definitions.json()["data"]) == 7

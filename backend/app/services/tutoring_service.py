@@ -1,6 +1,7 @@
 """交互式自适应导学服务：单题二元判定，并同时提供通俗讲解与知识点扩展。"""
 import json
 import hashlib
+import re
 import uuid
 from datetime import datetime
 from typing import Dict, Any, List, Optional
@@ -166,10 +167,44 @@ class AdaptiveTutoringService(BaseService):
         content = question.get("question", "") if isinstance(question, dict) else question
         return " ".join(str(content or "").strip().casefold().split())
 
+    @staticmethod
+    def _question_tokens(question: Any) -> set[str]:
+        """Tokenize a question for lightweight semantic near-duplicate checks."""
+        content = question.get("question", "") if isinstance(question, dict) else question
+        text = str(content or "").casefold()
+        tokens: set[str] = set(re.findall(r"[a-z0-9_]+", text))
+        for run in re.findall(r"[\u4e00-\u9fff]+", text):
+            tokens.add(run)
+            tokens.update(run[index:index + 2] for index in range(len(run) - 1))
+        return tokens
+
+    @classmethod
+    def _is_duplicate_question(
+        cls,
+        question: Any,
+        signatures: set[str],
+        token_sets: list[set[str]],
+        threshold: float = 0.78,
+    ) -> bool:
+        signature = cls._question_signature(question)
+        if not signature or signature in signatures:
+            return True
+        tokens = cls._question_tokens(question)
+        if not tokens:
+            return True
+        return any(
+            len(tokens & previous) / len(tokens | previous) >= threshold
+            for previous in token_sets
+            if previous
+        )
+
     @classmethod
     def _generic_fallback_question(cls, topic: str, difficulty: int, index: int) -> Dict[str, Any]:
         """Return a topic-labelled question when neither the provider nor seed bank can help."""
-        focus = ["基础概念与前提", "核心机制", "场景应用", "边界条件", "专业权衡"][index % 5]
+        focus = [
+            "基础概念与前提", "核心机制", "场景应用", "边界条件", "专业权衡",
+            "输入约束", "输出验证", "异常处理", "性能权衡", "安全边界",
+        ][index % 10]
         templates = {
             1: (
                 f"入门学习“{topic}”时，关于其{focus}首先需要识别哪项基础信息？",
@@ -437,14 +472,20 @@ class AdaptiveTutoringService(BaseService):
             for question in excluded_questions
             if cls._question_signature(question)
         }
+        excluded_token_sets = [
+            cls._question_tokens(question)
+            for question in excluded_questions
+            if cls._question_tokens(question)
+        ]
         unique_generated: List[Dict[str, Any]] = []
         seen_signatures = set(excluded_signatures)
+        seen_token_sets = list(excluded_token_sets)
         for question in generated:
             if int(question.get("difficulty", effective_difficulty)) != effective_difficulty:
                 continue
-            signature = cls._question_signature(question)
-            if signature and signature not in seen_signatures:
-                seen_signatures.add(signature)
+            if not cls._is_duplicate_question(question, seen_signatures, seen_token_sets):
+                seen_signatures.add(cls._question_signature(question))
+                seen_token_sets.append(cls._question_tokens(question))
                 unique_generated.append(question)
         generated = unique_generated[:question_count]
         for question in generated:
@@ -477,20 +518,31 @@ class AdaptiveTutoringService(BaseService):
             expected_multiple = (len(generated) + 1) % 3 == 0
             if (candidate["type"] == "multiple") != expected_multiple:
                 continue
-            signature = cls._question_signature(candidate)
-            if signature and signature not in seen_signatures:
-                seen_signatures.add(signature)
+            if not cls._is_duplicate_question(candidate, seen_signatures, seen_token_sets):
+                seen_signatures.add(cls._question_signature(candidate))
+                seen_token_sets.append(cls._question_tokens(candidate))
                 generated.append(candidate)
 
         fallback_variant = 0
+        fallback_attempts = 0
         while len(generated) < question_count:
+            fallback_attempts += 1
             candidate_index = len(generated) + fallback_variant * 3
             candidate = cls._generic_fallback_question(normalized_topic, effective_difficulty, candidate_index)
-            signature = cls._question_signature(candidate)
-            if signature not in seen_signatures:
-                seen_signatures.add(signature)
+            duplicate = cls._is_duplicate_question(candidate, seen_signatures, seen_token_sets)
+            # A finite fallback is preferable to an unbounded loop when a
+            # caller asks for more variants than the deterministic bank can
+            # express. Exact duplicates are still always rejected.
+            if not duplicate or fallback_attempts > question_count * 20:
+                signature = cls._question_signature(candidate)
+                if signature in seen_signatures:
+                    fallback_variant += 1
+                    continue
+                seen_signatures.add(cls._question_signature(candidate))
+                seen_token_sets.append(cls._question_tokens(candidate))
                 generated.append(candidate)
                 fallback_variant = 0
+                fallback_attempts = 0
             else:
                 fallback_variant += 1
 
@@ -641,7 +693,7 @@ class AdaptiveTutoringService(BaseService):
                 question_content,
                 user_answer,
                 correct_answer,
-                decision="review" if is_correct else "simplify",
+                decision=next_action,
             )
             generated_content["knowledge_expansion"] = cls._generate_knowledge_expansion(
                 learner,
@@ -1067,8 +1119,9 @@ class AdaptiveTutoringService(BaseService):
         correct_answer: str,
         decision: str = "simplify",
     ) -> Dict[str, Any]:
-        """生成简化通俗知识点解释（接入知识库检索）"""
+        """Generate decision-specific feedback with a deterministic fallback."""
         learning_style = learner.learning_style or "visual"
+        decision = decision if decision in {"advance", "simplify", "consolidate"} else "simplify"
 
         style_prefixes = {
             "visual": "通过图解方式理解：",
@@ -1091,26 +1144,49 @@ class AdaptiveTutoringService(BaseService):
                 top_k=5,
             )
             if kb_results:
-                # 从知识库提取用于解释的内容
-                kb_contents = [k.get("content", "").strip() for k in kb_results if k.get("content", "").strip()]
-                if kb_contents:
-                    # 取最相关的前2段作为解释素材
-                    knowledge_explanation = " ".join(kb_contents[:2])[:500]
-                    # 提取关键点
-                    for k in kb_results[:3]:
-                        title = k.get("title", "") or k.get("doc_title", "")
-                        if title:
-                            knowledge_key_points.append(title)
+                # Use relevant sentences rather than concatenating full slices.
+                for result in kb_results[:3]:
+                    content = str(result.get("content", "")).strip()
+                    knowledge_explanation = " ".join(
+                        [knowledge_explanation, cls._select_relevant_passages(
+                            content, question_topic, max_chars=500, max_sentences=4
+                        )]
+                    ).strip()[:500]
+                    title = result.get("title", "") or result.get("doc_title", "")
+                    if title:
+                        knowledge_key_points.append(title)
 
         # 2. 先从种子JSON取解释，没有则用知识库内容
         explanations = _QUESTION_EXPLANATIONS
         seed_explanation = explanations.get(question_topic)
         if seed_explanation:
-            simple_text = f"{style_prefix}{seed_explanation}"
+            base_text = seed_explanation
         elif knowledge_explanation:
-            simple_text = f"{style_prefix}{knowledge_explanation}"
+            base_text = knowledge_explanation
         else:
-            simple_text = f"{style_prefix}{question_topic}是相关领域的重要概念，建议结合实操练习加深理解..."
+            base_text = f"{question_topic}是相关领域的重要概念，建议结合实操练习加深理解。"
+
+        decision_copy = {
+            "simplify": {
+                "title": f"{question_topic} - 简化理解",
+                "intro": f"{style_prefix}本题需要先纠正关键概念：",
+                "practice": f"先复习{question_topic}的定义和成立条件，再完成一道基础练习并记录错误原因。",
+                "recommendation": f"把{question_topic}拆成概念、步骤和结果三部分，逐项核对后再作答。",
+            },
+            "advance": {
+                "title": f"{question_topic} - 迁移应用",
+                "intro": f"{style_prefix}你已掌握本题核心，下一步练习迁移和边界判断：",
+                "practice": f"尝试把{question_topic}应用到一个条件变化的真实场景，并说明选择依据和失效边界。",
+                "recommendation": f"完成一道{question_topic}的综合题，比较至少两种方案并解释取舍。",
+            },
+            "consolidate": {
+                "title": f"{question_topic} - 巩固练习",
+                "intro": f"{style_prefix}基础答案正确，但仍需要巩固易错条件：",
+                "practice": f"围绕{question_topic}完成两道变式题，重点检查前提、步骤和反例。",
+                "recommendation": f"先复盘{question_topic}的易错点，再做一道同主题变式题验证是否稳定掌握。",
+            },
+        }[decision]
+        simple_text = f"{decision_copy['intro']}{base_text}"
 
         # 3. 关键要点：优先知识库提取的，其次种子数据
         if knowledge_key_points:
@@ -1157,22 +1233,66 @@ class AdaptiveTutoringService(BaseService):
                     "reference_knowledge": knowledge_explanation or "无可用参考资料",
                 },
             )
-            ai_content["simple_explanation"] = f"{style_prefix}{ai_content['simple_explanation']}"
+            # Keep the branch contract authoritative even if the model ignores
+            # the requested decision in its free-form response.
+            ai_content["type"] = decision
+            ai_content["title"] = decision_copy["title"]
+            ai_content["simple_explanation"] = (
+                f"{decision_copy['intro']}{ai_content.get('simple_explanation') or base_text}"
+            )
+            ai_content["practice_tips"] = (
+                f"{decision_copy['practice']} {ai_content.get('practice_tips', '')}".strip()
+            )
+            ai_content["recommendation"] = decision_copy["recommendation"]
             ai_content["suggested_resources"] = suggested_resources
             return ai_content
         except Exception as exc:
             logger.warning(f"[自适应导学] AI 简化反馈失败，使用本地兜底: {exc}")
 
         return {
-            "type": "simplify",
-            "title": f"{question_topic} - 简化理解",
+            "type": decision,
+            "title": decision_copy["title"],
             "simple_explanation": simple_text,
             "key_points": key_points,
-            "practice_tips": f"建议从简单的{question_topic}基础问题开始练习，结合实际案例加深理解。",
-            "recommendation": f"先复习{question_topic}的核心概念，再完成一道基础练习并记录错误原因。",
+            "practice_tips": decision_copy["practice"],
+            "recommendation": decision_copy["recommendation"],
             "suggested_resources": suggested_resources,
             "knowledge_source": "knowledge_base" if knowledge_explanation else "seed_data",
         }
+
+    @staticmethod
+    def _select_relevant_passages(
+        content: str,
+        query: str,
+        max_chars: int = 500,
+        max_sentences: int = 4,
+    ) -> str:
+        """Select query-bearing sentences from a knowledge slice."""
+        if not content or not query:
+            return ""
+        query_terms = set(re.findall(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]{2,}", query.casefold()))
+        if not query_terms:
+            return ""
+        sentences = [
+            part.strip()
+            for part in re.split(r"(?<=[。！？.!?；;])\s*|\n+", content)
+            if part.strip()
+        ]
+        ranked = []
+        for index, sentence in enumerate(sentences):
+            normalized = sentence.casefold()
+            overlap = sum(term in normalized for term in query_terms)
+            if overlap:
+                ranked.append((overlap, -index, sentence))
+        ranked.sort(reverse=True)
+        selected: List[str] = []
+        total = 0
+        for _, _, sentence in ranked[:max_sentences]:
+            if total + len(sentence) + (1 if selected else 0) > max_chars:
+                break
+            selected.append(sentence)
+            total += len(sentence) + (1 if selected else 0)
+        return " ".join(selected)
 
     @classmethod
     def _generate_knowledge_expansion(
@@ -1198,7 +1318,17 @@ class AdaptiveTutoringService(BaseService):
                 top_k=5,
             )
             if kb_results:
-                contents = [str(item.get("content", "")).strip() for item in kb_results if item.get("content")]
+                contents = [
+                    cls._select_relevant_passages(
+                        str(item.get("content", "")),
+                        f"{question_topic} {question_content}",
+                        max_chars=400,
+                        max_sentences=3,
+                    )
+                    for item in kb_results
+                    if item.get("content")
+                ]
+                contents = [content for content in contents if content]
                 titles = [
                     str(item.get("title") or item.get("doc_title") or "").strip()
                     for item in kb_results
@@ -1208,7 +1338,8 @@ class AdaptiveTutoringService(BaseService):
                     overview = " ".join(contents[:2])[:800]
                 if titles:
                     key_points = list(dict.fromkeys([*key_points, *titles]))[:5]
-                knowledge_source = "knowledge_base"
+                if contents:
+                    knowledge_source = "knowledge_base"
 
             resources = (
                 db.query(LearningResource)

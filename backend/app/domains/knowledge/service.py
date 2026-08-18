@@ -43,9 +43,37 @@ def _escape_like(value: str) -> str:
     """转义 LIKE 模式中的特殊字符，避免用户输入的 % 和 _ 被当作通配符"""
     return value.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
+
+DEFAULT_MIN_SIMILARITY = 0.6
+
+
+def _query_terms(query: str) -> List[str]:
+    """Build stable word/bigram terms for keyword fallback scoring."""
+    terms = [query.strip().casefold()]
+    for token in re.findall(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]+", query.casefold()):
+        terms.append(token)
+        if re.fullmatch(r"[\u4e00-\u9fff]+", token):
+            terms.extend(token[index:index + 2] for index in range(len(token) - 1))
+    return list(dict.fromkeys(term for term in terms if term))[:24]
+
+
+def _keyword_match_score(query: str, content: str, title: str = "", keywords: Any = None) -> float:
+    terms = _query_terms(query)
+    if not terms:
+        return 0.0
+    haystack = " ".join(
+        [str(content or ""), str(title or ""), " ".join(str(item) for item in (keywords or []))]
+    ).casefold()
+    if query.strip().casefold() in haystack:
+        return 1.0
+    matched = sum(term in haystack for term in terms if term != query.strip().casefold())
+    comparable = max(1, len([term for term in terms if term != query.strip().casefold()]))
+    return round(matched / comparable, 4)
+
 # Chroma 全局客户端（懒加载）
 _chroma_client: Optional[Any] = None
 _chroma_collection: Optional[Any] = None
+_chroma_warmed = False
 _chroma_lock = threading.Lock()
 
 
@@ -82,6 +110,99 @@ class KnowledgeService:
     
     # 支持的行业分类（从 IndustryEnum 派生，保持与枚举定义一致）
     SUPPORTED_INDUSTRIES = [e.value for e in IndustryEnum]
+
+    @staticmethod
+    def warmup() -> Dict[str, Any]:
+        """Initialize Chroma and its embedding function before user traffic."""
+        global _chroma_warmed
+        started_at = time.perf_counter()
+        if not _CHROMA_AVAILABLE:
+            return {"ready": False, "vector_count": 0, "duration_ms": 0.0}
+        try:
+            collection = _get_chroma_collection()
+            vector_count = collection.count() if collection is not None else 0
+            # A real query initializes the embedding provider as well as the
+            # persistent collection. Skip it only when there is no index yet.
+            if collection is not None and vector_count:
+                collection.query(query_texts=["knowledge system warmup"], n_results=1)
+            _chroma_warmed = True
+            duration_ms = round((time.perf_counter() - started_at) * 1000, 1)
+            logger.info(
+                f"知识库预热完成: vectors={vector_count}, duration={duration_ms}ms"
+            )
+            return {"ready": True, "vector_count": vector_count, "duration_ms": duration_ms}
+        except Exception as exc:
+            _chroma_warmed = False
+            duration_ms = round((time.perf_counter() - started_at) * 1000, 1)
+            logger.warning(f"知识库预热失败: duration={duration_ms}ms, error={exc}")
+            return {"ready": False, "vector_count": 0, "duration_ms": duration_ms, "error": str(exc)[:200]}
+
+    @staticmethod
+    def is_warmed() -> bool:
+        return _chroma_warmed
+
+    @staticmethod
+    def _keyword_fallback(
+        db: Session,
+        query: str,
+        k: int,
+        min_similarity: float,
+        industry: Optional[str] = None,
+        doc_id: Optional[int] = None,
+        existing_ids: Optional[set[int]] = None,
+    ) -> List[Dict[str, Any]]:
+        sql_query = db.query(KnowledgeSlice).join(KnowledgeDoc).filter(
+            KnowledgeDoc.is_enabled == True,
+            KnowledgeDoc.status == "ready",
+        )
+        if industry:
+            sql_query = sql_query.filter(KnowledgeDoc.industry == industry)
+        if doc_id:
+            sql_query = sql_query.filter(KnowledgeSlice.doc_id == doc_id)
+        if existing_ids:
+            sql_query = sql_query.filter(~KnowledgeSlice.id.in_(existing_ids))
+
+        terms = _query_terms(query)
+        if not terms:
+            return []
+        sql_query = sql_query.filter(or_(*[
+            or_(
+                KnowledgeSlice.content.like(f"%{_escape_like(term)}%", escape="\\"),
+                KnowledgeSlice.title.like(f"%{_escape_like(term)}%", escape="\\"),
+            )
+            for term in terms
+        ]))
+        candidates = sql_query.limit(max(k * 5, 20)).all()
+        scored = []
+        for item in candidates:
+            score = _keyword_match_score(query, item.content, item.title, item.keywords)
+            if score >= min_similarity:
+                scored.append((score, item))
+        scored.sort(key=lambda pair: (-pair[0], pair[1].id))
+        selected = scored[:k]
+
+        doc_ids = {item.doc_id for _, item in selected}
+        docs = {
+            doc.id: doc
+            for doc in db.query(KnowledgeDoc).filter(
+                KnowledgeDoc.id.in_(doc_ids), KnowledgeDoc.is_enabled == True
+            ).all()
+        } if doc_ids else {}
+        return [
+            {
+                "slice_id": item.id,
+                "doc_id": item.doc_id,
+                "doc_title": docs[item.doc_id].title if item.doc_id in docs else "",
+                "industry": docs[item.doc_id].industry if item.doc_id in docs else "",
+                "title": item.title,
+                "content": item.content,
+                "similarity": score,
+                "slice_index": item.slice_index,
+                "keywords": item.keywords or [],
+                "highlighted_content": item.content[:200] + "..." if len(item.content) > 200 else item.content,
+            }
+            for score, item in selected
+        ]
     
     @staticmethod
     def create_doc(db: Session, doc_data: KnowledgeDocCreate) -> Tuple[Optional[KnowledgeDoc], str]:
@@ -625,7 +746,7 @@ class KnowledgeService:
             filter_industry = industry
             k = top_k
             filter_doc_id = doc_id
-            min_similarity = 0.0
+            min_similarity = DEFAULT_MIN_SIMILARITY
             search_type = "hybrid"
         
         if not query_text:
@@ -646,7 +767,12 @@ class KnowledgeService:
                 has_indexed_slices = indexed_query.first() is not None
 
             # 1. Chroma 向量语义检索（如果可用）
-            if search_type in ("vector", "hybrid") and _CHROMA_AVAILABLE and has_indexed_slices:
+            if (
+                search_type in ("vector", "hybrid")
+                and _CHROMA_AVAILABLE
+                and has_indexed_slices
+                and _chroma_warmed
+            ):
                 collection = _get_chroma_collection()
                 
                 if collection is not None:
@@ -737,6 +863,8 @@ class KnowledgeService:
                                 "keywords": keywords,
                                 "highlighted_content": content[:200] + "..." if len(content) > 200 else content,
                             })
+            elif search_type in ("vector", "hybrid") and _CHROMA_AVAILABLE and not _chroma_warmed:
+                logger.warning("Chroma 尚未预热，跳过向量检索并使用关键词降级")
             elif search_type in ("vector", "hybrid") and _CHROMA_AVAILABLE and db:
                 logger.debug("没有已索引知识切片，跳过 Chroma 检索")
             elif search_type == "hybrid":
@@ -746,102 +874,32 @@ class KnowledgeService:
             if search_type in ("keyword", "hybrid") and len(results) < k and db:
                 remaining = k - len(results)
                 existing_ids = {r["slice_id"] for r in results if r["slice_id"]}
-                
-                sql_query = db.query(KnowledgeSlice).join(KnowledgeDoc).filter(
-                    KnowledgeDoc.is_enabled == True,
-                    KnowledgeDoc.status == "ready",
+                results.extend(
+                    KnowledgeService._keyword_fallback(
+                        db,
+                        query_text,
+                        remaining,
+                        min_similarity,
+                        industry=filter_industry,
+                        doc_id=filter_doc_id,
+                        existing_ids=existing_ids,
+                    )
                 )
-                
-                if filter_industry:
-                    sql_query = sql_query.filter(KnowledgeDoc.industry == filter_industry)
-                if filter_doc_id:
-                    sql_query = sql_query.filter(KnowledgeSlice.doc_id == filter_doc_id)
-                if existing_ids:
-                    sql_query = sql_query.filter(~KnowledgeSlice.id.in_(existing_ids))
-                
-                # 关键词匹配支持完整查询和中英文词元，避免长句查询把结果全部过滤掉。
-                terms = [query_text.strip()]
-                terms.extend(re.findall(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]{2,}", query_text))
-                terms = list(dict.fromkeys(term for term in terms if term))[:12]
-                sql_query = sql_query.filter(or_(*[
-                    KnowledgeSlice.content.like(f"%{_escape_like(term)}%", escape="\\")
-                    for term in terms
-                ]))
-                
-                fallback_slices = sql_query.limit(remaining).all()
-                
-                # Batch fetch documents to avoid N+1
-                fallback_doc_ids = {s.doc_id for s in fallback_slices}
-                fallback_doc_map: Dict[int, KnowledgeDoc] = {}
-                if fallback_doc_ids:
-                    for d in db.query(KnowledgeDoc).filter(
-                        KnowledgeDoc.id.in_(fallback_doc_ids),
-                        KnowledgeDoc.is_enabled == True,
-                    ).all():
-                        fallback_doc_map[d.id] = d
-                
-                for s in fallback_slices:
-                    fallback_doc = fallback_doc_map.get(s.doc_id)
-                    results.append({
-                        "slice_id": s.id,
-                        "doc_id": s.doc_id,
-                        "doc_title": fallback_doc.title if fallback_doc else "",
-                        "industry": fallback_doc.industry if fallback_doc else "",
-                        "title": s.title,
-                        "content": s.content,
-                        "similarity": 0.5,
-                        "slice_index": s.slice_index,
-                        "keywords": s.keywords or [],
-                        "highlighted_content": s.content[:200] + "..." if len(s.content) > 200 else s.content,
-                    })
             
         except Exception as e:
             logger.warning(f"Chroma 检索异常，降级为数据库检索: {e}")
             # 降级：纯数据库关键词检索
             if db and search_type in ("keyword", "hybrid"):
-                sql_query = db.query(KnowledgeSlice).join(KnowledgeDoc).filter(
-                    KnowledgeDoc.is_enabled == True,
-                    KnowledgeDoc.status == "ready",
+                results.extend(
+                    KnowledgeService._keyword_fallback(
+                        db,
+                        query_text,
+                        k,
+                        min_similarity,
+                        industry=filter_industry,
+                        doc_id=filter_doc_id,
+                    )
                 )
-                if filter_industry:
-                    sql_query = sql_query.filter(KnowledgeDoc.industry == filter_industry)
-                if filter_doc_id:
-                    sql_query = sql_query.filter(KnowledgeSlice.doc_id == filter_doc_id)
-                
-                terms = [query_text.strip()]
-                terms.extend(re.findall(r"[A-Za-z0-9_]+|[\u4e00-\u9fff]{2,}", query_text))
-                terms = list(dict.fromkeys(term for term in terms if term))[:12]
-                sql_query = sql_query.filter(or_(*[
-                    KnowledgeSlice.content.like(f"%{_escape_like(term)}%", escape="\\")
-                    for term in terms
-                ]))
-                
-                fallback_slices = sql_query.limit(k).all()
-                
-                # Batch fetch documents to avoid N+1
-                fallback_doc_ids = {s.doc_id for s in fallback_slices}
-                fallback_doc_map: Dict[int, KnowledgeDoc] = {}
-                if fallback_doc_ids:
-                    for d in db.query(KnowledgeDoc).filter(
-                        KnowledgeDoc.id.in_(fallback_doc_ids),
-                        KnowledgeDoc.is_enabled == True,
-                    ).all():
-                        fallback_doc_map[d.id] = d
-                
-                for s in fallback_slices:
-                    fallback_doc = fallback_doc_map.get(s.doc_id)
-                    results.append({
-                        "slice_id": s.id,
-                        "doc_id": s.doc_id,
-                        "doc_title": fallback_doc.title if fallback_doc else "",
-                        "industry": fallback_doc.industry if fallback_doc else "",
-                        "title": s.title,
-                        "content": s.content,
-                        "similarity": 0.5,
-                        "slice_index": s.slice_index,
-                        "keywords": s.keywords or [],
-                        "highlighted_content": s.content[:200] + "..." if len(s.content) > 200 else s.content,
-                    })
         
         duration_ms = (time.time() - start_time) * 1000
         logger.info(f"知识库检索: query={query_text[:50]}..., results={len(results)}, duration={duration_ms:.0f}ms")

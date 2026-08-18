@@ -264,8 +264,8 @@ export default function AdminOpsOverview() {
               <p className="mt-2 text-xs text-text-tertiary">目标 &gt; 90%</p>
             </div>
             <div className="rounded-lg bg-bg-secondary/60 p-3">
-              <MetricValue value={displayMetric(knowledgeMetric, systemMetrics?.knowledgeCoverageRate)} label="知识点覆盖率" />
-              <p className="mt-2 text-xs text-text-tertiary">目标 &gt; 85%</p>
+              <MetricValue value={displayMetric(knowledgeMetric, systemMetrics?.knowledgeCoverageRate)} label="知识索引覆盖率" />
+              <p className="mt-2 text-xs text-text-tertiary">比赛口径目标 ≥ 90%</p>
             </div>
             {hasStandardMetrics && (
               <div className="rounded-lg bg-bg-secondary/60 p-3">

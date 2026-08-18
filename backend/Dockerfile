@@ -75,8 +75,8 @@ RUN mkdir -p /app/data /app/logs /app/data/uploads /app/data/chroma_db /app/data
 EXPOSE 8000
 
 # 健康检查：使用 Python urllib 替代 curl，避免额外系统依赖
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-    CMD python -c "import sys,urllib.request; r=urllib.request.urlopen('http://localhost:8000/health',timeout=5); sys.exit(0 if r.status==200 else 1)"
+HEALTHCHECK --interval=30s --timeout=15s --start-period=120s --retries=3 \
+    CMD python -c "import sys,urllib.request; r=urllib.request.urlopen('http://localhost:8000/health/ready',timeout=10); sys.exit(0 if r.status==200 else 1)"
 
 # 启动命令（单进程，workers 根据需要通过环境变量调整）
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]

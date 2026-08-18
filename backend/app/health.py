@@ -101,15 +101,21 @@ async def health_readiness(request: Request):
 
     # 2. Chroma 向量库检查
     try:
-        from app.domains.knowledge.service import _get_chroma_collection
+        from app.domains.knowledge.service import KnowledgeService, _get_chroma_collection
         collection = _get_chroma_collection()
         if collection is not None:
             vector_count = collection.count()
             expected_count = knowledge_counts["db_indexed_slices"]
-            chroma_status = "up" if vector_count == expected_count else "degraded"
+            chroma_status = (
+                "up"
+                if vector_count == expected_count and (KnowledgeService.is_warmed() or vector_count == 0)
+                else "degraded"
+            )
             note = None
             if vector_count != expected_count:
                 note = f"向量数量与数据库已索引切片不一致: vectors={vector_count}, db={expected_count}"
+            elif vector_count > 0 and not KnowledgeService.is_warmed():
+                note = "向量库已初始化但 embedding 尚未预热"
             elif (
                 knowledge_counts["ready_docs"] > 0
                 and (vector_count == 0 or knowledge_counts["declared_slices"] != knowledge_counts["db_slices"])
@@ -120,12 +126,18 @@ async def health_readiness(request: Request):
                 "status": chroma_status,
                 "vector_count": vector_count,
                 "db_indexed_slice_count": expected_count,
+                "warmed": KnowledgeService.is_warmed(),
                 **({"note": note} if note else {}),
             }
+            if chroma_status == "degraded":
+                overall_status = "not_ready"
+                http_status = 503
         else:
             checks["chroma"] = {"status": "fallback", "note": "Chroma不可用，使用数据库关键词检索降级模式"}
     except Exception as e:
         checks["chroma"] = {"status": "degraded", "error": str(e)[:200], "note": "使用数据库关键词检索降级模式"}
+        overall_status = "not_ready"
+        http_status = 503
 
     # 3. 系统资源检查
     try:
@@ -266,6 +278,7 @@ async def get_core_metrics():
             "answer_accuracy": standard_by_id.get("answer_accuracy", {}).get("value"),
             "knowledge_coverage_rate": standard_by_id.get("knowledge_index_coverage", {}).get("value"),
             "knowledge_index_coverage_rate": standard_by_id.get("knowledge_index_coverage", {}).get("value"),
+            "generated_content_coverage_rate": standard_by_id.get("generated_content_coverage", {}).get("value"),
             "learning_blind_spot_coverage_rate": standard_by_id.get("blind_spot_resource_coverage", {}).get("value"),
             "metrics_status": "degraded" if any(
                 metric.get("status") in {"collecting", "stale", "error"}
