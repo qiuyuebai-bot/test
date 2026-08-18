@@ -4,6 +4,7 @@ import { useStore } from '@/store'
 import { trainingApi } from '@/api'
 import { ApiError } from '@/lib/request'
 import { toast } from '@/components/toastStore'
+import { reportError } from '@/lib/sentry'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
@@ -94,7 +95,7 @@ export default function CertificationTab() {
       setSelectedRecord(null)
       void fetchCertificationRecords(canReview ? { learnerId: learnerId ?? undefined } : undefined)
     } catch (err) {
-      console.error('applyCertification failed:', err)
+      reportError(err, { tags: { area: 'certification', action: 'apply' } })
     } finally {
       setSubmitting(false)
     }
@@ -105,7 +106,7 @@ export default function CertificationTab() {
       await trainingApi.approveCertification(recordId, { comment: undefined })
       void fetchCertificationRecords(canReview && learnerId ? { learnerId } : undefined)
     } catch (err) {
-      console.error('approveCertification failed:', err)
+      reportError(err, { tags: { area: 'certification', action: 'approve' } })
     }
   }
 
@@ -114,7 +115,7 @@ export default function CertificationTab() {
       await trainingApi.rejectCertification(recordId, { comment: undefined })
       void fetchCertificationRecords(canReview && learnerId ? { learnerId } : undefined)
     } catch (err) {
-      console.error('rejectCertification failed:', err)
+      reportError(err, { tags: { area: 'certification', action: 'reject' } })
     }
   }
 
@@ -123,7 +124,7 @@ export default function CertificationTab() {
       await trainingApi.revokeCertification(recordId, { comment: '管理员撤销证书' })
       void fetchCertificationRecords(canReview && learnerId ? { learnerId } : undefined)
     } catch (err) {
-      console.error('revokeCertification failed:', err)
+      reportError(err, { tags: { area: 'certification', action: 'revoke' } })
     }
   }
 
@@ -132,7 +133,7 @@ export default function CertificationTab() {
       const result = await trainingApi.verifyCertification(certificateNumber)
       setVerificationResult(result)
     } catch (err) {
-      console.error('verifyCertification failed:', err)
+      reportError(err, { tags: { area: 'certification', action: 'verify' } })
     }
   }
 
@@ -623,7 +624,7 @@ function CreateCertificationModal({ positions, onClose, onCreated }: {
       })
       onCreated()
     } catch (err) {
-      console.error('createCertification failed:', err)
+      reportError(err, { tags: { area: 'certification', action: 'create' } })
     } finally {
       setSubmitting(false)
     }

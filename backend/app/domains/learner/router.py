@@ -9,7 +9,7 @@ from loguru import logger
 from sqlalchemy.exc import IntegrityError
 
 from app.database import get_db
-from app.schemas.response import success, bad_request, not_found, paged_success, unauthorized
+from app.schemas.response import success, bad_request, not_found, paged_success, unauthorized, BaseResponse
 from app.domains.learner.schemas import (
     LearnerProfileCreate,
     LearnerProfileUpdate,
@@ -17,6 +17,7 @@ from app.domains.learner.schemas import (
     LearnerBatchImportRequest,
     LearnerBatchExportRequest,
     AnonymizeRequest,
+    AnonymizeResponse,
     AnswerRecordCreate,
     AnswerRecordResponse,
 )
@@ -359,7 +360,7 @@ def analyze_learning(
 # 9. 数据脱敏
 # ===========================================
 
-@router.post("/{learner_id}/anonymize", summary="数据脱敏")
+@router.post("/{learner_id}/anonymize", summary="数据脱敏", response_model=BaseResponse[AnonymizeResponse])
 def anonymize_learner(
     learner_id: int,
     anonymize_request: AnonymizeRequest = None,

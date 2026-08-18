@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { AgentStatus, AgentTask, SystemMetrics } from '../types'
 import { agentApi, coreApi } from '../api'
 import type { AppState } from './index'
+import { reportError } from '../lib/sentry'
 
 type AgentStatusRaw = Partial<AgentStatus> & {
   failCount?: number
@@ -163,7 +164,7 @@ export const createAgentSlice: StateCreator<AppState, [], [], AgentSlice> = (set
     } catch (err) {
       if (reqId !== _latestAgentStatusesReqId) return
       if (!options?.silent) {
-        console.error('fetchAgentStatuses failed:', err)
+        reportError(err, { tags: { area: 'agent', action: 'fetch_statuses' } })
       }
       set({ agentsLoading: false })
     }
@@ -190,7 +191,7 @@ export const createAgentSlice: StateCreator<AppState, [], [], AgentSlice> = (set
       set({ tasks: items, tasksTotal: result.total })
     } catch (err) {
       if (reqId !== _latestTasksReqId) return
-      console.error('fetchTasks failed:', err)
+      reportError(err, { tags: { area: 'agent', action: 'fetch_tasks' } })
     }
   },
 
@@ -247,7 +248,7 @@ export const createAgentSlice: StateCreator<AppState, [], [], AgentSlice> = (set
           timeoutId = setTimeout(poll, 2000)
         }
       } catch (err) {
-        console.error('pollTaskStatus failed:', err)
+      reportError(err, { tags: { area: 'agent', action: 'poll_task_status' } })
       }
     }
     poll()
@@ -327,7 +328,7 @@ export const createMetricsSlice: StateCreator<AppState, [], [], MetricsSlice> = 
       })
     } catch (err) {
       if (!options?.silent) {
-        console.error('fetchSystemMetrics failed:', err)
+      reportError(err, { tags: { area: 'agent', action: 'fetch_system_metrics' } })
       }
       set({
         metricsLoading: false,
@@ -350,7 +351,7 @@ export const createMetricsSlice: StateCreator<AppState, [], [], MetricsSlice> = 
         metricsError: partial ? `${metrics.sourceFailures} 个指标数据源暂时不可用` : null,
       })
     } catch (err) {
-      if (!options?.silent) console.error('fetchSystemMetrics failed:', err)
+      if (!options?.silent) reportError(err, { tags: { area: 'agent', action: 'fetch_system_metrics' } })
       set({
         metricsLoading: false,
         metricsStatus: 'error',

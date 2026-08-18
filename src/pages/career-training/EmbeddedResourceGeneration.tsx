@@ -3,6 +3,7 @@ import { useShallow } from 'zustand/react/shallow'
 import { agentApi, coreApi } from '@/api'
 import { useStore } from '@/store'
 import { useTaskSSE } from '@/hooks/useTaskSSE'
+import { reportError } from '@/lib/sentry'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
@@ -89,7 +90,7 @@ export default function EmbeddedResourceGeneration({ position, learnerId }: Prop
         void selectResource(result.items[0])
       }
     } catch (err) {
-      console.error('getResourceList failed:', err)
+      reportError(err, { tags: { area: 'resource_generation', action: 'list' } })
     }
   }
 
@@ -101,7 +102,7 @@ export default function EmbeddedResourceGeneration({ position, learnerId }: Prop
         const detail = await coreApi.getResourceDetail(r.id)
         setSelectedResource(detail)
       } catch (err) {
-        console.error('getResourceDetail failed:', err)
+        reportError(err, { tags: { area: 'resource_generation', action: 'detail' } })
       } finally {
         setDetailLoading(false)
       }
@@ -122,7 +123,7 @@ export default function EmbeddedResourceGeneration({ position, learnerId }: Prop
       })
       setTaskId(result.taskId)
     } catch (err) {
-      console.error('runFullPipeline failed:', err)
+      reportError(err, { tags: { area: 'resource_generation', action: 'run_pipeline' } })
       setGenerating(false)
     }
   }

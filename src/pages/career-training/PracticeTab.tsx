@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useStore } from '@/store'
 import { trainingApi } from '@/api'
+import { reportError } from '@/lib/sentry'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import Select from '@/components/Select'
@@ -46,7 +47,7 @@ export default function PracticeTab() {
       const detail = await trainingApi.getPosition(p.id)
       setPositionDetail(detail)
     } catch (err) {
-      console.error('getPosition failed:', err)
+      reportError(err, { tags: { area: 'practice', action: 'get_position' } })
       setPositionDetail(null)
     }
   }

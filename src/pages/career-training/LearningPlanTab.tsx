@@ -4,6 +4,7 @@ import { useStore } from '@/store'
 import { trainingApi } from '@/api'
 import { toast } from '@/components/toastStore'
 import { ApiError } from '@/lib/request'
+import { reportError } from '@/lib/sentry'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
@@ -84,7 +85,7 @@ export default function LearningPlanTab() {
         setSelectedProject(detail)
         setProjectEnrollmentCount(detail.enrollmentCount ?? detail.enrollment_count ?? null)
       } catch (err) {
-        console.error('getTrainingProject failed:', err)
+        reportError(err, { tags: { area: 'training_plan', action: 'get_project' } })
       }
     }
     try {
@@ -102,7 +103,7 @@ export default function LearningPlanTab() {
         // 尚未生成计划
       }
     } catch (err) {
-      console.error('getEnrollment failed:', err)
+      reportError(err, { tags: { area: 'training_plan', action: 'get_enrollment' } })
     }
   }
 
@@ -163,7 +164,7 @@ export default function LearningPlanTab() {
       setShowAssessmentPicker(false)
       toast.success('计划已生成', '学习计划已根据评估结果生成')
     } catch (err) {
-      console.error('generatePlan failed:', err)
+      reportError(err, { tags: { area: 'training_plan', action: 'generate' } })
       const msg = err instanceof ApiError ? err.message : '生成学习计划失败，请稍后重试'
       toast.error('生成失败', msg)
     } finally {
@@ -235,7 +236,7 @@ export default function LearningPlanTab() {
       setPlan(updated)
       if (selectedProject && enrollment) syncTrainingContext(updated, Math.min(completedStages + 1, updated.totalStages ?? updated.total_stages), selectedProject, enrollment)
     } catch (err) {
-      console.error('updateProgress failed:', err)
+      reportError(err, { tags: { area: 'training_plan', action: 'update_progress' } })
     }
   }
 
@@ -245,7 +246,7 @@ export default function LearningPlanTab() {
       const updated = await trainingApi.completeTraining(enrollment.id)
       setEnrollment(updated)
     } catch (err) {
-      console.error('completeTraining failed:', err)
+      reportError(err, { tags: { area: 'training_plan', action: 'complete' } })
     }
   }
 

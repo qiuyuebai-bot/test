@@ -33,6 +33,10 @@ class LLMUnavailableError(RuntimeError):
         super().__init__(f"DeepSeek 当前不可用（{reason}）")
 
 
+class LLMProviderError(RuntimeError):
+    """A provider response was invalid or unavailable (safe to downgrade)."""
+
+
 class LLMUtil:
     """
     大模型通用调用工具类
@@ -277,7 +281,7 @@ class LLMUtil:
         """
         if response.status_code != 200:
             logger.error(f"LLM API 返回错误: status={response.status_code}, body={response.text[:500]}")
-            raise Exception(f"API error: {response.status_code}")
+            raise LLMProviderError(f"API error: {response.status_code}")
 
         data = response.json()
         content = data["choices"][0]["message"]["content"] or ""
@@ -559,7 +563,7 @@ class LLMUtil:
             if cache_key and result[0]:
                 cls._set_cached_response(cache_key, result)
             return result
-        except Exception as e:
+        except (httpx.RequestError, OSError, LLMProviderError, ValueError) as e:
             if settings.LLM_CIRCUIT_BREAKER_ENABLED:
                 cls._circuit_breaker._on_failure()
             logger.error(f"LLM sync_call 失败: {e}")
@@ -681,7 +685,7 @@ class LLMUtil:
             if settings.LLM_CIRCUIT_BREAKER_ENABLED:
                 cls._circuit_breaker._on_success()
             return result
-        except Exception as e:
+        except (httpx.RequestError, OSError, LLMProviderError, ValueError) as e:
             if settings.LLM_CIRCUIT_BREAKER_ENABLED:
                 cls._circuit_breaker._on_failure()
             logger.error(f"LLM multi_turn_call 失败: {e}")
@@ -760,7 +764,7 @@ class LLMUtil:
             if cache_key and result[0]:
                 await asyncio.to_thread(cls._set_cached_response, cache_key, result)
             return result
-        except Exception as e:
+        except (httpx.RequestError, OSError, LLMProviderError, ValueError) as e:
             if settings.LLM_CIRCUIT_BREAKER_ENABLED:
                 cls._circuit_breaker._on_failure()
             logger.error(f"LLM async_call 失败: {e}")
@@ -833,7 +837,7 @@ class LLMUtil:
                                 yield chunk["choices"][0]["delta"]["content"]
                         except json.JSONDecodeError:
                             continue
-        except Exception as e:
+        except (httpx.RequestError, OSError) as e:
             logger.error(f"LLM async_stream 失败: {e}")
             response = cls._generate_mock_response(prompt, system_prompt)
             for char in response:

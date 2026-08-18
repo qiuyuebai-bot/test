@@ -125,6 +125,13 @@ class TokenResponse(BaseModel):
     token_type: str = Field(default="bearer", description="Token类型")
 
 
+class LoginResponse(TokenResponse):
+    """认证成功响应数据（兼容现有客户端字段）"""
+    user_id: int = Field(..., description="用户ID")
+    username: str = Field(..., description="用户名")
+    role: str = Field(..., description="角色")
+
+
 class RefreshTokenRequest(BaseModel):
     """刷新Token请求"""
     refresh_token: str = Field(..., description="刷新Token")
@@ -135,8 +142,11 @@ class UserInfoResponse(BaseModel):
     user_id: int = Field(..., description="用户ID")
     username: str = Field(..., description="用户名")
     email: Optional[str] = Field(default=None, description="邮箱")
+    phone: Optional[str] = Field(default=None, description="手机号")
     role: str = Field(..., description="角色")
     is_active: bool = Field(..., description="是否激活")
+    is_verified: bool = Field(default=False, description="是否已验证")
+    enterprise_name: Optional[str] = Field(default=None, description="企业名称")
     last_login_at: Optional[str] = Field(default=None, description="最后登录时间")
     created_at: Optional[str] = Field(default=None, description="创建时间")
 

@@ -4,6 +4,7 @@ import { useStore } from '@/store'
 import { trainingApi } from '@/api'
 import { ApiError } from '@/lib/request'
 import { toast } from '@/components/toastStore'
+import { reportError } from '@/lib/sentry'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
@@ -69,7 +70,7 @@ export default function AssessmentTab() {
       const result = await trainingApi.listAssessmentTemplates({ position_id: p.id })
       setTemplates(result.items)
     } catch (err) {
-      console.error('listAssessmentTemplates failed:', err)
+      reportError(err, { tags: { area: 'assessment', action: 'list_templates' } })
     } finally {
       setTemplatesLoading(false)
     }
@@ -88,7 +89,7 @@ export default function AssessmentTab() {
       })
       setScoreForm(initial)
     } catch (err) {
-      console.error('startAssessment failed:', err)
+      reportError(err, { tags: { area: 'assessment', action: 'start' } })
     }
   }
 
@@ -109,7 +110,7 @@ export default function AssessmentTab() {
       setActiveRecord(null)
       void fetchAssessmentRecords(canEdit ? { learnerId: learnerId ?? undefined } : undefined)
     } catch (err) {
-      console.error('submitAssessment failed:', err)
+      reportError(err, { tags: { area: 'assessment', action: 'submit' } })
     } finally {
       setSubmitting(false)
     }
@@ -120,7 +121,7 @@ export default function AssessmentTab() {
       const gap = await trainingApi.getGapAnalysis(record.id)
       setGapAnalysis(gap)
     } catch (err) {
-      console.error('getGapAnalysis failed:', err)
+      reportError(err, { tags: { area: 'assessment', action: 'gap_analysis' } })
     }
   }
 
@@ -519,7 +520,7 @@ function CreateAssessmentTemplateModal({
           Object.entries(initial).filter(([cid]) => existingConfigMap.has(Number(cid))),
         ) : initial)
       })
-      .catch((err) => console.error('getPosition failed:', err))
+      .catch((err) => reportError(err, { tags: { area: 'assessment', action: 'get_position' } }))
       .finally(() => setDetailLoading(false))
   }, [position.id, template])
 

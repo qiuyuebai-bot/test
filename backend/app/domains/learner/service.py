@@ -629,12 +629,6 @@ class LearnerService:
         if not learner:
             return None
         
-        # 脱敏前数据
-        before_data = {
-            "real_name": learner.real_name,
-            "current_position": learner.current_position,
-        }
-        
         # 执行脱敏
         anonymized_fields = []
         anonymized_record_id = 0
@@ -655,7 +649,6 @@ class LearnerService:
                 original_data_hash=AnonymizeUtil.hash_data(original_name),
                 anonymized_data=learner.real_name,
                 anonymize_method="partial_mask",
-                original_example=original_name[:3] + "***" if len(original_name) > 3 else original_name + "***",
                 anonymized_example=learner.real_name,
             )
             db.add(record)
@@ -671,12 +664,6 @@ class LearnerService:
         # 标记为已脱敏
         learner.is_data_anonymized = True
         
-        # 脱敏后数据
-        after_data = {
-            "real_name": learner.real_name,
-            "current_position": learner.current_position,
-        }
-        
         db.commit()
         db.refresh(learner)
         
@@ -686,8 +673,10 @@ class LearnerService:
             learner_id=learner.id,
             is_anonymized=True,
             anonymized_fields=anonymized_fields,
-            before=before_data,
-            after=after_data,
+            # Preserve the response shape for existing clients, but expose only
+            # a redaction marker instead of the pre-anonymized values.
+            before={field: "[REDACTED]" for field in anonymized_fields},
+            after={field: "[REDACTED]" for field in anonymized_fields},
             record_id=anonymized_record_id,
             operation_time=datetime.now(),
         )

@@ -221,7 +221,9 @@ class PrivacyService:
             try:
                 anonymized = re.sub(rule["pattern"], rule["replace"], value)
             except (re.error, TypeError):
-                anonymized = value
+                # Fail closed when a configured rule is invalid; never echo
+                # the submitted PII as an "anonymized" result.
+                anonymized = "*" * max(len(value), 1)
             method = rule["method"]
         else:
             # 默认脱敏：保留前 2 位，其余用 * 替换

@@ -1,5 +1,5 @@
-import { useEffect, useRef, useState, useCallback } from 'react'
-import { createEventSource, http } from '../lib/request'
+import { useEffect, useRef, useState } from 'react'
+import { buildUrl, getAccessToken } from '../lib/request'
 
 interface SSEEvent {
   event: string
@@ -10,7 +10,7 @@ interface SSEEvent {
 interface UseTaskSSEOptions {
   onEvent?: (event: SSEEvent) => void
   onComplete?: (data: unknown) => void
-  onError?: (error: Event) => void
+  onError?: (error: unknown) => void
   enabled?: boolean
 }
 
@@ -40,42 +40,31 @@ export function useTaskSSE(
   const [error, setError] = useState<string | null>(null)
   const [lastEvent, setLastEvent] = useState<SSEEvent | null>(null)
 
-  const esRef = useRef<EventSource | null>(null)
+  const abortRef = useRef<AbortController | null>(null)
   const callbacksRef = useRef({ onEvent, onComplete, onError })
   callbacksRef.current = { onEvent, onComplete, onError }
 
-  const cleanup = useCallback(() => {
-    if (esRef.current) {
-      esRef.current.close()
-      esRef.current = null
-    }
-    setIsConnected(false)
-  }, [])
-
   useEffect(() => {
     if (!taskId || !enabled) {
-      cleanup()
+      abortRef.current?.abort()
+      abortRef.current = null
+      setIsConnected(false)
       return
     }
 
-    cleanup()
+    abortRef.current?.abort()
+    const controller = new AbortController()
+    abortRef.current = controller
     let cancelled = false
-    let es: EventSource | null = null
 
-    const handleOpen = () => {
-      setIsConnected(true)
-      setError(null)
-    }
-
-    const handleMessage = (e: MessageEvent) => {
-      if (e.data === '[DONE]') {
-        es?.close()
+    const handleMessage = (raw: string) => {
+      if (raw === '[DONE]') {
         setIsConnected(false)
-        return
+        return true
       }
 
       try {
-        const parsed = JSON.parse(e.data)
+        const parsed = JSON.parse(raw)
         const eventObj: SSEEvent = {
           event: parsed.event || 'message',
           data: parsed.data || parsed,
@@ -86,14 +75,10 @@ export function useTaskSSE(
         setEvents((prev) => [...prev.slice(-50), eventObj])
         callbacksRef.current.onEvent?.(eventObj)
 
-        if (parsed.data) {
-          const d = parsed.data
-          if (typeof d.stage === 'string') {
-            setCurrentStage(d.stage)
-          }
-          if (typeof d.progress === 'number') {
-            setProgress(Math.min(100, Math.max(0, d.progress)))
-          }
+        const data = parsed.data
+        if (data && typeof data.stage === 'string') setCurrentStage(data.stage)
+        if (data && typeof data.progress === 'number') {
+          setProgress(Math.min(100, Math.max(0, data.progress)))
         }
 
         if (eventObj.event === 'task_completed') {
@@ -102,50 +87,69 @@ export function useTaskSSE(
           callbacksRef.current.onComplete?.(eventObj.data)
         } else if (eventObj.event === 'task_failed') {
           setIsFailed(true)
-          const errData = eventObj.data as { error?: string }
-          setError(errData?.error || '任务执行失败')
+          const errorData = eventObj.data as { error?: string }
+          setError(errorData?.error || '任务执行失败')
         }
       } catch {
-        // ignore parse errors
+        // Ignore malformed event frames and continue reading the stream.
+      }
+      return false
+    }
+
+    const connect = async () => {
+      try {
+        const headers: Record<string, string> = { Accept: 'text/event-stream' }
+        const token = getAccessToken()
+        if (token) headers.Authorization = `Bearer ${token}`
+
+        const response = await fetch(buildUrl(`/agent/tasks/${taskId}/events`), {
+          headers,
+          credentials: 'include',
+          signal: controller.signal,
+        })
+        if (!response.ok || !response.body) {
+          throw new Error(`SSE connection failed: ${response.status}`)
+        }
+
+        setIsConnected(true)
+        setError(null)
+        const reader = response.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+
+        while (!cancelled) {
+          const { value, done } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          const frames = buffer.split('\n\n')
+          buffer = frames.pop() || ''
+          for (const frame of frames) {
+            const data = frame
+              .split('\n')
+              .filter((line) => line.startsWith('data:'))
+              .map((line) => line.slice(5).trimStart())
+              .join('\n')
+            if (data && handleMessage(data)) return
+          }
+        }
+        setIsConnected(false)
+      } catch (err) {
+        if (cancelled || (err instanceof DOMException && err.name === 'AbortError')) return
+        setIsConnected(false)
+        setError('连接中断')
+        callbacksRef.current.onError?.(err)
       }
     }
 
-    const handleError = (e: Event) => {
-      setIsConnected(false)
-      setError('连接中断')
-      callbacksRef.current.onError?.(e)
-    }
-
-    http.post<{ ticket: string }>(`/agent/tasks/${taskId}/stream-ticket`)
-      .then((res) => {
-        if (cancelled) return
-        const ticketStr = (res as { ticket?: string })?.ticket
-        if (!ticketStr) {
-          setError('获取SSE票据失败')
-          return
-        }
-        es = createEventSource(`/agent/tasks/${taskId}/events`, { ticket: ticketStr })
-        esRef.current = es
-        es.addEventListener('open', handleOpen)
-        es.addEventListener('message', handleMessage)
-        es.addEventListener('error', handleError)
-      })
-      .catch(() => {
-        if (!cancelled) setError('获取SSE票据失败')
-      })
+    void connect()
 
     return () => {
       cancelled = true
-      if (es) {
-        es.removeEventListener('open', handleOpen)
-        es.removeEventListener('message', handleMessage)
-        es.removeEventListener('error', handleError)
-        es.close()
-      }
-      esRef.current = null
+      controller.abort()
+      if (abortRef.current === controller) abortRef.current = null
       setIsConnected(false)
     }
-  }, [taskId, enabled, cleanup])
+  }, [taskId, enabled])
 
   return {
     events,

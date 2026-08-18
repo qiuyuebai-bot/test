@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { LearnerProfile } from '../types'
 import { learnerApi } from '../api'
 import type { AppState } from './index'
+import { reportError } from '../lib/sentry'
 
 export interface LearnerSlice {
   learners: LearnerProfile[]
@@ -68,7 +69,7 @@ export const createLearnerSlice: StateCreator<AppState, [], [], LearnerSlice> = 
         },
       })
     } catch (err) {
-      console.error('fetchLearners failed:', err)
+      reportError(err, { tags: { area: 'learner', action: 'fetch_list' } })
       set({
         learnersLoading: false,
         learnerLoading: false,

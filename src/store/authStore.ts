@@ -2,7 +2,8 @@ import type { StateCreator } from 'zustand'
 import type { UserInfo } from '../types'
 import { authApi } from '../api'
 import { clearAuth, setTokens, setUserInfo, getUserInfo, isAuthenticated } from '../lib/request'
-import { setSentryUser } from '../lib/sentry'
+import { reportError, setSentryUser } from '../lib/sentry'
+import { toast } from '../components/toastStore'
 import type { AppState } from './index'
 
 export interface AuthSlice {
@@ -57,7 +58,8 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, 
     try {
       await authApi.logout()
     } catch (err) {
-      console.error('logout failed:', err)
+      reportError(err, { tags: { area: 'auth', action: 'logout' } })
+      toast.warning('退出登录未完成', '本地登录状态已清除')
     }
     clearAuth()
     setSentryUser(null)
@@ -70,7 +72,7 @@ export const createAuthSlice: StateCreator<AppState, [], [], AuthSlice> = (set, 
       const userInfo = await authApi.getCurrentUser()
       set({ user: userInfo, isLoggedIn: true })
     } catch (err) {
-      console.error('fetchCurrentUser failed:', err)
+      reportError(err, { tags: { area: 'auth', action: 'fetch_current_user' } })
       clearAuth()
       set({ user: null, isLoggedIn: false })
     }

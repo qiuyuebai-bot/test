@@ -43,9 +43,8 @@ class AnonymizedData(Base):
     # 关联用户（可选）
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True, comment="关联用户ID")
     
-    # 原始数据（加密存储）
+    # Only an irreversible digest is retained for audit correlation.
     original_data_hash = Column(String(64), nullable=True, comment="原始数据哈希(MD5)")
-    original_data_encrypted = Column(Text, nullable=True, comment="原始数据(加密)")
     
     # 脱敏结果
     anonymized_data = Column(String(200), nullable=False, comment="脱敏后数据")
@@ -57,8 +56,7 @@ class AnonymizedData(Base):
     preserve_suffix = Column(Integer, default=0, comment="保留后缀长度")
     mask_char = Column(String(1), default="*", comment="掩码字符")
     
-    # 脱敏示例
-    original_example = Column(String(100), nullable=True, comment="原始数据示例")
+    # 脱敏示例仅保留结果，不保留原始示例
     anonymized_example = Column(String(100), nullable=True, comment="脱敏后示例")
     
     # 脱敏状态

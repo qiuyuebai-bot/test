@@ -4,6 +4,7 @@ import { useStore } from '@/store'
 import { trainingApi } from '@/api'
 import { ApiError } from '@/lib/request'
 import { toast } from '@/components/toastStore'
+import { reportError } from '@/lib/sentry'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
@@ -63,7 +64,7 @@ export default function PositionTab() {
       const detail = await trainingApi.getPosition(p.id)
       setSelected(detail)
     } catch (err) {
-      console.error('getPosition failed:', err)
+      reportError(err, { tags: { area: 'position', action: 'get' } })
     } finally {
       setDetailLoading(false)
     }
@@ -77,7 +78,7 @@ export default function PositionTab() {
       const detail = await trainingApi.getPosition(positionId)
       setSelected(detail)
     } catch (err) {
-      console.error('removePositionCompetency failed:', err)
+      reportError(err, { tags: { area: 'position', action: 'remove_competency' } })
       toast.error('移除关联失败', err instanceof ApiError ? err.message : '请稍后重试')
     }
   }
@@ -89,7 +90,7 @@ export default function PositionTab() {
       setSelected(null)
       void fetchPositions()
     } catch (err) {
-      console.error('deletePosition failed:', err)
+      reportError(err, { tags: { area: 'position', action: 'delete' } })
       toast.error('删除岗位失败', err instanceof ApiError ? err.message : '请稍后重试')
     }
   }
@@ -258,7 +259,7 @@ export default function PositionTab() {
               const detail = await trainingApi.getPosition(selected.id)
               setSelected(detail)
             } catch (err) {
-              console.error('refresh position failed:', err)
+              reportError(err, { tags: { area: 'position', action: 'refresh' } })
             }
             setShowLinkCompetency(false)
           }}
@@ -328,7 +329,7 @@ function CreatePositionModal({ onClose, onCreated }: {
       })
       onCreated()
     } catch (err) {
-      console.error('createPosition failed:', err)
+      reportError(err, { tags: { area: 'position', action: 'create' } })
     } finally {
       setSubmitting(false)
     }
@@ -592,7 +593,7 @@ function CreateCompetencyModal({ onClose, onCreated }: {
       })
       onCreated()
     } catch (err) {
-      console.error('createCompetency failed:', err)
+      reportError(err, { tags: { area: 'position', action: 'create_competency' } })
     } finally {
       setSubmitting(false)
     }
@@ -652,7 +653,7 @@ function LinkCompetencyModal({
       })
       onLinked()
     } catch (err) {
-      console.error('addPositionCompetency failed:', err)
+      reportError(err, { tags: { area: 'position', action: 'add_competency' } })
     } finally {
       setSubmitting(false)
     }
@@ -723,7 +724,7 @@ function CompetencyManagerModal({
       await trainingApi.deleteCompetency(id)
       onChanged()
     } catch (err) {
-      console.error('deleteCompetency failed:', err)
+      reportError(err, { tags: { area: 'position', action: 'delete_competency' } })
       toast.error('删除胜任力失败', err instanceof ApiError ? err.message : '请稍后重试')
     } finally {
       setDeletingId(null)

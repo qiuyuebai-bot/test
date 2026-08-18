@@ -1,6 +1,7 @@
 import type { StateCreator } from 'zustand'
 import { trainingApi } from '../api'
 import type { AppState } from './index'
+import { reportError } from '../lib/sentry'
 import type {
   Position, Competency, AssessmentRecord,
   Certification, CertificationRecord, TrainingProject,
@@ -53,7 +54,7 @@ export const createTrainingSlice: StateCreator<AppState, [], [], TrainingSlice> 
       })
       set({ positions: result.items, positionsLoading: false })
     } catch (err) {
-      console.error('fetchPositions failed:', err)
+      reportError(err, { tags: { area: 'training', action: 'fetch_positions' } })
       set({ positionsLoading: false })
     }
   },
@@ -63,7 +64,7 @@ export const createTrainingSlice: StateCreator<AppState, [], [], TrainingSlice> 
       const result = await trainingApi.listCompetencies({ page: 1, page_size: 100 })
       set({ competencies: result.items })
     } catch (err) {
-      console.error('fetchCompetencies failed:', err)
+      reportError(err, { tags: { area: 'training', action: 'fetch_competencies' } })
     }
   },
 
@@ -79,7 +80,7 @@ export const createTrainingSlice: StateCreator<AppState, [], [], TrainingSlice> 
       })
       set({ assessmentRecords: result.items, assessmentRecordsLoading: false })
     } catch (err) {
-      console.error('fetchAssessmentRecords failed:', err)
+      reportError(err, { tags: { area: 'training', action: 'fetch_assessment_records' } })
       set({ assessmentRecordsLoading: false })
     }
   },
@@ -89,7 +90,7 @@ export const createTrainingSlice: StateCreator<AppState, [], [], TrainingSlice> 
       const result = await trainingApi.listCertifications({ page: 1, page_size: 50 })
       set({ certifications: result.items })
     } catch (err) {
-      console.error('fetchCertifications failed:', err)
+      reportError(err, { tags: { area: 'training', action: 'fetch_certifications' } })
     }
   },
 
@@ -104,7 +105,7 @@ export const createTrainingSlice: StateCreator<AppState, [], [], TrainingSlice> 
       })
       set({ certificationRecords: result.items, certificationRecordsLoading: false })
     } catch (err) {
-      console.error('fetchCertificationRecords failed:', err)
+      reportError(err, { tags: { area: 'training', action: 'fetch_certification_records' } })
       set({ certificationRecordsLoading: false })
     }
   },
@@ -120,7 +121,7 @@ export const createTrainingSlice: StateCreator<AppState, [], [], TrainingSlice> 
       })
       set({ trainingProjects: result.items, trainingProjectsLoading: false })
     } catch (err) {
-      console.error('fetchTrainingProjects failed:', err)
+      reportError(err, { tags: { area: 'training', action: 'fetch_training_projects' } })
       set({ trainingProjectsLoading: false })
     }
   },

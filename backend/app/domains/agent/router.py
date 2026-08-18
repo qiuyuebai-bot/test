@@ -4,8 +4,6 @@ Agent 协同调度 API 路由
 import asyncio
 import json
 import threading
-import secrets
-import time
 from app.utils.datetime import utcnow_naive
 from typing import Optional, Dict
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -27,6 +25,11 @@ from app.domains.agent.schemas import (
     CreateAgentTaskRequest,
     DiagnosisRequest,
     GenerationRequest,
+    AgentStatusResponse,
+    TaskStatusResponse,
+    TaskLogEntry,
+    DiagnosisResultResponse,
+    MetricsResponse,
 )
 from app.domains.learner.service import LearnerService
 from app.agents.orchestrator import orchestrator
@@ -174,45 +177,9 @@ _AGENT_RESPONSES = {
     500: {"description": "服务器内部错误（Agent执行异常、LLM调用失败等）"},
 }
 
-# SSE 短期票据存储（30 秒有效，一次性使用，避免 JWT Token 泄露到 URL/日志）
-_SSE_TICKETS: Dict[str, Dict] = {}
-_SSE_TICKET_TTL = 30
-_SSE_TICKETS_LOCK = threading.Lock()
-
-
-def _issue_sse_ticket(user_id: int, task_id: int) -> str:
-    ticket = secrets.token_urlsafe(32)
-    with _SSE_TICKETS_LOCK:
-        _cleanup_sse_tickets_locked()
-        _SSE_TICKETS[ticket] = {
-            "user_id": user_id,
-            "task_id": task_id,
-            "expires_at": time.time() + _SSE_TICKET_TTL,
-        }
-    return ticket
-
-
-def _consume_sse_ticket(ticket: str, task_id: int) -> Optional[int]:
-    with _SSE_TICKETS_LOCK:
-        _cleanup_sse_tickets_locked()
-        info = _SSE_TICKETS.pop(ticket, None)
-    if not info or info["expires_at"] < time.time():
-        return None
-    if info["task_id"] != task_id:
-        return None
-    return info["user_id"]
-
-
-def _cleanup_sse_tickets_locked() -> None:
-    now = time.time()
-    expired = [k for k, v in list(_SSE_TICKETS.items()) if v["expires_at"] < now]
-    for k in expired:
-        _SSE_TICKETS.pop(k, None)
-
-
 # ========== Agent 状态接口 ==========
 
-@router.get("/status", summary="获取所有Agent状态")
+@router.get("/status", summary="获取所有Agent状态", response_model=BaseResponse[dict])
 def get_all_agent_status(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
@@ -233,10 +200,10 @@ def get_all_agent_status(
         })
     except Exception as e:
         LoggerUtil.log_error("获取Agent状态失败", e)
-        return error(message=f"获取Agent状态失败: {str(e)}")
+        return error(message="获取Agent状态失败，请稍后重试")
 
 
-@router.get("/status/{agent_type}", summary="获取指定Agent状态")
+@router.get("/status/{agent_type}", summary="获取指定Agent状态", response_model=BaseResponse[AgentStatusResponse])
 def get_agent_status(
     agent_type: str,
     db: Session = Depends(get_db),
@@ -255,12 +222,12 @@ def get_agent_status(
         return success(data=status)
     except Exception as e:
         LoggerUtil.log_error(f"获取{agent_type}状态失败", e)
-        return error(message=f"获取Agent状态失败: {str(e)}")
+        return error(message="获取Agent状态失败，请稍后重试")
 
 
 # ========== 任务管理接口 ==========
 
-@router.post("/tasks", summary="创建Agent任务", responses=_AGENT_RESPONSES)
+@router.post("/tasks", summary="创建Agent任务", response_model=BaseResponse[dict], responses=_AGENT_RESPONSES)
 def create_agent_task(
     request: CreateAgentTaskRequest,
     db: Session = Depends(get_db),
@@ -304,10 +271,10 @@ def create_agent_task(
         return success(data=task_info, message="任务创建成功")
     except Exception as e:
         LoggerUtil.log_error("创建Agent任务失败", e)
-        return error(message=f"创建任务失败: {str(e)}")
+        return error(message="创建任务失败，请稍后重试")
 
 
-@router.post("/tasks/{task_id}/start", summary="启动任务执行", responses=_AGENT_RESPONSES)
+@router.post("/tasks/{task_id}/start", summary="启动任务执行", response_model=BaseResponse[dict], responses=_AGENT_RESPONSES)
 def start_agent_task(
     task_id: int,
     db: Session = Depends(get_db),
@@ -380,52 +347,24 @@ def start_agent_task(
         )
     except Exception as e:
         LoggerUtil.log_error("启动任务失败", e)
-        return error(message=f"启动任务失败: {str(e)}")
-
-
-@router.post("/tasks/{task_id}/stream-ticket", summary="获取SSE短期票据")
-def create_sse_ticket(
-    task_id: int,
-    db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(get_current_user),
-) -> BaseResponse:
-    """签发一次性短期票据用于 SSE 连接鉴权（30 秒有效），避免 JWT Token 泄露到 URL/日志"""
-    task = db.query(AgentTask).filter(AgentTask.id == task_id).first()
-    if not task:
-        return not_found("任务不存在")
-    if not _check_task_permission(db, current_user, task):
-        return unauthorized("无权限访问该任务")
-    ticket = _issue_sse_ticket(current_user.id, task_id)
-    return success(data={"ticket": ticket, "expires_in": _SSE_TICKET_TTL})
+        return error(message="启动任务失败，请稍后重试")
 
 
 @router.get("/tasks/{task_id}/events", summary="SSE实时任务进度流")
 def task_events_stream(
     task_id: int,
     request: Request,
-    ticket: Optional[str] = None,
     db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
 ):
     """
     Server-Sent Events 实时进度推送
 
-    - 前端先调用 POST /tasks/{task_id}/stream-ticket 获取短期票据
-    - 再用 ?ticket= 参数连接此端点（票据 30 秒有效，一次性消费）
+    - 浏览器客户端使用 Authorization header 或 HttpOnly access cookie
     - 实时接收任务各阶段进度、辩论轮次、完成/失败事件
     - 连接关闭自动取消订阅
     """
-    from app.models import User
-
-    if not ticket:
-        raise HTTPException(status_code=401, detail="未提供SSE票据")
-
-    user_id = _consume_sse_ticket(ticket, task_id)
-    if user_id is None:
-        raise HTTPException(status_code=401, detail="票据无效或已过期")
-
-    user = db.query(User).filter(User.id == user_id).first()
-    if not user or not user.is_active:
-        raise HTTPException(status_code=401, detail="用户不存在或已被禁用")
+    user_id = current_user.user_id
 
     task = db.query(AgentTask).filter(AgentTask.id == task_id).first()
     if not task:
@@ -508,7 +447,7 @@ def task_events_stream(
     )
 
 
-@router.get("/tasks/{task_id}/status", summary="查询任务状态")
+@router.get("/tasks/{task_id}/status", summary="查询任务状态", response_model=BaseResponse[TaskStatusResponse])
 def get_task_status(
     task_id: int,
     db: Session = Depends(get_db),
@@ -533,10 +472,10 @@ def get_task_status(
         return success(data=status)
     except Exception as e:
         LoggerUtil.log_error("查询任务状态失败", e)
-        return error(message=f"查询状态失败: {str(e)}")
+        return error(message="查询状态失败，请稍后重试")
 
 
-@router.get("/tasks/{task_id}/logs", summary="查询任务执行日志")
+@router.get("/tasks/{task_id}/logs", summary="查询任务执行日志", response_model=BaseResponse[list[TaskLogEntry]])
 def get_task_logs(
     task_id: int,
     db: Session = Depends(get_db),
@@ -579,7 +518,7 @@ def get_task_logs(
         })
     except Exception as e:
         LoggerUtil.log_error("查询任务日志失败", e)
-        return error(message=f"查询日志失败: {str(e)}")
+        return error(message="查询日志失败，请稍后重试")
 
 
 @router.get("/tasks/{task_id}/evidence", summary="获取任务完整证据链")
@@ -852,7 +791,7 @@ def get_task_evidence(
         })
     except Exception as e:
         LoggerUtil.log_error("获取任务证据链失败", e)
-        return error(message=f"获取任务证据链失败: {str(e)}")
+        return error(message="获取任务证据链失败，请稍后重试")
 
 
 @router.get("/tasks", summary="获取任务列表")
@@ -918,7 +857,7 @@ def get_task_list(
         )
     except Exception as e:
         LoggerUtil.log_error("获取任务列表失败", e)
-        return error(message=f"获取任务列表失败: {str(e)}")
+        return error(message="获取任务列表失败，请稍后重试")
 
 
 # ========== 学情诊断接口 ==========
@@ -1007,7 +946,7 @@ def run_diagnosis(
             db.commit()
         except Exception:
             db.rollback()
-        return error(message=f"学情诊断失败: {str(e)}")
+        return error(message="学情诊断失败，请稍后重试")
 
 
 # ========== 辩论记录接口 ==========
@@ -1048,12 +987,12 @@ def get_debate_records(
         })
     except Exception as e:
         LoggerUtil.log_error("获取辩论记录失败", e)
-        return error(message=f"获取辩论记录失败: {str(e)}")
+        return error(message="获取辩论记录失败，请稍后重试")
 
 
 # ========== 指标统计接口 ==========
 
-@router.get("/metrics/hallucination", summary="幻觉率统计")
+@router.get("/metrics/hallucination", summary="幻觉率统计", response_model=BaseResponse[MetricsResponse])
 def get_hallucination_metrics(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
@@ -1075,7 +1014,7 @@ def get_hallucination_metrics(
 
     except Exception as e:
         LoggerUtil.log_error("获取幻觉率统计失败", e)
-        return error(message=f"获取统计失败: {str(e)}")
+        return error(message="获取统计失败，请稍后重试")
 
 
 @router.get("/metrics/performance", summary="Agent性能统计")
@@ -1115,7 +1054,7 @@ def get_agent_performance(
         })
     except Exception as e:
         LoggerUtil.log_error("获取性能统计失败", e)
-        return error(message=f"获取性能统计失败: {str(e)}")
+        return error(message="获取性能统计失败，请稍后重试")
 
 
 # ========== 快速执行接口 ==========
@@ -1199,4 +1138,4 @@ def run_full_pipeline(
         )
     except Exception as e:
         LoggerUtil.log_error("启动完整流水线失败", e)
-        return error(message=f"启动失败: {str(e)}")
+        return error(message="启动失败，请稍后重试")

@@ -207,9 +207,10 @@ class AnonymizeUtil:
         if method:
             return method(data)
         
-        # 默认返回原始数据
+        # Unknown fields must fail closed; returning the input would defeat
+        # callers that rely on this helper for privacy boundaries.
         logger.warning(f"未知的脱敏类型: {data_type}")
-        return data
+        return AnonymizeUtil.DEFAULT_MASK_CHAR * max(len(data), 1)
     
     @staticmethod
     def batch_anonymize(data_dict: dict, rules: dict) -> dict:

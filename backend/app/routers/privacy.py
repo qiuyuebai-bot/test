@@ -6,15 +6,24 @@ from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.schemas.response import success
-from app.schemas.privacy import AnonymizationTestRequest
+from app.schemas.response import success, BaseResponse
+from app.schemas.privacy import (
+    AnonymizationTestRequest,
+    AnonymizationTestResponse,
+    PrivacyOverview,
+    ComplianceItem,
+    AnonymizationRule,
+    PermissionItem,
+    KeyInfo,
+    ComplianceDocument,
+)
 from app.services.privacy_service import PrivacyService
 from app.utils.auth import get_current_user, CurrentUser, require_admin
 
 router = APIRouter(prefix="/privacy", tags=["数据隐私与合规"])
 
 
-@router.get("/overview", summary="获取隐私合规总览")
+@router.get("/overview", summary="获取隐私合规总览", response_model=BaseResponse[PrivacyOverview])
 def get_overview(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
@@ -23,7 +32,7 @@ def get_overview(
     return success(PrivacyService.get_overview())
 
 
-@router.get("/compliance", summary="获取隐私合规检查项")
+@router.get("/compliance", summary="获取隐私合规检查项", response_model=BaseResponse[list[ComplianceItem]])
 def get_compliance(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
@@ -32,7 +41,7 @@ def get_compliance(
     return success(PrivacyService.get_compliance_items())
 
 
-@router.get("/anonymization", summary="获取数据脱敏规则")
+@router.get("/anonymization", summary="获取数据脱敏规则", response_model=BaseResponse[list[AnonymizationRule]])
 def get_anonymization(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
@@ -41,7 +50,7 @@ def get_anonymization(
     return success(PrivacyService.get_anonymization_rules())
 
 
-@router.post("/anonymization/test", summary="测试数据脱敏")
+@router.post("/anonymization/test", summary="测试数据脱敏", response_model=BaseResponse[AnonymizationTestResponse])
 def test_anonymization(
     req: AnonymizationTestRequest,
     db: Session = Depends(get_db),
@@ -52,7 +61,7 @@ def test_anonymization(
     return success(result)
 
 
-@router.get("/permissions", summary="获取数据权限配置")
+@router.get("/permissions", summary="获取数据权限配置", response_model=BaseResponse[list[PermissionItem]])
 def get_permissions(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),
@@ -61,7 +70,7 @@ def get_permissions(
     return success(PrivacyService.get_permission_config())
 
 
-@router.get("/keys", summary="获取密钥管理信息（脱敏展示）")
+@router.get("/keys", summary="获取密钥管理信息（脱敏展示）", response_model=BaseResponse[list[KeyInfo]])
 def get_keys(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(require_admin),
@@ -70,7 +79,7 @@ def get_keys(
     return success(PrivacyService.get_key_info())
 
 
-@router.get("/documents", summary="获取合规文档列表")
+@router.get("/documents", summary="获取合规文档列表", response_model=BaseResponse[list[ComplianceDocument]])
 def get_documents(
     db: Session = Depends(get_db),
     current_user: CurrentUser = Depends(get_current_user),

@@ -167,7 +167,9 @@ class Settings(BaseSettings):
         default="http://localhost:5173,http://localhost:3000,http://127.0.0.1:5173",
         description="允许的CORS来源，逗号分隔。生产环境必须改为具体域名，禁止使用 *",
     )
-    CORS_ALLOW_CREDENTIALS: bool = Field(default=False, description="是否允许CORS携带凭证")
+    # Auth uses HttpOnly cookies in browser clients.  Keep credentials enabled so
+    # the development SPA can refresh a session across localhost ports.
+    CORS_ALLOW_CREDENTIALS: bool = Field(default=True, description="是否允许CORS携带凭证")
 
     TRUSTED_PROXIES: str = Field(
         default="",

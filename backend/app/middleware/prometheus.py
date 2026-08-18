@@ -369,19 +369,16 @@ async def prometheus_metrics_endpoint(request: Request) -> PlainTextResponse:
     now = time.time()
     if now - _db_stats_cache["timestamp"] > _DB_STATS_CACHE_TTL:
         try:
-            from app.database import SessionLocal
+            from app.database import get_db_context
             from app.models import KnowledgeSlice, LearningResource
             from sqlalchemy import func
             from starlette.concurrency import run_in_threadpool
 
             def _query_counts():
-                db = SessionLocal()
-                try:
+                with get_db_context() as db:
                     total_slices = db.query(func.count(KnowledgeSlice.id)).scalar() or 0
                     total_resources = db.query(func.count(LearningResource.id)).scalar() or 0
                     return total_slices, total_resources
-                finally:
-                    db.close()
 
             total_slices, total_resources = await run_in_threadpool(_query_counts)
             _db_stats_cache["slices"] = total_slices

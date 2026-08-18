@@ -4,9 +4,11 @@ import { reportError } from './sentry'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
 
-const ACCESS_TOKEN_KEY = 'access_token'
-const REFRESH_TOKEN_KEY = 'refresh_token'
 const USER_KEY = 'user_info'
+
+// Access tokens live only for the current page session. Refresh credentials are
+// kept in an HttpOnly cookie by the backend and are never readable by JS.
+let accessToken: string | null = null
 
 const DEFAULT_TIMEOUT = 30000
 const LONG_TIMEOUT = 120000
@@ -64,17 +66,17 @@ export class TimeoutError extends Error {
   }
 }
 
-function getAccessToken(): string | null {
-  return localStorage.getItem(ACCESS_TOKEN_KEY)
+export function getAccessToken(): string | null {
+  return accessToken
 }
 
 function getRefreshToken(): string | null {
-  return localStorage.getItem(REFRESH_TOKEN_KEY)
+  return null
 }
 
-export function setTokens(accessToken: string, refreshToken: string): void {
-  localStorage.setItem(ACCESS_TOKEN_KEY, accessToken)
-  localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken)
+export function setTokens(nextAccessToken: string, refreshToken: string): void {
+  void refreshToken
+  accessToken = nextAccessToken
 }
 
 export function setUserInfo(user: { user_id: number; username: string; role: string }): void {
@@ -92,13 +94,12 @@ export function getUserInfo(): { userId: number; username: string; role: string 
 }
 
 export function clearAuth(): void {
-  localStorage.removeItem(ACCESS_TOKEN_KEY)
-  localStorage.removeItem(REFRESH_TOKEN_KEY)
+  accessToken = null
   localStorage.removeItem(USER_KEY)
 }
 
 export function isAuthenticated(): boolean {
-  return !!getAccessToken()
+  return !!getAccessToken() || !!getUserInfo()
 }
 
 export function getUserRole(): string | null {
@@ -106,7 +107,7 @@ export function getUserRole(): string | null {
   return info?.role ?? null
 }
 
-function buildUrl(path: string, params?: Record<string, string | number | boolean | undefined>): string {
+export function buildUrl(path: string, params?: Record<string, string | number | boolean | undefined>): string {
   const url = new URL(API_BASE_URL + path, window.location.origin)
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
@@ -130,15 +131,20 @@ async function refreshTokenRequest(): Promise<boolean> {
   isRefreshing = true
   refreshPromise = (async () => {
     const refresh = getRefreshToken()
-    if (!refresh) return false
     try {
       const controller = new AbortController()
       const timeoutId = setTimeout(() => controller.abort(), 10000)
-      const resp = await fetch(API_BASE_URL + '/auth/refresh', {
+      const refreshConfig: RequestInit = {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ refresh_token: refresh }),
+        credentials: 'include',
         signal: controller.signal,
+      }
+      if (refresh) {
+        refreshConfig.body = JSON.stringify({ refresh_token: refresh })
+      }
+      const resp = await fetch(API_BASE_URL + '/auth/refresh', {
+        ...refreshConfig,
       })
       clearTimeout(timeoutId)
       const data: ApiResponse<{ access_token: string; refresh_token: string }> = await resp.json()
@@ -172,7 +178,7 @@ function doFetch(url: string, config: RequestInit, timeoutMs: number): Promise<R
     signal.addEventListener('abort', onAbort, { once: true })
   }
 
-  return fetch(url, { ...config, signal: controller.signal }).finally(() => {
+  return fetch(url, { ...config, credentials: 'include', signal: controller.signal }).finally(() => {
     clearTimeout(timeoutId)
     if (signal) {
       signal.removeEventListener('abort', onAbort)

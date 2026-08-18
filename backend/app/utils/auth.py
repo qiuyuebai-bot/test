@@ -8,6 +8,7 @@ from typing import Optional, Dict, Any
 from jose import JWTError, jwt
 import bcrypt
 from fastapi import Depends, HTTPException, status, Request
+from fastapi.responses import Response
 from fastapi.security import OAuth2PasswordBearer, HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from loguru import logger
@@ -71,6 +72,38 @@ oauth2_scheme = OAuth2PasswordBearer(
 )
 
 security_scheme = HTTPBearer(auto_error=False)
+
+ACCESS_TOKEN_COOKIE = "access_token"
+REFRESH_TOKEN_COOKIE = "refresh_token"
+
+
+def set_auth_cookies(response: Response, tokens: Dict[str, str]) -> None:
+    """Set short-lived auth cookies without exposing refresh credentials to JS."""
+    secure = settings.APP_ENV == "production"
+    response.set_cookie(
+        ACCESS_TOKEN_COOKIE,
+        tokens["access_token"],
+        max_age=settings.JWT_EXPIRE_MINUTES * 60,
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+        path="/",
+    )
+    response.set_cookie(
+        REFRESH_TOKEN_COOKIE,
+        tokens["refresh_token"],
+        max_age=7 * 24 * 60 * 60,
+        httponly=True,
+        secure=secure,
+        samesite="lax",
+        path=f"{settings.API_PREFIX}/auth",
+    )
+
+
+def clear_auth_cookies(response: Response) -> None:
+    """Expire both auth cookies during logout."""
+    response.delete_cookie(ACCESS_TOKEN_COOKIE, path="/")
+    response.delete_cookie(REFRESH_TOKEN_COOKIE, path=f"{settings.API_PREFIX}/auth")
 
 
 # ===========================================
@@ -279,7 +312,7 @@ def get_token_from_request(
     """
     从请求中提取 Token
     
-    仅支持 Authorization Header 方式，避免 token 出现在 URL/日志中导致泄露
+    优先支持 Authorization Header，并支持 HttpOnly cookie；不接受 URL query token。
     
     Args:
         request: FastAPI Request对象
@@ -301,6 +334,11 @@ def get_token_from_request(
     auth_header = request.headers.get("Authorization")
     if auth_header and auth_header.startswith("Bearer "):
         return auth_header.replace("Bearer ", "")
+
+    # 方式4: HttpOnly cookie（浏览器客户端不再需要把 token 放进 localStorage）
+    cookie_token = request.cookies.get(ACCESS_TOKEN_COOKIE)
+    if cookie_token:
+        return cookie_token
     
     return None
 

@@ -5,10 +5,10 @@ import time
 import platform
 import threading
 from copy import deepcopy
+from contextlib import contextmanager
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
 from sqlalchemy import case, func, text
-from loguru import logger
 
 from app.config import settings
 from app.database import SessionLocal
@@ -25,6 +25,19 @@ router = APIRouter(tags=["运维"])
 _READINESS_CACHE_TTL_SECONDS = 20.0
 _readiness_cache_lock = threading.Lock()
 _readiness_cache: tuple[float, int, str, dict] | None = None
+
+
+@contextmanager
+def _read_only_db_context():
+    """Create and close a read-only session for health and metrics probes."""
+    db = SessionLocal()
+    try:
+        yield db
+    except Exception:
+        db.rollback()
+        raise
+    finally:
+        db.close()
 
 
 @router.get("/", tags=["基础"])
@@ -85,8 +98,7 @@ def health_readiness(request: Request):
     }
     try:
         db_start = time.time()
-        db = SessionLocal()
-        try:
+        with _read_only_db_context() as db:
             db.execute(text("SELECT 1"))
             db_latency_ms = round((time.time() - db_start) * 1000, 1)
             doc_counts = db.query(
@@ -111,8 +123,6 @@ def health_readiness(request: Request):
                 "db_indexed_slices": int(slice_counts[1] or 0),
                 "declared_slices": int(doc_counts[2] or 0),
             }
-        finally:
-            db.close()
     except Exception as e:
         checks["database"] = {"status": "down", "error": str(e)[:200]}
         overall_status = "not_ready"
@@ -257,8 +267,7 @@ def get_core_metrics():
     from app.services.metric_service import MetricService
     from sqlalchemy import func, case
 
-    db = SessionLocal()
-    try:
+    with _read_only_db_context() as db:
         hallucination_metrics = MetricsUtil.calculate_hallucination_metrics(db)
         total_resources, active_learners, avg_match = db.query(
             func.count(LearningResource.id),
@@ -323,8 +332,3 @@ def get_core_metrics():
             "total_resources": total_resources,
             "active_learners": active_learners,
         })
-    except Exception as e:
-        logger.exception(f"获取核心指标失败: {e}")
-        raise
-    finally:
-        db.close()

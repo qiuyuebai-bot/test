@@ -3,20 +3,25 @@
 提供登录、注册、Token刷新、用户信息、密码修改等接口
 """
 from app.utils.datetime import utcnow_naive
-from fastapi import APIRouter, Depends
+from typing import Optional
+from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
+from sqlalchemy.exc import SQLAlchemyError
 from loguru import logger
 
 from app.database import get_db
 from app.models import LearnerProfile
 from app.models.user import User, UserRoleEnum
-from app.schemas.response import success, error, bad_request, unauthorized
+from app.schemas.response import success, error, bad_request, unauthorized, BaseResponse
 from app.schemas.auth import (
     LoginRequest,
     RegisterRequest,
     OnboardingNameRequest,
     RefreshTokenRequest,
     ChangePasswordRequest,
+    LoginResponse,
+    TokenResponse,
+    UserInfoResponse,
 )
 from app.utils.auth import (
     hash_password,
@@ -25,6 +30,8 @@ from app.utils.auth import (
     verify_refresh_token,
     get_current_user,
     CurrentUser,
+    set_auth_cookies,
+    clear_auth_cookies,
 )
 from app.utils.logger import LoggerUtil, _sanitize_value
 
@@ -50,7 +57,7 @@ def _mask_username(username: str) -> str:
 # 1. 用户注册
 # ===========================================
 
-@router.post("/register", summary="用户注册", responses=_AUTH_RESPONSES)
+@router.post("/register", summary="用户注册", response_model=BaseResponse[LoginResponse], responses=_AUTH_RESPONSES)
 def register(
     request: RegisterRequest,
     db: Session = Depends(get_db),
@@ -99,26 +106,28 @@ def register(
         # 生成Token
         tokens = create_tokens_for_user(user)
         
-        logger.info(f"用户注册成功: username={user.username}, id={user.id}")
+        logger.info(f"用户注册成功: username={_mask_username(user.username)}, id={user.id}")
         
-        return success({
+        response = success({
             "user_id": user.id,
             "username": user.username,
             "role": role,
             **tokens,
         }, "注册成功")
+        set_auth_cookies(response, tokens)
+        return response
         
-    except Exception as e:
-        logger.error(f"注册失败: {e}")
+    except SQLAlchemyError:
+        logger.exception("注册数据库操作失败")
         db.rollback()
-        return error(message=f"注册失败: {str(e)}")
+        return error(message="注册失败，请稍后重试")
 
 
 # ===========================================
 # 2. 用户登录
 # ===========================================
 
-@router.post("/login", summary="用户登录", responses=_AUTH_RESPONSES)
+@router.post("/login", summary="用户登录", response_model=BaseResponse[LoginResponse], responses=_AUTH_RESPONSES)
 def login(
     request: LoginRequest,
     db: Session = Depends(get_db),
@@ -158,30 +167,33 @@ def login(
         
         LoggerUtil.log_api_request(
             "POST /auth/login",
-            {"username": request.username},
+            {"username": _mask_username(request.username)},
         )
         
-        logger.info(f"用户登录成功: username={user.username}")
+        logger.info(f"用户登录成功: username={_mask_username(user.username)}")
         
-        return success({
+        response = success({
             "user_id": user.id,
             "username": user.username,
             "role": user.role.value if hasattr(user.role, 'value') else user.role,
             **tokens,
         }, "登录成功")
+        set_auth_cookies(response, tokens)
+        return response
         
-    except Exception as e:
-        logger.error(f"登录失败: {e}")
-        return error(message=f"登录失败: {str(e)}")
+    except SQLAlchemyError:
+        logger.exception("登录数据库操作失败")
+        return error(message="登录失败，请稍后重试")
 
 
 # ===========================================
 # 3. Token 刷新
 # ===========================================
 
-@router.post("/refresh", summary="刷新Token", responses=_AUTH_RESPONSES)
+@router.post("/refresh", summary="刷新Token", response_model=BaseResponse[TokenResponse], responses=_AUTH_RESPONSES)
 def refresh_token(
-    request: RefreshTokenRequest,
+    http_request: Request,
+    request: Optional[RefreshTokenRequest] = None,
     db: Session = Depends(get_db),
 ):
     """
@@ -192,7 +204,12 @@ def refresh_token(
     """
     try:
         # 验证刷新Token
-        payload = verify_refresh_token(request.refresh_token)
+        refresh_value = (request.refresh_token if request else None)
+        if not refresh_value:
+            # The browser sends the HttpOnly cookie automatically.  The body
+            # remains accepted for non-browser clients during migration.
+            refresh_value = http_request.cookies.get("refresh_token")
+        payload = verify_refresh_token(refresh_value) if refresh_value else None
         if not payload:
             return unauthorized("刷新Token无效或已过期")
         
@@ -213,18 +230,20 @@ def refresh_token(
         
         logger.info(f"Token刷新成功: user_id={user_id}")
         
-        return success(tokens, "Token刷新成功")
+        response = success(tokens, "Token刷新成功")
+        set_auth_cookies(response, tokens)
+        return response
         
-    except Exception as e:
-        logger.error(f"Token刷新失败: {e}")
-        return error(message=f"Token刷新失败: {str(e)}")
+    except SQLAlchemyError:
+        logger.exception("Token刷新数据库操作失败")
+        return error(message="Token刷新失败，请重新登录")
 
 
 # ===========================================
 # 4. 获取当前用户信息
 # ===========================================
 
-@router.get("/me", summary="获取当前用户信息", responses=_AUTH_RESPONSES)
+@router.get("/me", summary="获取当前用户信息", response_model=BaseResponse[UserInfoResponse], responses=_AUTH_RESPONSES)
 def get_current_user_info(
     current_user: CurrentUser = Depends(get_current_user),
     db: Session = Depends(get_db),
@@ -253,16 +272,16 @@ def get_current_user_info(
             "created_at": user.created_at.isoformat() if user.created_at else None,
         }, "查询成功")
         
-    except Exception as e:
-        logger.error(f"获取用户信息失败: {e}")
-        return error(message=f"获取用户信息失败: {str(e)}")
+    except SQLAlchemyError:
+        logger.exception("获取用户信息数据库操作失败")
+        return error(message="获取用户信息失败，请稍后重试")
 
 
 # ===========================================
 # 5. 注册后设置称呼
 # ===========================================
 
-@router.post("/onboarding/name", summary="注册后设置称呼", responses=_AUTH_RESPONSES)
+@router.post("/onboarding/name", summary="注册后设置称呼", response_model=BaseResponse[dict], responses=_AUTH_RESPONSES)
 def set_onboarding_name(
     request: OnboardingNameRequest,
     current_user: CurrentUser = Depends(get_current_user),
@@ -298,17 +317,17 @@ def set_onboarding_name(
             "real_name": learner.real_name,
         }, "设置成功")
 
-    except Exception as e:
-        logger.error(f"设置称呼失败: {e}")
+    except SQLAlchemyError:
+        logger.exception("设置称呼数据库操作失败")
         db.rollback()
-        return error(message=f"设置称呼失败: {str(e)}")
+        return error(message="设置称呼失败，请稍后重试")
 
 
 # ===========================================
 # 6. 修改密码
 # ===========================================
 
-@router.post("/change-password", summary="修改密码", responses=_AUTH_RESPONSES)
+@router.post("/change-password", summary="修改密码", response_model=BaseResponse[None], responses=_AUTH_RESPONSES)
 def change_password(
     request: ChangePasswordRequest,
     current_user: CurrentUser = Depends(get_current_user),
@@ -341,32 +360,35 @@ def change_password(
         
         return success(None, "密码修改成功")
         
-    except Exception as e:
-        logger.error(f"修改密码失败: {e}")
+    except SQLAlchemyError:
+        logger.exception("修改密码数据库操作失败")
         db.rollback()
-        return error(message=f"修改密码失败: {str(e)}")
+        return error(message="修改密码失败，请稍后重试")
 
 
 # ===========================================
 # 7. 登出
 # ===========================================
 
-@router.post("/logout", summary="用户登出")
+@router.post("/logout", summary="用户登出", response_model=BaseResponse[None])
 def logout(
+    request: Request,
     current_user: CurrentUser = Depends(get_current_user),
 ):
     """
     用户登出（前端清除Token即可，服务端记录登出日志）
     """
     logger.info(f"用户登出: user_id={current_user.user_id}, username={current_user.username}")
-    return success(None, "登出成功")
+    response = success(None, "登出成功")
+    clear_auth_cookies(response)
+    return response
 
 
 # ===========================================
 # 8. 验证Token有效性
 # ===========================================
 
-@router.get("/verify", summary="验证Token有效性", responses=_AUTH_RESPONSES)
+@router.get("/verify", summary="验证Token有效性", response_model=BaseResponse[dict], responses=_AUTH_RESPONSES)
 def verify_token(
     current_user: CurrentUser = Depends(get_current_user),
 ):

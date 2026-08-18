@@ -2,6 +2,7 @@ import type { StateCreator } from 'zustand'
 import type { LearningResource } from '../types'
 import { coreApi } from '../api'
 import type { AppState } from './index'
+import { reportError } from '../lib/sentry'
 
 export interface ResourceSlice {
   resources: LearningResource[]
@@ -65,7 +66,7 @@ export const createResourceSlice: StateCreator<AppState, [], [], ResourceSlice> 
         resourceLoading: false,
       })
     } catch (err) {
-      console.error('fetchResources failed:', err)
+      reportError(err, { tags: { area: 'resource', action: 'fetch_list' } })
       set({ resourcesLoading: false, resourceLoading: false })
     }
   },

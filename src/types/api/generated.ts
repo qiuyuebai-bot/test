@@ -144,6 +144,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/health/llm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Health Llm
+         * @description Return a redacted DeepSeek connectivity check.
+         */
+        get: operations["health_llm_api_v1_health_llm_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/health/llm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Health Llm
+         * @description Return a redacted DeepSeek connectivity check.
+         */
+        get: operations["health_llm_health_llm_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/metrics/prometheus": {
         parameters: {
             query?: never;
@@ -794,6 +834,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/knowledge/stats/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 知识库汇总统计
+         * @description 获取不受当前分页影响的知识库汇总统计。
+         */
+        get: operations["get_knowledge_summary_api_v1_knowledge_stats_summary_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/knowledge/stats/industries": {
         parameters: {
             query?: never;
@@ -933,26 +993,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/agent/tasks/{task_id}/stream-ticket": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * 获取SSE短期票据
-         * @description 签发一次性短期票据用于 SSE 连接鉴权（30 秒有效），避免 JWT Token 泄露到 URL/日志
-         */
-        post: operations["create_sse_ticket_api_v1_agent_tasks__task_id__stream_ticket_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/agent/tasks/{task_id}/events": {
         parameters: {
             query?: never;
@@ -964,8 +1004,7 @@ export interface paths {
          * SSE实时任务进度流
          * @description Server-Sent Events 实时进度推送
          *
-         *     - 前端先调用 POST /tasks/{task_id}/stream-ticket 获取短期票据
-         *     - 再用 ?ticket= 参数连接此端点（票据 30 秒有效，一次性消费）
+         *     - 浏览器客户端使用 Authorization header 或 HttpOnly access cookie
          *     - 实时接收任务各阶段进度、辩论轮次、完成/失败事件
          *     - 连接关闭自动取消订阅
          */
@@ -1014,6 +1053,26 @@ export interface paths {
          *     - 返回按时间排序的执行日志列表
          */
         get: operations["get_task_logs_api_v1_agent_tasks__task_id__logs_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agent/tasks/{task_id}/evidence": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 获取任务完整证据链
+         * @description 返回任务摘要、时间线、辩论、知识来源、修正对比和决策依据。
+         */
+        get: operations["get_task_evidence_api_v1_agent_tasks__task_id__evidence_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1477,6 +1536,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/report/metrics/definitions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 获取统一指标定义
+         * @description Expose the registry so clients can explain every reported value.
+         */
+        get: operations["get_metric_definitions_api_v1_report_metrics_definitions_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/report/metrics/update": {
         parameters: {
             query?: never;
@@ -1520,6 +1599,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/tutoring/recommendations/{learner_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * 获取导学主题推荐
+         * @description Return an explainable topic recommendation for the selected learner.
+         */
+        get: operations["get_tutoring_recommendations_api_v1_tutoring_recommendations__learner_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/tutoring/questions/generate": {
         parameters: {
             query?: never;
@@ -1554,8 +1653,8 @@ export interface paths {
          * @description 提交答题结果，触发多Agent协同自适应决策
          *
          *     双分支逻辑：
-         *     - 正确率≥70% → 生成高阶进阶挑战任务
-         *     - 正确率<70% → 生成简化通俗知识点解释
+         *     - 单选题答对 → 继续深化并提供知识点扩展
+         *     - 单选题答错 → 提供纠错通俗讲解和知识点扩展
          *
          *     完整留存交互记录，支持历史回溯
          */
@@ -1583,7 +1682,11 @@ export interface paths {
         get: operations["get_interaction_history_api_v1_tutoring_history__learner_id__get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * 删除交互历史记录
+         * @description 按单条记录、会话或当前学习者范围删除交互历史。
+         */
+        delete: operations["delete_interaction_history_api_v1_tutoring_history__learner_id__delete"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1603,6 +1706,685 @@ export interface paths {
         get: operations["get_decision_logic_api_v1_tutoring_decision_logic_get"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tutoring/answers/batch": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Submit a batch practice session */
+        post: operations["submit_batch_api_v1_tutoring_answers_batch_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/tutoring/answers/batch/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Get a batch practice result */
+        get: operations["get_batch_result_api_v1_tutoring_answers_batch__session_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/diagnostic/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 创建或恢复能力诊断会话 */
+        post: operations["create_session_api_v1_diagnostic_sessions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/diagnostic/sessions/{session_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 读取能力诊断会话 */
+        get: operations["get_session_api_v1_diagnostic_sessions__session_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/diagnostic/sessions/{session_id}/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 提交能力诊断答案 */
+        post: operations["submit_answer_api_v1_diagnostic_sessions__session_id__answers_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/competencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 胜任力项列表 */
+        get: operations["get_competencies_api_v1_competencies_get"];
+        put?: never;
+        /** 创建胜任力项 */
+        post: operations["create_competency_api_v1_competencies_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/competencies/{competency_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 胜任力项详情 */
+        get: operations["get_competency_detail_api_v1_competencies__competency_id__get"];
+        /** 更新胜任力项 */
+        put: operations["update_competency_api_v1_competencies__competency_id__put"];
+        post?: never;
+        /** 删除胜任力项 */
+        delete: operations["delete_competency_api_v1_competencies__competency_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/positions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 岗位列表 */
+        get: operations["get_positions_api_v1_positions_get"];
+        put?: never;
+        /** 创建岗位 */
+        post: operations["create_position_api_v1_positions_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/positions/{position_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 岗位详情（含胜任力矩阵） */
+        get: operations["get_position_detail_api_v1_positions__position_id__get"];
+        /** 更新岗位 */
+        put: operations["update_position_api_v1_positions__position_id__put"];
+        post?: never;
+        /** 删除岗位 */
+        delete: operations["delete_position_api_v1_positions__position_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/positions/{position_id}/competencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 为岗位添加胜任力要求 */
+        post: operations["add_competency_to_position_api_v1_positions__position_id__competencies_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/positions/{position_id}/competencies/{competency_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新岗位胜任力要求 */
+        put: operations["update_position_competency_api_v1_positions__position_id__competencies__competency_id__put"];
+        post?: never;
+        /** 移除岗位胜任力要求 */
+        delete: operations["remove_competency_from_position_api_v1_positions__position_id__competencies__competency_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assessments/templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 评估模板列表 */
+        get: operations["get_templates_api_v1_assessments_templates_get"];
+        put?: never;
+        /** 创建评估模板 */
+        post: operations["create_template_api_v1_assessments_templates_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assessments/templates/{template_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 评估模板详情 */
+        get: operations["get_template_detail_api_v1_assessments_templates__template_id__get"];
+        /** 更新评估模板 */
+        put: operations["update_template_api_v1_assessments_templates__template_id__put"];
+        post?: never;
+        /** 删除评估模板 */
+        delete: operations["delete_template_api_v1_assessments_templates__template_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assessments/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 开始评估 */
+        post: operations["start_assessment_api_v1_assessments_start_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assessments/records": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 评估记录列表 */
+        get: operations["get_records_api_v1_assessments_records_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assessments/records/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 评估记录详情（含评分明细） */
+        get: operations["get_record_detail_api_v1_assessments_records__record_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assessments/records/{record_id}/submit": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 提交评估答案 */
+        post: operations["submit_assessment_api_v1_assessments_records__record_id__submit_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/assessments/records/{record_id}/gaps": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取差距分析结果 */
+        get: operations["get_gap_analysis_api_v1_assessments_records__record_id__gaps_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certifications": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 认证列表 */
+        get: operations["get_certifications_api_v1_certifications_get"];
+        put?: never;
+        /** 创建认证 */
+        post: operations["create_certification_api_v1_certifications_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certifications/{cert_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 认证详情（含规则） */
+        get: operations["get_certification_detail_api_v1_certifications__cert_id__get"];
+        /** 更新认证 */
+        put: operations["update_certification_api_v1_certifications__cert_id__put"];
+        post?: never;
+        /** 删除认证 */
+        delete: operations["delete_certification_api_v1_certifications__cert_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certifications/{cert_id}/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 认证规则列表 */
+        get: operations["get_rules_api_v1_certifications__cert_id__rules_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certifications/rules": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 添加发证规则 */
+        post: operations["add_rule_api_v1_certifications_rules_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certifications/rules/{rule_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** 删除发证规则 */
+        delete: operations["delete_rule_api_v1_certifications_rules__rule_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certifications/apply": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 申请认证 */
+        post: operations["apply_for_certification_api_v1_certifications_apply_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certifications/records/list": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 认证记录列表 */
+        get: operations["get_records_api_v1_certifications_records_list_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certifications/records/{record_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 认证记录详情 */
+        get: operations["get_record_detail_api_v1_certifications_records__record_id__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certifications/records/{record_id}/approve": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 批准认证 */
+        post: operations["approve_record_api_v1_certifications_records__record_id__approve_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certifications/records/{record_id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 拒绝认证 */
+        post: operations["reject_record_api_v1_certifications_records__record_id__reject_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certifications/records/{record_id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 撤销已发证书 */
+        post: operations["revoke_record_api_v1_certifications_records__record_id__revoke_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/certifications/verify/{certificate_number}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 公开验真证书 */
+        get: operations["verify_certificate_api_v1_certifications_verify__certificate_number__get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/training-projects": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 培训项目列表 */
+        get: operations["get_projects_api_v1_training_projects_get"];
+        put?: never;
+        /** 创建培训项目 */
+        post: operations["create_project_api_v1_training_projects_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/training-projects/{project_id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 培训项目详情 */
+        get: operations["get_project_detail_api_v1_training_projects__project_id__get"];
+        /** 更新培训项目 */
+        put: operations["update_project_api_v1_training_projects__project_id__put"];
+        post?: never;
+        /** 删除培训项目 */
+        delete: operations["delete_project_api_v1_training_projects__project_id__delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/training-projects/{project_id}/enroll": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 报名培训项目 */
+        post: operations["enroll_api_v1_training_projects__project_id__enroll_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/training-projects/{project_id}/enrollment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 查询当前用户报名状态 */
+        get: operations["get_enrollment_api_v1_training_projects__project_id__enrollment_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/training-projects/{project_id}/enrollments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 项目学员列表 */
+        get: operations["get_enrollments_api_v1_training_projects__project_id__enrollments_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/training-enrollments/{enrollment_id}/generate-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** AI生成学习计划 */
+        post: operations["generate_plan_api_v1_training_enrollments__enrollment_id__generate_plan_post"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/training-enrollments/{enrollment_id}/plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** 获取学习计划 */
+        get: operations["get_plan_api_v1_training_enrollments__enrollment_id__plan_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/training-plans/{plan_id}/progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** 更新学习进度 */
+        put: operations["update_progress_api_v1_training_plans__plan_id__progress_put"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/training-enrollments/{enrollment_id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** 完成培训 */
+        post: operations["complete_enrollment_api_v1_training_enrollments__enrollment_id__complete_post"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1633,42 +2415,15 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/trainings": {
+    "/api/v1/dashboard/learner": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * 获取培训任务列表
-         * @description 获取企业培训任务列表，支持分页、搜索、筛选
-         */
-        get: operations["get_training_list_api_v1_trainings_get"];
-        put?: never;
-        /**
-         * 创建培训任务
-         * @description 创建新的企业培训任务
-         */
-        post: operations["create_training_api_v1_trainings_post"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/trainings/stats/overview": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 获取培训统计
-         * @description 获取培训统计概览（缓存 30 秒）
-         */
-        get: operations["get_training_stats_api_v1_trainings_stats_overview_get"];
+        /** 获取学习者 Dashboard 数据 */
+        get: operations["learner_dashboard_api_v1_dashboard_learner_get"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1677,47 +2432,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/trainings/transfers/list": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 获取转岗培训列表
-         * @description 获取所有转岗培训记录
-         */
-        get: operations["get_transfers_api_v1_trainings_transfers_list_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/trainings/skill-gaps/analysis": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * 获取技能差距分析
-         * @description 获取技能差距分析数据
-         */
-        get: operations["get_skill_gaps_api_v1_trainings_skill_gaps_analysis_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/trainings/batch-import": {
+    "/api/v1/dashboard/learner/guidance": {
         parameters: {
             query?: never;
             header?: never;
@@ -1726,40 +2441,26 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /**
-         * 批量导入培训任务
-         * @description 批量导入培训任务
-         */
-        post: operations["batch_import_api_v1_trainings_batch_import_post"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
-        patch?: never;
+        /** 更新学习者 Dashboard 引导状态 */
+        patch: operations["learner_guidance_state_api_v1_dashboard_learner_guidance_patch"];
         trace?: never;
     };
-    "/api/v1/trainings/{training_id}": {
+    "/api/v1/dashboard/teacher": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        /**
-         * 获取培训任务详情
-         * @description 根据ID获取培训任务详情
-         */
-        get: operations["get_training_detail_api_v1_trainings__training_id__get"];
-        /**
-         * 更新培训任务
-         * @description 更新培训任务信息
-         */
-        put: operations["update_training_api_v1_trainings__training_id__put"];
+        /** 获取教师 Dashboard 数据 */
+        get: operations["teacher_dashboard_api_v1_dashboard_teacher_get"];
+        put?: never;
         post?: never;
-        /**
-         * 删除培训任务
-         * @description 删除培训任务
-         */
-        delete: operations["delete_training_api_v1_trainings__training_id__delete"];
+        delete?: never;
         options?: never;
         head?: never;
         patch?: never;
@@ -1970,6 +2671,73 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /**
+         * AgentStatusResponse
+         * @description Agent状态响应
+         */
+        AgentStatusResponse: {
+            /**
+             * Agent Type
+             * @description Agent类型
+             */
+            agent_type: string;
+            /**
+             * Agent Name
+             * @description Agent名称
+             */
+            agent_name: string;
+            /**
+             * Status
+             * @description 状态: idle/running/validating/error
+             */
+            status: string;
+            /**
+             * Current Task Id
+             * @description 当前任务ID
+             */
+            current_task_id?: number | null;
+            /**
+             * Last Error
+             * @description 最后错误信息
+             */
+            last_error?: string | null;
+        };
+        /**
+         * AnonymizationRule
+         * @description 脱敏规则
+         */
+        AnonymizationRule: {
+            /**
+             * Id
+             * @description 规则ID
+             */
+            id: number;
+            /**
+             * Field
+             * @description 字段名称
+             */
+            field: string;
+            /**
+             * Original
+             * @description 原始示例数据
+             */
+            original: string;
+            /**
+             * Anonymized
+             * @description 脱敏后示例数据
+             */
+            anonymized: string;
+            /**
+             * Method
+             * @description 脱敏方法
+             */
+            method: string;
+            /**
+             * Status
+             * @description 状态(active/draft)
+             */
+            status: string;
+        };
+        /**
          * AnonymizationTestRequest
          * @description 脱敏测试请求
          */
@@ -1986,6 +2754,32 @@ export interface components {
             value: string;
         };
         /**
+         * AnonymizationTestResponse
+         * @description 脱敏测试响应
+         */
+        AnonymizationTestResponse: {
+            /**
+             * Field
+             * @description 字段类型
+             */
+            field: string;
+            /**
+             * Original
+             * @description 原始值
+             */
+            original: string;
+            /**
+             * Anonymized
+             * @description 脱敏结果
+             */
+            anonymized: string;
+            /**
+             * Method
+             * @description 使用的脱敏方法
+             */
+            method: string;
+        };
+        /**
          * AnonymizeRequest
          * @description 脱敏请求
          */
@@ -2000,6 +2794,29 @@ export interface components {
              * @description 指定脱敏字段，为空则脱敏所有敏感字段
              */
             fields?: string[] | null;
+        };
+        /**
+         * AnonymizeResponse
+         * @description 脱敏响应
+         */
+        AnonymizeResponse: {
+            /** Learner Id */
+            learner_id: number;
+            /** Is Anonymized */
+            is_anonymized: boolean;
+            /** Anonymized Fields */
+            anonymized_fields: string[];
+            /** Before */
+            before: Record<string, never>;
+            /** After */
+            after: Record<string, never>;
+            /** Record Id */
+            record_id: number;
+            /**
+             * Operation Time
+             * Format: date-time
+             */
+            operation_time: string;
         };
         /**
          * AnswerRecordCreate
@@ -2039,6 +2856,79 @@ export interface components {
             time_spent_ms: number;
         };
         /**
+         * AssessmentStartRequest
+         * @description 开始评估请求
+         */
+        AssessmentStartRequest: {
+            /**
+             * Template Id
+             * @description 评估模板ID
+             */
+            template_id: number;
+            /**
+             * Learner Id
+             * @description 学习者画像ID
+             */
+            learner_id: number;
+        };
+        /**
+         * AssessmentSubmitRequest
+         * @description 提交评估请求
+         */
+        AssessmentSubmitRequest: {
+            /**
+             * Scores
+             * @description 评分列表 [{competency_id, current_level, current_score, assessment_method, evidence}]
+             */
+            scores: Record<string, never>[];
+        };
+        /** AssessmentTemplateCreate */
+        AssessmentTemplateCreate: {
+            /**
+             * Position Id
+             * @description 关联岗位ID
+             */
+            position_id: number;
+            /**
+             * Name
+             * @description 模板名称
+             */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Competency Configs
+             * @description 胜任力配置列表
+             */
+            competency_configs?: components["schemas"]["CompetencyConfig"][];
+            /**
+             * Pass Threshold
+             * @description 通过分数线
+             * @default 60
+             */
+            pass_threshold: number;
+            /**
+             * Duration Minutes
+             * @description 评估时长(分钟)
+             */
+            duration_minutes?: number | null;
+        };
+        /** AssessmentTemplateUpdate */
+        AssessmentTemplateUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Competency Configs */
+            competency_configs?: components["schemas"]["CompetencyConfig"][] | null;
+            /** Pass Threshold */
+            pass_threshold?: number | null;
+            /** Duration Minutes */
+            duration_minutes?: number | null;
+            /** Is Active */
+            is_active?: boolean | null;
+        };
+        /**
          * BaseResponse
          * @description 统一返回结果基类
          * @example {
@@ -2072,6 +2962,642 @@ export interface components {
             timestamp?: string;
         };
         /**
+         * BaseResponse[AgentStatusResponse]
+         * @example {
+         *       "code": 200,
+         *       "message": "操作成功",
+         *       "timestamp": "2024-03-15 14:30:00"
+         *     }
+         */
+        BaseResponse_AgentStatusResponse_: {
+            /**
+             * Code
+             * @description 状态码
+             * @default 200
+             */
+            code: number;
+            /**
+             * Message
+             * @description 提示消息
+             * @default 操作成功
+             */
+            message: string;
+            /** @description 业务数据 */
+            data?: components["schemas"]["AgentStatusResponse"] | null;
+            /**
+             * Timestamp
+             * @description 响应时间戳
+             */
+            timestamp?: string;
+        };
+        /**
+         * BaseResponse[AnonymizationTestResponse]
+         * @example {
+         *       "code": 200,
+         *       "message": "操作成功",
+         *       "timestamp": "2024-03-15 14:30:00"
+         *     }
+         */
+        BaseResponse_AnonymizationTestResponse_: {
+            /**
+             * Code
+             * @description 状态码
+             * @default 200
+             */
+            code: number;
+            /**
+             * Message
+             * @description 提示消息
+             * @default 操作成功
+             */
+            message: string;
+            /** @description 业务数据 */
+            data?: components["schemas"]["AnonymizationTestResponse"] | null;
+            /**
+             * Timestamp
+             * @description 响应时间戳
+             */
+            timestamp?: string;
+        };
+        /**
+         * BaseResponse[AnonymizeResponse]
+         * @example {
+         *       "code": 200,
+         *       "message": "操作成功",
+         *       "timestamp": "2024-03-15 14:30:00"
+         *     }
+         */
+        BaseResponse_AnonymizeResponse_: {
+            /**
+             * Code
+             * @description 状态码
+             * @default 200
+             */
+            code: number;
+            /**
+             * Message
+             * @description 提示消息
+             * @default 操作成功
+             */
+            message: string;
+            /** @description 业务数据 */
+            data?: components["schemas"]["AnonymizeResponse"] | null;
+            /**
+             * Timestamp
+             * @description 响应时间戳
+             */
+            timestamp?: string;
+        };
+        /**
+         * BaseResponse[LoginResponse]
+         * @example {
+         *       "code": 200,
+         *       "message": "操作成功",
+         *       "timestamp": "2024-03-15 14:30:00"
+         *     }
+         */
+        BaseResponse_LoginResponse_: {
+            /**
+             * Code
+             * @description 状态码
+             * @default 200
+             */
+            code: number;
+            /**
+             * Message
+             * @description 提示消息
+             * @default 操作成功
+             */
+            message: string;
+            /** @description 业务数据 */
+            data?: components["schemas"]["LoginResponse"] | null;
+            /**
+             * Timestamp
+             * @description 响应时间戳
+             */
+            timestamp?: string;
+        };
+        /**
+         * BaseResponse[MetricsResponse]
+         * @example {
+         *       "code": 200,
+         *       "message": "操作成功",
+         *       "timestamp": "2024-03-15 14:30:00"
+         *     }
+         */
+        BaseResponse_MetricsResponse_: {
+            /**
+             * Code
+             * @description 状态码
+             * @default 200
+             */
+            code: number;
+            /**
+             * Message
+             * @description 提示消息
+             * @default 操作成功
+             */
+            message: string;
+            /** @description 业务数据 */
+            data?: components["schemas"]["MetricsResponse"] | null;
+            /**
+             * Timestamp
+             * @description 响应时间戳
+             */
+            timestamp?: string;
+        };
+        /**
+         * BaseResponse[NoneType]
+         * @example {
+         *       "code": 200,
+         *       "message": "操作成功",
+         *       "timestamp": "2024-03-15 14:30:00"
+         *     }
+         */
+        BaseResponse_NoneType_: {
+            /**
+             * Code
+             * @description 状态码
+             * @default 200
+             */
+            code: number;
+            /**
+             * Message
+             * @description 提示消息
+             * @default 操作成功
+             */
+            message: string;
+            /**
+             * Data
+             * @description 业务数据
+             */
+            data?: null;
+            /**
+             * Timestamp
+             * @description 响应时间戳
+             */
+            timestamp?: string;
+        };
+        /**
+         * BaseResponse[PrivacyOverview]
+         * @example {
+         *       "code": 200,
+         *       "message": "操作成功",
+         *       "timestamp": "2024-03-15 14:30:00"
+         *     }
+         */
+        BaseResponse_PrivacyOverview_: {
+            /**
+             * Code
+             * @description 状态码
+             * @default 200
+             */
+            code: number;
+            /**
+             * Message
+             * @description 提示消息
+             * @default 操作成功
+             */
+            message: string;
+            /** @description 业务数据 */
+            data?: components["schemas"]["PrivacyOverview"] | null;
+            /**
+             * Timestamp
+             * @description 响应时间戳
+             */
+            timestamp?: string;
+        };
+        /**
+         * BaseResponse[TaskStatusResponse]
+         * @example {
+         *       "code": 200,
+         *       "message": "操作成功",
+         *       "timestamp": "2024-03-15 14:30:00"
+         *     }
+         */
+        BaseResponse_TaskStatusResponse_: {
+            /**
+             * Code
+             * @description 状态码
+             * @default 200
+             */
+            code: number;
+            /**
+             * Message
+             * @description 提示消息
+             * @default 操作成功
+             */
+            message: string;
+            /** @description 业务数据 */
+            data?: components["schemas"]["TaskStatusResponse"] | null;
+            /**
+             * Timestamp
+             * @description 响应时间戳
+             */
+            timestamp?: string;
+        };
+        /**
+         * BaseResponse[TokenResponse]
+         * @example {
+         *       "code": 200,
+         *       "message": "操作成功",
+         *       "timestamp": "2024-03-15 14:30:00"
+         *     }
+         */
+        BaseResponse_TokenResponse_: {
+            /**
+             * Code
+             * @description 状态码
+             * @default 200
+             */
+            code: number;
+            /**
+             * Message
+             * @description 提示消息
+             * @default 操作成功
+             */
+            message: string;
+            /** @description 业务数据 */
+            data?: components["schemas"]["TokenResponse"] | null;
+            /**
+             * Timestamp
+             * @description 响应时间戳
+             */
+            timestamp?: string;
+        };
+        /**
+         * BaseResponse[UserInfoResponse]
+         * @example {
+         *       "code": 200,
+         *       "message": "操作成功",
+         *       "timestamp": "2024-03-15 14:30:00"
+         *     }
+         */
+        BaseResponse_UserInfoResponse_: {
+            /**
+             * Code
+             * @description 状态码
+             * @default 200
+             */
+            code: number;
+            /**
+             * Message
+             * @description 提示消息
+             * @default 操作成功
+             */
+            message: string;
+            /** @description 业务数据 */
+            data?: components["schemas"]["UserInfoResponse"] | null;
+            /**
+             * Timestamp
+             * @description 响应时间戳
+             */
+            timestamp?: string;
+        };
+        /**
+         * BaseResponse[dict]
+         * @example {
+         *       "code": 200,
+         *       "message": "操作成功",
+         *       "timestamp": "2024-03-15 14:30:00"
+         *     }
+         */
+        BaseResponse_dict_: {
+            /**
+             * Code
+             * @description 状态码
+             * @default 200
+             */
+            code: number;
+            /**
+             * Message
+             * @description 提示消息
+             * @default 操作成功
+             */
+            message: string;
+            /**
+             * Data
+             * @description 业务数据
+             */
+            data?: Record<string, never> | null;
+            /**
+             * Timestamp
+             * @description 响应时间戳
+             */
+            timestamp?: string;
+        };
+        /**
+         * BaseResponse[list[AnonymizationRule]]
+         * @example {
+         *       "code": 200,
+         *       "message": "操作成功",
+         *       "timestamp": "2024-03-15 14:30:00"
+         *     }
+         */
+        BaseResponse_list_AnonymizationRule__: {
+            /**
+             * Code
+             * @description 状态码
+             * @default 200
+             */
+            code: number;
+            /**
+             * Message
+             * @description 提示消息
+             * @default 操作成功
+             */
+            message: string;
+            /**
+             * Data
+             * @description 业务数据
+             */
+            data?: components["schemas"]["AnonymizationRule"][] | null;
+            /**
+             * Timestamp
+             * @description 响应时间戳
+             */
+            timestamp?: string;
+        };
+        /**
+         * BaseResponse[list[ComplianceDocument]]
+         * @example {
+         *       "code": 200,
+         *       "message": "操作成功",
+         *       "timestamp": "2024-03-15 14:30:00"
+         *     }
+         */
+        BaseResponse_list_ComplianceDocument__: {
+            /**
+             * Code
+             * @description 状态码
+             * @default 200
+             */
+            code: number;
+            /**
+             * Message
+             * @description 提示消息
+             * @default 操作成功
+             */
+            message: string;
+            /**
+             * Data
+             * @description 业务数据
+             */
+            data?: components["schemas"]["ComplianceDocument"][] | null;
+            /**
+             * Timestamp
+             * @description 响应时间戳
+             */
+            timestamp?: string;
+        };
+        /**
+         * BaseResponse[list[ComplianceItem]]
+         * @example {
+         *       "code": 200,
+         *       "message": "操作成功",
+         *       "timestamp": "2024-03-15 14:30:00"
+         *     }
+         */
+        BaseResponse_list_ComplianceItem__: {
+            /**
+             * Code
+             * @description 状态码
+             * @default 200
+             */
+            code: number;
+            /**
+             * Message
+             * @description 提示消息
+             * @default 操作成功
+             */
+            message: string;
+            /**
+             * Data
+             * @description 业务数据
+             */
+            data?: components["schemas"]["ComplianceItem"][] | null;
+            /**
+             * Timestamp
+             * @description 响应时间戳
+             */
+            timestamp?: string;
+        };
+        /**
+         * BaseResponse[list[KeyInfo]]
+         * @example {
+         *       "code": 200,
+         *       "message": "操作成功",
+         *       "timestamp": "2024-03-15 14:30:00"
+         *     }
+         */
+        BaseResponse_list_KeyInfo__: {
+            /**
+             * Code
+             * @description 状态码
+             * @default 200
+             */
+            code: number;
+            /**
+             * Message
+             * @description 提示消息
+             * @default 操作成功
+             */
+            message: string;
+            /**
+             * Data
+             * @description 业务数据
+             */
+            data?: components["schemas"]["KeyInfo"][] | null;
+            /**
+             * Timestamp
+             * @description 响应时间戳
+             */
+            timestamp?: string;
+        };
+        /**
+         * BaseResponse[list[PermissionItem]]
+         * @example {
+         *       "code": 200,
+         *       "message": "操作成功",
+         *       "timestamp": "2024-03-15 14:30:00"
+         *     }
+         */
+        BaseResponse_list_PermissionItem__: {
+            /**
+             * Code
+             * @description 状态码
+             * @default 200
+             */
+            code: number;
+            /**
+             * Message
+             * @description 提示消息
+             * @default 操作成功
+             */
+            message: string;
+            /**
+             * Data
+             * @description 业务数据
+             */
+            data?: components["schemas"]["PermissionItem"][] | null;
+            /**
+             * Timestamp
+             * @description 响应时间戳
+             */
+            timestamp?: string;
+        };
+        /**
+         * BaseResponse[list[TaskLogEntry]]
+         * @example {
+         *       "code": 200,
+         *       "message": "操作成功",
+         *       "timestamp": "2024-03-15 14:30:00"
+         *     }
+         */
+        BaseResponse_list_TaskLogEntry__: {
+            /**
+             * Code
+             * @description 状态码
+             * @default 200
+             */
+            code: number;
+            /**
+             * Message
+             * @description 提示消息
+             * @default 操作成功
+             */
+            message: string;
+            /**
+             * Data
+             * @description 业务数据
+             */
+            data?: components["schemas"]["TaskLogEntry"][] | null;
+            /**
+             * Timestamp
+             * @description 响应时间戳
+             */
+            timestamp?: string;
+        };
+        /** BatchAnswerItem */
+        BatchAnswerItem: {
+            /** Question Id */
+            question_id: string;
+            /** User Answer */
+            user_answer: unknown;
+            /** Sequence Index */
+            sequence_index: number;
+        };
+        /**
+         * CertificationApplyRequest
+         * @description 申请认证请求
+         */
+        CertificationApplyRequest: {
+            /**
+             * Certification Id
+             * @description 认证ID
+             */
+            certification_id: number;
+            /**
+             * Assessment Record Id
+             * @description 评估记录ID
+             */
+            assessment_record_id: number;
+            /**
+             * Learner Id
+             * @description 学习者画像ID
+             */
+            learner_id: number;
+        };
+        /**
+         * CertificationCreate
+         * @description 创建认证
+         */
+        CertificationCreate: {
+            /**
+             * Position Id
+             * @description 关联岗位ID
+             */
+            position_id: number;
+            /**
+             * Name
+             * @description 认证名称
+             */
+            name: string;
+            /**
+             * Code
+             * @description 认证编码（唯一）
+             */
+            code: string;
+            /**
+             * Level
+             * @description 认证级别 junior/mid/senior
+             */
+            level?: string | null;
+            /** Description */
+            description?: string | null;
+            /**
+             * Validity Period Months
+             * @description 有效期(月)，0表示永久
+             * @default 0
+             */
+            validity_period_months: number;
+            /**
+             * Issuer
+             * @description 发证机构
+             */
+            issuer?: string | null;
+        };
+        /**
+         * CertificationReviewRequest
+         * @description 审核认证请求
+         */
+        CertificationReviewRequest: {
+            /**
+             * Comment
+             * @description 审核意见
+             */
+            comment?: string | null;
+        };
+        /**
+         * CertificationRuleCreate
+         * @description 创建发证规则
+         */
+        CertificationRuleCreate: {
+            /**
+             * Certification Id
+             * @description 认证ID
+             */
+            certification_id: number;
+            /**
+             * Rule Type
+             * @description 规则类型: overall_score/competency_level/all_mandatory_met
+             */
+            rule_type: string;
+            /**
+             * Rule Config
+             * @description 规则配置
+             */
+            rule_config?: Record<string, never>;
+        };
+        /**
+         * CertificationUpdate
+         * @description 更新认证
+         */
+        CertificationUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Level */
+            level?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Validity Period Months */
+            validity_period_months?: number | null;
+            /** Issuer */
+            issuer?: string | null;
+            /** Is Active */
+            is_active?: boolean | null;
+        };
+        /**
          * ChangePasswordRequest
          * @description 修改密码请求
          */
@@ -2086,6 +3612,130 @@ export interface components {
              * @description 新密码（至少8位，包含字母和数字）
              */
             new_password: string;
+        };
+        /**
+         * CompetencyConfig
+         * @description 胜任力配置项（模板内的元素）
+         */
+        CompetencyConfig: {
+            /**
+             * Competency Id
+             * @description 胜任力ID
+             */
+            competency_id: number;
+            /**
+             * Question Count
+             * @description 题目数量
+             * @default 5
+             */
+            question_count: number;
+            /**
+             * Difficulty
+             * @description 难度等级(1-5)
+             * @default 3
+             */
+            difficulty: number;
+            /**
+             * Assessment Method
+             * @description 评估方式: quiz/self_report/interview/project
+             * @default quiz
+             */
+            assessment_method: string;
+        };
+        /** CompetencyCreate */
+        CompetencyCreate: {
+            /**
+             * Code
+             * @description 胜任力编码
+             */
+            code: string;
+            /**
+             * Name
+             * @description 胜任力名称
+             */
+            name: string;
+            /**
+             * Category
+             * @description 胜任力类别
+             */
+            category?: string | null;
+            /** Description */
+            description?: string | null;
+            /**
+             * Level Descriptions
+             * @description 各等级描述
+             */
+            level_descriptions?: Record<string, never> | null;
+        };
+        /** CompetencyUpdate */
+        CompetencyUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Category */
+            category?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Level Descriptions */
+            level_descriptions?: Record<string, never> | null;
+            /** Is Active */
+            is_active?: boolean | null;
+        };
+        /**
+         * ComplianceDocument
+         * @description 合规文档
+         */
+        ComplianceDocument: {
+            /**
+             * Title
+             * @description 文档标题
+             */
+            title: string;
+            /**
+             * Date
+             * @description 更新/导出时间
+             */
+            date: string;
+            /**
+             * Url
+             * @description 文档链接
+             */
+            url: string;
+        };
+        /**
+         * ComplianceItem
+         * @description 合规检查项
+         */
+        ComplianceItem: {
+            /**
+             * Id
+             * @description 检查项ID
+             */
+            id: number;
+            /**
+             * Category
+             * @description 分类
+             */
+            category: string;
+            /**
+             * Requirement
+             * @description 要求描述
+             */
+            requirement: string;
+            /**
+             * Status
+             * @description 状态(pass/pending/fail)
+             */
+            status: string;
+            /**
+             * Last Check
+             * @description 最近检查时间
+             */
+            last_check: string;
+            /**
+             * Detail
+             * @description 检查详情
+             */
+            detail?: string | null;
         };
         /**
          * CreateAgentTaskRequest
@@ -2127,9 +3777,7 @@ export interface components {
              * Input Data
              * @description 额外输入数据
              */
-            input_data?: {
-                [key: string]: unknown;
-            } | null;
+            input_data?: Record<string, never> | null;
         };
         /**
          * DiagnosisRequest
@@ -2141,6 +3789,50 @@ export interface components {
              * @description 学习者ID
              */
             learner_id: number;
+        };
+        /** DiagnosticAnswerCreate */
+        DiagnosticAnswerCreate: {
+            /** Question Id */
+            question_id: string;
+            /** User Answer */
+            user_answer: unknown;
+            /**
+             * Time Spent Ms
+             * @default 0
+             */
+            time_spent_ms: number;
+        };
+        /** DiagnosticSessionCreate */
+        DiagnosticSessionCreate: {
+            /** Learner Id */
+            learner_id: number;
+            /**
+             * Questions Per Dimension
+             * @default 2
+             */
+            questions_per_dimension: number;
+        };
+        /**
+         * EnrollRequest
+         * @description 报名请求
+         */
+        EnrollRequest: {
+            /**
+             * Learner Id
+             * @description 学习者画像ID
+             */
+            learner_id?: number | null;
+        };
+        /**
+         * GeneratePlanRequest
+         * @description 生成学习计划请求
+         */
+        GeneratePlanRequest: {
+            /**
+             * Assessment Record Id
+             * @description 基于哪次评估记录生成计划
+             */
+            assessment_record_id: number;
         };
         /**
          * GenerateResourcesRequest
@@ -2195,6 +3887,23 @@ export interface components {
              * @default false
              */
             replace_pending: boolean;
+            /**
+             * Assessment Mode
+             * @description assessment mode
+             * @default practice
+             * @enum {string}
+             */
+            assessment_mode: "practice" | "batch_practice";
+            /**
+             * Session Id
+             * @description batch session id
+             */
+            session_id?: string | null;
+            /**
+             * Training Context
+             * @description 岗位培训阶段上下文
+             */
+            training_context?: Record<string, never> | null;
         };
         /**
          * GenerationRequest
@@ -2222,11 +3931,52 @@ export interface components {
              * @description 行业领域
              */
             industry?: string | null;
+            /**
+             * Training Context
+             * @description 岗位培训阶段上下文
+             */
+            training_context?: Record<string, never> | null;
+        };
+        /** GuidanceStateUpdate */
+        GuidanceStateUpdate: {
+            /** Action */
+            action: string;
         };
         /** HTTPValidationError */
         HTTPValidationError: {
             /** Detail */
             detail?: components["schemas"]["ValidationError"][];
+        };
+        /**
+         * KeyInfo
+         * @description 密钥管理信息（脱敏展示）
+         */
+        KeyInfo: {
+            /**
+             * Name
+             * @description 密钥名称
+             */
+            name: string;
+            /**
+             * Description
+             * @description 用途说明
+             */
+            description: string;
+            /**
+             * Algorithm
+             * @description 加密算法
+             */
+            algorithm: string;
+            /**
+             * Masked Value
+             * @description 掩码后的密钥（仅展示）
+             */
+            masked_value: string;
+            /**
+             * Is Configured
+             * @description 是否已配置
+             */
+            is_configured: boolean;
         };
         /**
          * KnowledgeBatchDeleteRequest
@@ -2288,8 +4038,9 @@ export interface components {
              * Search Type
              * @description 检索类型(vector/keyword/hybrid)
              * @default hybrid
+             * @enum {string}
              */
-            search_type: string;
+            search_type: "vector" | "keyword" | "hybrid";
         };
         /**
          * LearnerBatchExportRequest
@@ -2490,6 +4241,13 @@ export interface components {
              * @description 知识盲区标签
              */
             knowledge_blind_areas?: string[];
+            /**
+             * Manual Ability Adjustments
+             * @description 可选的能力手动修正
+             */
+            manual_ability_adjustments?: {
+                [key: string]: number;
+            };
         };
         /**
          * LearnerProfileUpdate
@@ -2532,6 +4290,10 @@ export interface components {
             engineering_practice?: number | null;
             /** Knowledge Blind Areas */
             knowledge_blind_areas?: string[] | null;
+            /** Manual Ability Adjustments */
+            manual_ability_adjustments?: {
+                [key: string]: number;
+            } | null;
         };
         /**
          * LoginRequest
@@ -2552,6 +4314,78 @@ export interface components {
             password: string;
         };
         /**
+         * LoginResponse
+         * @description 认证成功响应数据（兼容现有客户端字段）
+         */
+        LoginResponse: {
+            /**
+             * Access Token
+             * @description 访问Token
+             */
+            access_token: string;
+            /**
+             * Refresh Token
+             * @description 刷新Token
+             */
+            refresh_token: string;
+            /**
+             * Token Type
+             * @description Token类型
+             * @default bearer
+             */
+            token_type: string;
+            /**
+             * User Id
+             * @description 用户ID
+             */
+            user_id: number;
+            /**
+             * Username
+             * @description 用户名
+             */
+            username: string;
+            /**
+             * Role
+             * @description 角色
+             */
+            role: string;
+        };
+        /**
+         * MetricsResponse
+         * @description 指标统计响应
+         */
+        MetricsResponse: {
+            /** Total Checks */
+            total_checks: number;
+            /** Evaluated Checks */
+            evaluated_checks: number;
+            /** Pending Checks */
+            pending_checks: number;
+            /** Confirmed Hallucinations */
+            confirmed_hallucinations: number;
+            /** Evidence Gaps */
+            evidence_gaps: number;
+            /** Hallucination Rate */
+            hallucination_rate?: number | null;
+            /** Pass Rate */
+            pass_rate?: number | null;
+            /**
+             * Has Sufficient Sample
+             * @default false
+             */
+            has_sufficient_sample: boolean;
+            /**
+             * Minimum Sample Size
+             * @default 5
+             */
+            minimum_sample_size: number;
+            /**
+             * Unit
+             * @default %
+             */
+            unit: string;
+        };
+        /**
          * OnboardingNameRequest
          * @description 注册后设置称呼
          */
@@ -2562,6 +4396,143 @@ export interface components {
              * @example 秋月白
              */
             name: string;
+        };
+        /**
+         * PermissionItem
+         * @description 数据权限配置项
+         */
+        PermissionItem: {
+            /**
+             * Role
+             * @description 角色
+             */
+            role: string;
+            /**
+             * Data Access
+             * @description 数据访问范围
+             */
+            data_access: string;
+            /**
+             * Export Allowed
+             * @description 是否允许导出
+             */
+            export_allowed: boolean;
+            /**
+             * Delete Allowed
+             * @description 是否允许删除
+             */
+            delete_allowed: boolean;
+        };
+        /** PositionCompetencyCreate */
+        PositionCompetencyCreate: {
+            /**
+             * Competency Id
+             * @description 胜任力ID
+             */
+            competency_id: number;
+            /**
+             * Required Level
+             * @description 要求等级(1-5)
+             */
+            required_level: number;
+            /**
+             * Weight
+             * @description 权重
+             * @default 1
+             */
+            weight: number;
+            /**
+             * Is Mandatory
+             * @description 是否必修
+             * @default true
+             */
+            is_mandatory: boolean;
+        };
+        /** PositionCompetencyUpdate */
+        PositionCompetencyUpdate: {
+            /** Required Level */
+            required_level?: number | null;
+            /** Weight */
+            weight?: number | null;
+            /** Is Mandatory */
+            is_mandatory?: boolean | null;
+        };
+        /** PositionCreate */
+        PositionCreate: {
+            /**
+             * Code
+             * @description 岗位编码
+             */
+            code: string;
+            /**
+             * Name
+             * @description 岗位名称
+             */
+            name: string;
+            /**
+             * Category
+             * @description 岗位类别
+             */
+            category?: string | null;
+            /** Industry */
+            industry?: string | null;
+            /** Level */
+            level?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Responsibilities */
+            responsibilities?: string[] | null;
+            /** Prerequisites */
+            prerequisites?: string[] | null;
+            /** Career Path */
+            career_path?: string[] | null;
+        };
+        /** PositionUpdate */
+        PositionUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Category */
+            category?: string | null;
+            /** Industry */
+            industry?: string | null;
+            /** Level */
+            level?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Responsibilities */
+            responsibilities?: string[] | null;
+            /** Prerequisites */
+            prerequisites?: string[] | null;
+            /** Career Path */
+            career_path?: string[] | null;
+            /** Is Active */
+            is_active?: boolean | null;
+        };
+        /**
+         * PrivacyOverview
+         * @description 隐私合规总览
+         */
+        PrivacyOverview: {
+            /**
+             * Compliance Status
+             * @description 合规状态(compliant/warning)
+             */
+            compliance_status: string;
+            /**
+             * Encryption Standard
+             * @description 加密标准
+             */
+            encryption_standard: string;
+            /**
+             * Anonymization Rule Count
+             * @description 脱敏规则数
+             */
+            anonymization_rule_count: number;
+            /**
+             * Pending Count
+             * @description 待处理项数
+             */
+            pending_count: number;
         };
         /**
          * RefreshTokenRequest
@@ -2636,6 +4607,16 @@ export interface components {
              */
             hints_used: number;
             /**
+             * Session Id
+             * @description 自适应导学会话ID
+             */
+            session_id?: string | null;
+            /**
+             * Sequence Index
+             * @description 会话内题目序号
+             */
+            sequence_index?: number | null;
+            /**
              * Question Type
              * @description 题目类型
              */
@@ -2666,177 +4647,211 @@ export interface components {
              */
             score?: number | null;
         };
-        /**
-         * TrainingBatchImportItem
-         * @description 批量导入单条
-         */
-        TrainingBatchImportItem: {
-            /** Company Name */
-            company_name: string;
-            /** Training Name */
-            training_name: string;
-            /**
-             * Training Type
-             * @default standard
-             */
-            training_type: string;
-            /** Industry */
-            industry?: string | null;
-            /**
-             * Participant Count
-             * @default 0
-             */
-            participant_count: number;
-            /** Responsible Person */
-            responsible_person?: string | null;
+        /** SubmitBatchRequest */
+        SubmitBatchRequest: {
+            /** Learner Id */
+            learner_id: number;
+            /** Session Id */
+            session_id: string;
+            /** Answers */
+            answers: components["schemas"]["BatchAnswerItem"][];
         };
         /**
-         * TrainingBatchImportRequest
-         * @description 批量导入请求
+         * TaskLogEntry
+         * @description 任务日志条目
          */
-        TrainingBatchImportRequest: {
-            /** Trainings */
-            trainings: components["schemas"]["TrainingBatchImportItem"][];
+        TaskLogEntry: {
+            /** Stage */
+            stage: string;
+            /** Progress */
+            progress: number;
+            /** Description */
+            description: string;
+            /** Timestamp */
+            timestamp: string;
         };
         /**
-         * TrainingCreate
-         * @description 创建培训任务
+         * TaskStatusResponse
+         * @description 任务状态响应
          */
-        TrainingCreate: {
-            /**
-             * Company Name
-             * @description 企业名称
-             */
-            company_name: string;
-            /**
-             * Training Name
-             * @description 培训名称
-             */
-            training_name: string;
-            /**
-             * Training Type
-             * @description 培训类型(standard/transfer)
-             * @default standard
-             */
-            training_type: string;
-            /**
-             * Description
-             * @description 培训描述
-             */
-            description?: string | null;
-            /**
-             * Industry
-             * @description 所属行业
-             */
-            industry?: string | null;
-            /**
-             * Modules
-             * @description 培训模块列表
-             */
-            modules?: string[];
-            /**
-             * Participant Count
-             * @description 参与人数
-             * @default 0
-             */
-            participant_count: number;
-            /**
-             * Participants
-             * @description 参与学员ID列表
-             */
-            participants?: number[];
-            /**
-             * Responsible Person
-             * @description 负责人
-             */
-            responsible_person?: string | null;
-            /**
-             * Start Date
-             * @description 开始日期
-             */
-            start_date?: string | null;
-            /**
-             * End Date
-             * @description 结束日期
-             */
-            end_date?: string | null;
-            /**
-             * Estimated Duration
-             * @description 预计时长(天)
-             * @default 0
-             */
-            estimated_duration: number;
-            /**
-             * Is Transfer Training
-             * @description 是否转岗培训
-             * @default false
-             */
-            is_transfer_training: boolean;
-            /**
-             * Transfer From Position
-             * @description 原岗位
-             */
-            transfer_from_position?: string | null;
-            /**
-             * Transfer To Position
-             * @description 目标岗位
-             */
-            transfer_to_position?: string | null;
-            /**
-             * Skill Gap Analysis
-             * @description 技能差距分析
-             */
-            skill_gap_analysis?: {
-                [key: string]: unknown;
-            };
-        };
-        /**
-         * TrainingUpdate
-         * @description 更新培训任务
-         */
-        TrainingUpdate: {
-            /** Training Name */
-            training_name?: string | null;
+        TaskStatusResponse: {
+            /** Task Id */
+            task_id: number;
+            /** Task Name */
+            task_name?: string | null;
+            /** Status */
+            status?: string | null;
+            /** Progress */
+            progress?: number | null;
+            /** Stage */
+            stage?: string | null;
             /** Description */
             description?: string | null;
-            /** Industry */
-            industry?: string | null;
-            /** Modules */
-            modules?: string[] | null;
-            /** Participant Count */
-            participant_count?: number | null;
-            /** Participants */
-            participants?: number[] | null;
-            /** Responsible Person */
-            responsible_person?: string | null;
+            /** Error */
+            error?: string | null;
+            /** Created At */
+            created_at?: string | null;
+            /** Completed At */
+            completed_at?: string | null;
+        };
+        /**
+         * TokenResponse
+         * @description Token响应
+         */
+        TokenResponse: {
+            /**
+             * Access Token
+             * @description 访问Token
+             */
+            access_token: string;
+            /**
+             * Refresh Token
+             * @description 刷新Token
+             */
+            refresh_token: string;
+            /**
+             * Token Type
+             * @description Token类型
+             * @default bearer
+             */
+            token_type: string;
+        };
+        /**
+         * TrainingProjectCreate
+         * @description 创建培训项目
+         */
+        TrainingProjectCreate: {
+            /**
+             * Name
+             * @description 项目名称
+             */
+            name: string;
+            /** Description */
+            description?: string | null;
+            /**
+             * Position Id
+             * @description 关联岗位ID
+             */
+            position_id: number;
+            /**
+             * Certification Id
+             * @description 关联认证ID
+             */
+            certification_id?: number | null;
+            /**
+             * Project Type
+             * @description 项目类型: onboard/transfer/upskill/compliance
+             */
+            project_type?: string | null;
+            /**
+             * Enterprise Name
+             * @description 所属企业
+             */
+            enterprise_name?: string | null;
             /** Start Date */
             start_date?: string | null;
             /** End Date */
             end_date?: string | null;
-            /** Estimated Duration */
-            estimated_duration?: number | null;
-            /** Status */
+            /**
+             * Config
+             * @description 项目级配置
+             */
+            config?: Record<string, never>;
+        };
+        /**
+         * TrainingProjectUpdate
+         * @description 更新培训项目
+         */
+        TrainingProjectUpdate: {
+            /** Name */
+            name?: string | null;
+            /** Description */
+            description?: string | null;
+            /** Certification Id */
+            certification_id?: number | null;
+            /** Project Type */
+            project_type?: string | null;
+            /** Enterprise Name */
+            enterprise_name?: string | null;
+            /**
+             * Status
+             * @description 项目状态: draft/active/completed/archived
+             */
             status?: string | null;
-            /** Progress Percentage */
-            progress_percentage?: number | null;
-            /** Completed Modules */
-            completed_modules?: number | null;
-            /** Is Transfer Training */
-            is_transfer_training?: boolean | null;
-            /** Transfer From Position */
-            transfer_from_position?: string | null;
-            /** Transfer To Position */
-            transfer_to_position?: string | null;
-            /** Skill Gap Analysis */
-            skill_gap_analysis?: {
-                [key: string]: unknown;
-            } | null;
-            /** Pass Rate */
-            pass_rate?: number | null;
-            /** Average Score */
-            average_score?: number | null;
-            /** Satisfaction Rate */
-            satisfaction_rate?: number | null;
+            /** Start Date */
+            start_date?: string | null;
+            /** End Date */
+            end_date?: string | null;
+            /** Config */
+            config?: Record<string, never> | null;
+        };
+        /**
+         * UpdateProgressRequest
+         * @description 更新学习进度请求
+         */
+        UpdateProgressRequest: {
+            /**
+             * Completed Stages
+             * @description 已完成阶段数
+             */
+            completed_stages: number;
+        };
+        /**
+         * UserInfoResponse
+         * @description 用户信息响应
+         */
+        UserInfoResponse: {
+            /**
+             * User Id
+             * @description 用户ID
+             */
+            user_id: number;
+            /**
+             * Username
+             * @description 用户名
+             */
+            username: string;
+            /**
+             * Email
+             * @description 邮箱
+             */
+            email?: string | null;
+            /**
+             * Phone
+             * @description 手机号
+             */
+            phone?: string | null;
+            /**
+             * Role
+             * @description 角色
+             */
+            role: string;
+            /**
+             * Is Active
+             * @description 是否激活
+             */
+            is_active: boolean;
+            /**
+             * Is Verified
+             * @description 是否已验证
+             * @default false
+             */
+            is_verified: boolean;
+            /**
+             * Enterprise Name
+             * @description 企业名称
+             */
+            enterprise_name?: string | null;
+            /**
+             * Last Login At
+             * @description 最后登录时间
+             */
+            last_login_at?: string | null;
+            /**
+             * Created At
+             * @description 创建时间
+             */
+            created_at?: string | null;
         };
         /** ValidationError */
         ValidationError: {
@@ -2996,6 +5011,46 @@ export interface operations {
             };
         };
     };
+    health_llm_api_v1_health_llm_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
+    health_llm_health_llm_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     get_prometheus_metrics_api_v1_metrics_prometheus_get: {
         parameters: {
             query?: never;
@@ -3095,7 +5150,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BaseResponse_LoginResponse_"];
                 };
             };
             /** @description 请求参数错误（用户名已占用、邮箱已注册等） */
@@ -3147,7 +5202,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BaseResponse_LoginResponse_"];
                 };
             };
             /** @description 请求参数错误（用户名已占用、邮箱已注册等） */
@@ -3187,9 +5242,9 @@ export interface operations {
             path?: never;
             cookie?: never;
         };
-        requestBody: {
+        requestBody?: {
             content: {
-                "application/json": components["schemas"]["RefreshTokenRequest"];
+                "application/json": components["schemas"]["RefreshTokenRequest"] | null;
             };
         };
         responses: {
@@ -3199,7 +5254,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BaseResponse_TokenResponse_"];
                 };
             };
             /** @description 请求参数错误（用户名已占用、邮箱已注册等） */
@@ -3247,7 +5302,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BaseResponse_UserInfoResponse_"];
                 };
             };
             /** @description 请求参数错误（用户名已占用、邮箱已注册等） */
@@ -3299,7 +5354,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BaseResponse_dict_"];
                 };
             };
             /** @description 请求参数错误（用户名已占用、邮箱已注册等） */
@@ -3351,7 +5406,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BaseResponse_NoneType_"];
                 };
             };
             /** @description 请求参数错误（用户名已占用、邮箱已注册等） */
@@ -3399,7 +5454,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BaseResponse_NoneType_"];
                 };
             };
         };
@@ -3419,7 +5474,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BaseResponse_dict_"];
                 };
             };
             /** @description 请求参数错误（用户名已占用、邮箱已注册等） */
@@ -3757,7 +5812,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BaseResponse_AnonymizeResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -4243,6 +6298,26 @@ export interface operations {
             };
         };
     };
+    get_knowledge_summary_api_v1_knowledge_stats_summary_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": unknown;
+                };
+            };
+        };
+    };
     get_industry_stats_api_v1_knowledge_stats_industries_get: {
         parameters: {
             query?: never;
@@ -4309,7 +6384,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BaseResponse"];
+                    "application/json": components["schemas"]["BaseResponse_dict_"];
                 };
             };
         };
@@ -4331,7 +6406,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BaseResponse"];
+                    "application/json": components["schemas"]["BaseResponse_AgentStatusResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -4399,7 +6474,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BaseResponse"];
+                    "application/json": components["schemas"]["BaseResponse_dict_"];
                 };
             };
             /** @description 请求参数错误（任务参数不合法、Agent类型无效等） */
@@ -4470,7 +6545,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BaseResponse"];
+                    "application/json": components["schemas"]["BaseResponse_dict_"];
                 };
             };
             /** @description 请求参数错误（任务参数不合法、Agent类型无效等） */
@@ -4524,42 +6599,9 @@ export interface operations {
             };
         };
     };
-    create_sse_ticket_api_v1_agent_tasks__task_id__stream_ticket_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                task_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BaseResponse"];
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
     task_events_stream_api_v1_agent_tasks__task_id__events_get: {
         parameters: {
-            query?: {
-                ticket?: string | null;
-            };
+            query?: never;
             header?: never;
             path: {
                 task_id: number;
@@ -4605,7 +6647,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BaseResponse"];
+                    "application/json": components["schemas"]["BaseResponse_TaskStatusResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -4620,6 +6662,37 @@ export interface operations {
         };
     };
     get_task_logs_api_v1_agent_tasks__task_id__logs_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                task_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse_list_TaskLogEntry__"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_task_evidence_api_v1_agent_tasks__task_id__evidence_get: {
         parameters: {
             query?: never;
             header?: never;
@@ -4769,7 +6842,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["BaseResponse"];
+                    "application/json": components["schemas"]["BaseResponse_MetricsResponse_"];
                 };
             };
         };
@@ -4909,9 +6982,7 @@ export interface operations {
         };
         requestBody: {
             content: {
-                "application/json": {
-                    [key: string]: unknown;
-                };
+                "application/json": Record<string, never>;
             };
         };
         responses: {
@@ -5343,6 +7414,26 @@ export interface operations {
             };
         };
     };
+    get_metric_definitions_api_v1_report_metrics_definitions_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+        };
+    };
     update_metrics_api_v1_report_metrics_update_post: {
         parameters: {
             query?: never;
@@ -5371,6 +7462,37 @@ export interface operations {
             };
             header?: never;
             path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_tutoring_recommendations_api_v1_tutoring_recommendations__learner_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                learner_id: number;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -5499,6 +7621,42 @@ export interface operations {
             };
         };
     };
+    delete_interaction_history_api_v1_tutoring_history__learner_id__delete: {
+        parameters: {
+            query?: {
+                /** @description 单条记录ID */
+                record_id?: number | null;
+                /** @description 会话ID；不传则清空当前学习者历史 */
+                session_id?: string | null;
+            };
+            header?: never;
+            path: {
+                learner_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
     get_decision_logic_api_v1_tutoring_decision_logic_get: {
         parameters: {
             query?: never;
@@ -5515,6 +7673,1827 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+        };
+    };
+    submit_batch_api_v1_tutoring_answers_batch_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitBatchRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_batch_result_api_v1_tutoring_answers_batch__session_id__get: {
+        parameters: {
+            query: {
+                learner_id: number;
+            };
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_session_api_v1_diagnostic_sessions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiagnosticSessionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_session_api_v1_diagnostic_sessions__session_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_answer_api_v1_diagnostic_sessions__session_id__answers_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                session_id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DiagnosticAnswerCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_competencies_api_v1_competencies_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                keyword?: string | null;
+                category?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_competency_api_v1_competencies_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompetencyCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_competency_detail_api_v1_competencies__competency_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                competency_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_competency_api_v1_competencies__competency_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                competency_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompetencyUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_competency_api_v1_competencies__competency_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                competency_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_positions_api_v1_positions_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                keyword?: string | null;
+                category?: string | null;
+                industry?: string | null;
+                level?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_position_api_v1_positions_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PositionCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_position_detail_api_v1_positions__position_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                position_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_position_api_v1_positions__position_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                position_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PositionUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_position_api_v1_positions__position_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                position_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_competency_to_position_api_v1_positions__position_id__competencies_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                position_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PositionCompetencyCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_position_competency_api_v1_positions__position_id__competencies__competency_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                position_id: number;
+                competency_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PositionCompetencyUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    remove_competency_from_position_api_v1_positions__position_id__competencies__competency_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                position_id: number;
+                competency_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_templates_api_v1_assessments_templates_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                position_id?: number | null;
+                keyword?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_template_api_v1_assessments_templates_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssessmentTemplateCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_template_detail_api_v1_assessments_templates__template_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_template_api_v1_assessments_templates__template_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssessmentTemplateUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_template_api_v1_assessments_templates__template_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                template_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    start_assessment_api_v1_assessments_start_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssessmentStartRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_records_api_v1_assessments_records_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                user_id?: number | null;
+                position_id?: number | null;
+                status?: string | null;
+                learner_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_record_detail_api_v1_assessments_records__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    submit_assessment_api_v1_assessments_records__record_id__submit_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssessmentSubmitRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_gap_analysis_api_v1_assessments_records__record_id__gaps_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_certifications_api_v1_certifications_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                position_id?: number | null;
+                keyword?: string | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_certification_api_v1_certifications_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CertificationCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_certification_detail_api_v1_certifications__cert_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cert_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_certification_api_v1_certifications__cert_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cert_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CertificationUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_certification_api_v1_certifications__cert_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cert_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_rules_api_v1_certifications__cert_id__rules_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                cert_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    add_rule_api_v1_certifications_rules_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CertificationRuleCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_rule_api_v1_certifications_rules__rule_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                rule_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    apply_for_certification_api_v1_certifications_apply_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CertificationApplyRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_records_api_v1_certifications_records_list_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                user_id?: number | null;
+                status?: string | null;
+                learner_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_record_detail_api_v1_certifications_records__record_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    approve_record_api_v1_certifications_records__record_id__approve_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CertificationReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    reject_record_api_v1_certifications_records__record_id__reject_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CertificationReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    revoke_record_api_v1_certifications_records__record_id__revoke_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                record_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CertificationReviewRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    verify_certificate_api_v1_certifications_verify__certificate_number__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                certificate_number: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_projects_api_v1_training_projects_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+                status?: string | null;
+                keyword?: string | null;
+                position_id?: number | null;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    create_project_api_v1_training_projects_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrainingProjectCreate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_project_detail_api_v1_training_projects__project_id__get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_project_api_v1_training_projects__project_id__put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["TrainingProjectUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    delete_project_api_v1_training_projects__project_id__delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    enroll_api_v1_training_projects__project_id__enroll_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                project_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["EnrollRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_enrollment_api_v1_training_projects__project_id__enrollment_get: {
+        parameters: {
+            query?: {
+                learner_id?: number | null;
+            };
+            header?: never;
+            path: {
+                project_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_enrollments_api_v1_training_projects__project_id__enrollments_get: {
+        parameters: {
+            query?: {
+                page?: number;
+                page_size?: number;
+            };
+            header?: never;
+            path: {
+                project_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    generate_plan_api_v1_training_enrollments__enrollment_id__generate_plan_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                enrollment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GeneratePlanRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    get_plan_api_v1_training_enrollments__enrollment_id__plan_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                enrollment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    update_progress_api_v1_training_plans__plan_id__progress_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                plan_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateProgressRequest"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    complete_enrollment_api_v1_training_enrollments__enrollment_id__complete_post: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                enrollment_id: number;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
                 };
             };
         };
@@ -5539,14 +9518,65 @@ export interface operations {
             };
         };
     };
-    get_training_list_api_v1_trainings_get: {
+    learner_dashboard_api_v1_dashboard_learner_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+        };
+    };
+    learner_guidance_state_api_v1_dashboard_learner_guidance_patch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["GuidanceStateUpdate"];
+            };
+        };
+        responses: {
+            /** @description Successful Response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BaseResponse"];
+                };
+            };
+            /** @description Validation Error */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HTTPValidationError"];
+                };
+            };
+        };
+    };
+    teacher_dashboard_api_v1_dashboard_teacher_get: {
         parameters: {
             query?: {
                 page?: number;
                 page_size?: number;
                 keyword?: string | null;
-                status?: string | null;
-                training_type?: string | null;
             };
             header?: never;
             path?: never;
@@ -5560,241 +9590,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    create_training_api_v1_trainings_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TrainingCreate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_training_stats_api_v1_trainings_stats_overview_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_transfers_api_v1_trainings_transfers_list_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-        };
-    };
-    get_skill_gaps_api_v1_trainings_skill_gaps_analysis_get: {
-        parameters: {
-            query?: {
-                training_id?: number | null;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    batch_import_api_v1_trainings_batch_import_post: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TrainingBatchImportRequest"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    get_training_detail_api_v1_trainings__training_id__get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                training_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    update_training_api_v1_trainings__training_id__put: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                training_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["TrainingUpdate"];
-            };
-        };
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
-                };
-            };
-            /** @description Validation Error */
-            422: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["HTTPValidationError"];
-                };
-            };
-        };
-    };
-    delete_training_api_v1_trainings__training_id__delete: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                training_id: number;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            /** @description Successful Response */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BaseResponse"];
                 };
             };
             /** @description Validation Error */
@@ -5823,7 +9619,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BaseResponse_PrivacyOverview_"];
                 };
             };
         };
@@ -5843,7 +9639,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BaseResponse_list_ComplianceItem__"];
                 };
             };
         };
@@ -5863,7 +9659,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BaseResponse_list_AnonymizationRule__"];
                 };
             };
         };
@@ -5887,7 +9683,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BaseResponse_AnonymizationTestResponse_"];
                 };
             };
             /** @description Validation Error */
@@ -5916,7 +9712,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BaseResponse_list_PermissionItem__"];
                 };
             };
         };
@@ -5936,7 +9732,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BaseResponse_list_KeyInfo__"];
                 };
             };
         };
@@ -5956,7 +9752,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": unknown;
+                    "application/json": components["schemas"]["BaseResponse_list_ComplianceDocument__"];
                 };
             };
         };
