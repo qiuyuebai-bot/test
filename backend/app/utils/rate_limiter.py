@@ -5,21 +5,111 @@
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import JSONResponse
-from typing import Dict, List, Tuple
+from typing import Dict, List, Optional, Tuple
 from collections import defaultdict
 from loguru import logger
+import asyncio
 import time
 import threading
+
+
+_REDIS_SLIDING_WINDOW_SCRIPT = """
+local key = KEYS[1]
+local now_ms = tonumber(ARGV[1])
+local window_ms = tonumber(ARGV[2])
+local max_requests = tonumber(ARGV[3])
+local cutoff = now_ms - window_ms
+
+redis.call('ZREMRANGEBYSCORE', key, 0, cutoff)
+local count = redis.call('ZCARD', key)
+if count >= max_requests then
+    local first = redis.call('ZRANGE', key, 0, 0, 'WITHSCORES')
+    local retry_ms = window_ms
+    if first[2] then
+        retry_ms = window_ms - (now_ms - tonumber(first[2]))
+    end
+    redis.call('EXPIRE', key, math.ceil(window_ms / 1000) + 1)
+    return {0, math.max(1, math.ceil(retry_ms / 1000))}
+end
+
+local sequence_key = key .. ':seq'
+local member = tostring(now_ms) .. '-' .. tostring(redis.call('INCR', sequence_key))
+redis.call('ZADD', key, now_ms, member)
+redis.call('EXPIRE', key, math.ceil(window_ms / 1000) + 1)
+redis.call('EXPIRE', sequence_key, math.ceil(window_ms / 1000) + 1)
+return {1, 0}
+"""
 
 
 class SlidingWindowRateLimiter:
     """滑动窗口速率限流器"""
 
-    def __init__(self):
+    def __init__(self, redis_url: Optional[str] = None):
         self._windows: Dict[str, List[float]] = defaultdict(list)
         self._lock = threading.Lock()
         self._last_cleanup = time.time()
         self._cleanup_interval = 60.0
+        self._redis_url = redis_url
+        self._redis_client = None
+        self._redis_lock = threading.Lock()
+        self._redis_unavailable_until = 0.0
+        self._redis_retry_interval = 5.0
+
+    def _get_redis_client(self):
+        if not self._redis_url or time.monotonic() < self._redis_unavailable_until:
+            return None
+        with self._redis_lock:
+            if self._redis_client is not None:
+                return self._redis_client
+            try:
+                import redis
+
+                self._redis_client = redis.Redis.from_url(
+                    self._redis_url,
+                    decode_responses=True,
+                    socket_connect_timeout=0.2,
+                    socket_timeout=0.2,
+                )
+                return self._redis_client
+            except Exception as exc:
+                self._redis_unavailable_until = time.monotonic() + self._redis_retry_interval
+                logger.warning("Redis 限流客户端初始化失败，暂时回退本地限流: {}", exc)
+                return None
+
+    def _disable_redis(self, exc: Exception) -> None:
+        with self._redis_lock:
+            self._redis_unavailable_until = time.monotonic() + self._redis_retry_interval
+            client = self._redis_client
+            self._redis_client = None
+        if client is not None:
+            try:
+                client.close()
+            except Exception:
+                pass
+        logger.warning("Redis 限流不可用，暂时回退本地限流: {}", exc)
+
+    def _redis_is_allowed(
+        self,
+        key: str,
+        max_requests: int,
+        window_seconds: int,
+    ) -> Optional[Tuple[bool, int]]:
+        client = self._get_redis_client()
+        if client is None:
+            return None
+        try:
+            result = client.eval(
+                _REDIS_SLIDING_WINDOW_SCRIPT,
+                1,
+                f"rate-limit:{key}",
+                int(time.time() * 1000),
+                int(window_seconds * 1000),
+                max_requests,
+            )
+            return bool(int(result[0])), int(result[1])
+        except Exception as exc:
+            self._disable_redis(exc)
+            return None
 
     def _cleanup_old_entries(self, current_time: float, window_seconds: int):
         """清理过期的请求记录"""
@@ -50,6 +140,10 @@ class SlidingWindowRateLimiter:
         Returns:
             (是否允许, 重试等待秒数)
         """
+        redis_result = self._redis_is_allowed(key, max_requests, window_seconds)
+        if redis_result is not None:
+            return redis_result
+
         current_time = time.time()
         self._cleanup_old_entries(current_time, window_seconds)
         
@@ -78,7 +172,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
 
     def __init__(self, app, settings):
         super().__init__(app)
-        self.limiter = SlidingWindowRateLimiter()
+        self.limiter = SlidingWindowRateLimiter(redis_url=getattr(settings, "REDIS_URL", None))
         self.settings = settings
         
         self._rate_limits = {
@@ -163,7 +257,12 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
         max_requests, window_seconds = self._match_rate_limit(path)
         limit_key = f"{client_ip}:{path}"
         
-        allowed, retry_after = self.limiter.is_allowed(limit_key, max_requests, window_seconds)
+        allowed, retry_after = await asyncio.to_thread(
+            self.limiter.is_allowed,
+            limit_key,
+            max_requests,
+            window_seconds,
+        )
         
         if not allowed:
             logger.warning(

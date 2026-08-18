@@ -92,7 +92,7 @@ export default {
         },
       },
       fontFamily: {
-        sans: ['"Noto Sans SC"', '"SF Pro Display"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
+        sans: ['-apple-system', 'BlinkMacSystemFont', '"Segoe UI"', '"PingFang SC"', '"Microsoft YaHei"', 'sans-serif'],
         mono: ['"JetBrains Mono"', '"SF Mono"', 'Consolas', 'monospace'],
       },
       fontSize: {

@@ -400,7 +400,7 @@ def create_sse_ticket(
 
 
 @router.get("/tasks/{task_id}/events", summary="SSE实时任务进度流")
-async def task_events_stream(
+def task_events_stream(
     task_id: int,
     request: Request,
     ticket: Optional[str] = None,

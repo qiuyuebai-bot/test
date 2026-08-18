@@ -3,9 +3,10 @@
 实现文档上传、解析、切片、检索、溯源等接口
 """
 from fastapi import APIRouter, Depends, Query, Request
-from sqlalchemy.orm import Session
-from typing import Optional
+from sqlalchemy.orm import Session, sessionmaker
+from typing import Optional, Tuple
 from loguru import logger
+import asyncio
 import os
 import re
 from pathlib import Path
@@ -44,6 +45,52 @@ _KNOWLEDGE_RESPONSES = {
     422: {"description": "请求体验证失败"},
     500: {"description": "服务器内部错误（解析失败、向量索引异常等）"},
 }
+
+
+def _persist_and_process_document(
+    db_bind,
+    doc_data: KnowledgeDocCreate,
+    raw_bytes: bytes,
+    text_content: str,
+) -> Tuple[Optional[KnowledgeUploadResponse], str]:
+    """Run synchronous DB, filesystem, and vector work outside the event loop."""
+    worker_db = sessionmaker(
+        bind=db_bind,
+        autocommit=False,
+        autoflush=False,
+        expire_on_commit=False,
+    )()
+    try:
+        doc, result_msg = KnowledgeService.create_doc(worker_db, doc_data)
+        if doc is None:
+            return None, result_msg
+
+        try:
+            Path(result_msg).write_bytes(raw_bytes)
+        except OSError as exc:
+            doc.status = "error"
+            doc.error_message = "原始文档保存失败，请检查存储目录权限"
+            worker_db.commit()
+            logger.error(f"原始文档保存失败: doc_id={doc.id}, error={exc}")
+            return None, doc.error_message
+
+        if not KnowledgeService.process_doc(worker_db, doc.id, text_content):
+            return None, doc.error_message or "文档处理失败，请检查日志"
+
+        return KnowledgeUploadResponse(
+            doc_id=doc.id,
+            file_name=doc.file_name,
+            file_size=doc.file_size,
+            status=doc.status,
+            message="文档上传并索引成功",
+            slice_count=doc.slice_count,
+            indexed_slice_count=doc.indexed_slice_count,
+        ), ""
+    except Exception:
+        worker_db.rollback()
+        raise
+    finally:
+        worker_db.close()
 
 
 # ===========================================
@@ -143,7 +190,8 @@ async def upload_document(
             )
 
         try:
-            text_content = KnowledgeDocumentParser.extract(
+            text_content = await asyncio.to_thread(
+                KnowledgeDocumentParser.extract,
                 file_name,
                 raw_bytes,
                 fallback_text=supplied_text,
@@ -155,7 +203,7 @@ async def upload_document(
         if industry not in KnowledgeService.SUPPORTED_INDUSTRIES:
             return bad_request(f"不支持的行业分类: {industry}，支持: {KnowledgeService.SUPPORTED_INDUSTRIES}")
         
-        # 创建文档记录
+        # 创建文档记录并处理索引，全部放入工作线程，避免阻塞事件循环。
         doc_data = KnowledgeDocCreate(
             title=title,
             industry=industry,
@@ -169,36 +217,17 @@ async def upload_document(
             tags=[],
         )
         
-        doc, result_msg = KnowledgeService.create_doc(db, doc_data)
-        
-        if doc is None:
-            return bad_request(result_msg)
-        
-        try:
-            Path(result_msg).write_bytes(raw_bytes)
-        except OSError as exc:
-            doc.status = "error"
-            doc.error_message = "原始文档保存失败，请检查存储目录权限"
-            db.commit()
-            logger.error(f"原始文档保存失败: doc_id={doc.id}, error={exc}")
-            return bad_request(doc.error_message)
-
-        # 同步处理文档（实际生产中应使用Celery异步任务）
-        process_success = KnowledgeService.process_doc(db, doc.id, text_content)
-        
-        if not process_success:
-            return bad_request(doc.error_message or "文档处理失败，请检查日志")
-        
-        response = KnowledgeUploadResponse(
-            doc_id=doc.id,
-            file_name=doc.file_name,
-            file_size=doc.file_size,
-            status=doc.status,
-            message="文档上传并索引成功",
-            slice_count=doc.slice_count,
-            indexed_slice_count=doc.indexed_slice_count,
+        # Pass only the Engine across the thread boundary; SQLAlchemy sessions
+        # remain owned by the thread that performs the blocking work.
+        response, error_message = await asyncio.to_thread(
+            _persist_and_process_document,
+            db.get_bind(),
+            doc_data,
+            raw_bytes,
+            text_content,
         )
-        
+        if response is None:
+            return bad_request(error_message)
         return success(response, "文档上传成功")
         
     except Exception as e:

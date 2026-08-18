@@ -305,7 +305,7 @@ def get_token_from_request(
     return None
 
 
-async def get_current_user(
+def get_current_user(
     request: Request,
     db: Session = Depends(get_db),
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),
@@ -367,7 +367,7 @@ async def get_current_user(
     )
 
 
-async def get_current_user_optional(
+def get_current_user_optional(
     request: Request,
     db: Session = Depends(get_db),
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(security_scheme),

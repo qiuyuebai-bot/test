@@ -3,9 +3,11 @@
 """
 import time
 import platform
+import threading
+from copy import deepcopy
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse
-from sqlalchemy import text
+from sqlalchemy import case, func, text
 from loguru import logger
 
 from app.config import settings
@@ -17,6 +19,12 @@ from app.utils.datetime import utcnow_naive
 
 
 router = APIRouter(tags=["运维"])
+
+# Readiness probes run every 15 seconds in the default Helm values. Keep a
+# slightly longer cache window so repeated probes do not repeat full counts.
+_READINESS_CACHE_TTL_SECONDS = 20.0
+_readiness_cache_lock = threading.Lock()
+_readiness_cache: tuple[float, int, str, dict] | None = None
 
 
 @router.get("/", tags=["基础"])
@@ -52,8 +60,16 @@ async def health_liveness(request: Request):
 
 @router.get("/health/ready", tags=["运维"])
 @router.get("/api/v1/health/ready", tags=["运维"])
-async def health_readiness(request: Request):
+def health_readiness(request: Request):
     """就绪检查（Readiness Probe）"""
+    global _readiness_cache
+
+    now = time.monotonic()
+    with _readiness_cache_lock:
+        if _readiness_cache and now - _readiness_cache[0] < _READINESS_CACHE_TTL_SECONDS:
+            _, cached_status, cached_message, cached_checks = _readiness_cache
+            return _readiness_response(request, cached_status, cached_message, deepcopy(cached_checks))
+
     checks = {}
     overall_status = "ready"
     http_status = 200
@@ -73,18 +89,27 @@ async def health_readiness(request: Request):
         try:
             db.execute(text("SELECT 1"))
             db_latency_ms = round((time.time() - db_start) * 1000, 1)
-            enabled_docs = db.query(KnowledgeDoc).filter(KnowledgeDoc.is_enabled == True).all()
+            doc_counts = db.query(
+                func.count(KnowledgeDoc.id),
+                func.coalesce(
+                    func.sum(case((KnowledgeDoc.status == "ready", 1), else_=0)),
+                    0,
+                ),
+                func.coalesce(func.sum(KnowledgeDoc.slice_count), 0),
+            ).filter(KnowledgeDoc.is_enabled == True).one()
+            slice_counts = db.query(
+                func.count(KnowledgeSlice.id),
+                func.coalesce(
+                    func.sum(case((KnowledgeSlice.is_indexed == True, 1), else_=0)),
+                    0,
+                ),
+            ).join(KnowledgeDoc).filter(KnowledgeDoc.is_enabled == True).one()
             knowledge_counts = {
-                "enabled_docs": len(enabled_docs),
-                "ready_docs": sum(1 for doc in enabled_docs if doc.status == "ready"),
-                "db_slices": db.query(KnowledgeSlice).join(KnowledgeDoc).filter(
-                    KnowledgeDoc.is_enabled == True
-                ).count(),
-                "db_indexed_slices": db.query(KnowledgeSlice).join(KnowledgeDoc).filter(
-                    KnowledgeDoc.is_enabled == True,
-                    KnowledgeSlice.is_indexed == True,
-                ).count(),
-                "declared_slices": sum((doc.slice_count or 0) for doc in enabled_docs),
+                "enabled_docs": int(doc_counts[0] or 0),
+                "ready_docs": int(doc_counts[1] or 0),
+                "db_slices": int(slice_counts[0] or 0),
+                "db_indexed_slices": int(slice_counts[1] or 0),
+                "declared_slices": int(doc_counts[2] or 0),
             }
         finally:
             db.close()
@@ -166,6 +191,14 @@ async def health_readiness(request: Request):
         "note": "API可用" if LLMUtil.is_available() else "LLM未配置，使用Mock响应",
     }
 
+    if http_status == 200:
+        with _readiness_cache_lock:
+            _readiness_cache = (time.monotonic(), http_status, overall_status, deepcopy(checks))
+    return _readiness_response(request, http_status, overall_status, checks)
+
+
+def _readiness_response(request: Request, http_status: int, overall_status: str, checks: dict):
+    """Build a probe response while keeping the expensive checks cacheable."""
     return JSONResponse(
         status_code=http_status,
         content={
@@ -185,7 +218,7 @@ async def health_readiness(request: Request):
 
 @router.get("/health/llm")
 @router.get("/api/v1/health/llm")
-async def health_llm():
+def health_llm():
     """Return a redacted DeepSeek connectivity check."""
     from app.utils.llm import LLMUtil
 
@@ -217,7 +250,7 @@ async def system_info():
 
 
 @router.get("/api/v1/metrics", tags=["指标"])
-async def get_core_metrics():
+def get_core_metrics():
     """获取核心量化指标（从数据库真实统计）"""
     from app.models import LearningResource, AgentTask, DebateRecord, KnowledgeSlice
     from app.utils.metrics import MetricsUtil

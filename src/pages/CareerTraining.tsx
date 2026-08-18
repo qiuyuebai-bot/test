@@ -1,11 +1,13 @@
-import { useEffect } from 'react'
+import { lazy, Suspense, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { clsx } from 'clsx'
-import PositionTab from './career-training/PositionTab'
-import AssessmentTab from './career-training/AssessmentTab'
-import LearningPlanTab from './career-training/LearningPlanTab'
-import PracticeTab from './career-training/PracticeTab'
-import CertificationTab from './career-training/CertificationTab'
+import { PageSkeleton } from '@/components/Skeleton'
+
+const PositionTab = lazy(() => import('./career-training/PositionTab'))
+const AssessmentTab = lazy(() => import('./career-training/AssessmentTab'))
+const LearningPlanTab = lazy(() => import('./career-training/LearningPlanTab'))
+const PracticeTab = lazy(() => import('./career-training/PracticeTab'))
+const CertificationTab = lazy(() => import('./career-training/CertificationTab'))
 
 type TabKey = 'position' | 'assessment' | 'plan' | 'practice' | 'certification'
 
@@ -60,11 +62,13 @@ export default function CareerTraining() {
       </nav>
 
       <div className="mt-4">
-        {currentTab === 'position' && <PositionTab />}
-        {currentTab === 'assessment' && <AssessmentTab />}
-        {currentTab === 'plan' && <LearningPlanTab />}
-        {currentTab === 'practice' && <PracticeTab />}
-        {currentTab === 'certification' && <CertificationTab />}
+        <Suspense fallback={<PageSkeleton />}>
+          {currentTab === 'position' && <PositionTab />}
+          {currentTab === 'assessment' && <AssessmentTab />}
+          {currentTab === 'plan' && <LearningPlanTab />}
+          {currentTab === 'practice' && <PracticeTab />}
+          {currentTab === 'certification' && <CertificationTab />}
+        </Suspense>
       </div>
     </div>
   )

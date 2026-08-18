@@ -23,6 +23,7 @@ import {
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useState, useEffect, useRef } from 'react'
+import { prefetchRoute } from '@/lib/routePrefetch'
 
 type NavigationItem = {
   name: string
@@ -157,6 +158,8 @@ export default function Layout() {
                     <Link
                       key={item.name}
                       to={item.href}
+                      onPointerEnter={() => prefetchRoute(item.href)}
+                      onFocus={() => prefetchRoute(item.href)}
                       aria-label={item.name}
                       title={isSidebarCollapsed ? item.name : undefined}
                       className={clsx(
@@ -298,7 +301,7 @@ export default function Layout() {
 
         {/* 内容区域 */}
         <main className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 bg-bg-secondary">
-          <PageTransition>
+          <PageTransition key={location.pathname}>
             <Outlet />
           </PageTransition>
         </main>

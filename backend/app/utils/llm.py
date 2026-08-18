@@ -10,6 +10,7 @@ P3-3 增强：
 - 已支持 SSE 流式输出（async_stream）
 """
 from typing import Optional, List, Dict, Any, Tuple, AsyncGenerator
+import asyncio
 import json
 import atexit
 import hashlib
@@ -53,6 +54,11 @@ class LLMUtil:
     _response_cache_ttl: int = 3600  # 默认 1 小时
     _response_cache_max_size: int = 1024  # LRU 最大条目数
     _response_cache_lock: threading.RLock = threading.RLock()
+    _response_cache_redis = None
+    _response_cache_redis_lock: threading.Lock = threading.Lock()
+    _response_cache_redis_disabled_until: float = 0.0
+    _response_cache_redis_retry_interval: float = 5.0
+    _response_cache_redis_prefix: str = "llm:response:v1:"
     _cache_enabled_threshold: float = 0.3  # temperature ≤ 此值才启用缓存
     _cache_hits: int = 0
     _cache_misses: int = 0
@@ -313,8 +319,107 @@ class LLMUtil:
         return temp <= cls._cache_enabled_threshold
 
     @classmethod
+    def _get_redis_cache_client(cls):
+        if not settings.REDIS_URL or time.monotonic() < cls._response_cache_redis_disabled_until:
+            return None
+        with cls._response_cache_redis_lock:
+            if cls._response_cache_redis is not None:
+                return cls._response_cache_redis
+            try:
+                import redis
+
+                cls._response_cache_redis = redis.Redis.from_url(
+                    settings.REDIS_URL,
+                    decode_responses=True,
+                    socket_connect_timeout=0.2,
+                    socket_timeout=0.2,
+                )
+                return cls._response_cache_redis
+            except Exception as exc:
+                cls._response_cache_redis_disabled_until = (
+                    time.monotonic() + cls._response_cache_redis_retry_interval
+                )
+                logger.warning("Redis LLM 缓存客户端初始化失败，回退本地缓存: {}", exc)
+                return None
+
+    @classmethod
+    def _disable_redis_cache(cls, exc: Exception) -> None:
+        with cls._response_cache_redis_lock:
+            cls._response_cache_redis_disabled_until = (
+                time.monotonic() + cls._response_cache_redis_retry_interval
+            )
+            client = cls._response_cache_redis
+            cls._response_cache_redis = None
+        if client is not None:
+            try:
+                client.close()
+            except Exception:
+                pass
+        logger.warning("Redis LLM 缓存不可用，回退本地缓存: {}", exc)
+
+    @classmethod
+    def _get_redis_cached_response(cls, cache_key: str) -> Optional[Tuple[str, Dict[str, int]]]:
+        client = cls._get_redis_cache_client()
+        if client is None:
+            return None
+        try:
+            raw = client.get(f"{cls._response_cache_redis_prefix}{cache_key}")
+            if not raw:
+                return None
+            payload = json.loads(raw)
+            return str(payload["value"]), dict(payload.get("usage") or {})
+        except Exception as exc:
+            cls._disable_redis_cache(exc)
+            return None
+
+    @classmethod
+    def _set_redis_cached_response(
+        cls,
+        cache_key: str,
+        value: Tuple[str, Dict[str, int]],
+        ttl: int,
+    ) -> None:
+        client = cls._get_redis_cache_client()
+        if client is None:
+            return
+        try:
+            payload = json.dumps({"value": value[0], "usage": value[1]}, ensure_ascii=False)
+            client.set(
+                f"{cls._response_cache_redis_prefix}{cache_key}",
+                payload,
+                ex=ttl,
+            )
+        except Exception as exc:
+            cls._disable_redis_cache(exc)
+
+    @classmethod
+    def _set_local_cached_response(
+        cls,
+        cache_key: str,
+        value: Tuple[str, Dict[str, int]],
+        ttl: int,
+    ) -> None:
+        with cls._response_cache_lock:
+            cls._response_cache[cache_key] = {
+                "value": value,
+                "timestamp": time.time(),
+                "ttl": ttl,
+            }
+            cls._response_cache.move_to_end(cache_key)
+            if len(cls._response_cache) > cls._response_cache_max_size:
+                oldest_key = next(iter(cls._response_cache))
+                del cls._response_cache[oldest_key]
+
+    @classmethod
     def _get_cached_response(cls, cache_key: str) -> Optional[Tuple[str, Dict[str, int]]]:
         """获取缓存的响应（线程安全，过期自动清理）"""
+        remote = cls._get_redis_cached_response(cache_key)
+        if remote is not None:
+            with cls._response_cache_lock:
+                cls._cache_hits += 1
+            cls._set_local_cached_response(cache_key, remote, cls._response_cache_ttl)
+            return remote
+
         with cls._response_cache_lock:
             entry = cls._response_cache.get(cache_key)
             if entry is None:
@@ -337,16 +442,9 @@ class LLMUtil:
         ttl: Optional[int] = None,
     ) -> None:
         """写入缓存响应（线程安全）"""
-        with cls._response_cache_lock:
-            cls._response_cache[cache_key] = {
-                "value": value,
-                "timestamp": time.time(),
-                "ttl": ttl or cls._response_cache_ttl,
-            }
-            cls._response_cache.move_to_end(cache_key)
-            if len(cls._response_cache) > cls._response_cache_max_size:
-                oldest_key = next(iter(cls._response_cache))
-                del cls._response_cache[oldest_key]
+        effective_ttl = ttl or cls._response_cache_ttl
+        cls._set_local_cached_response(cache_key, value, effective_ttl)
+        cls._set_redis_cached_response(cache_key, value, effective_ttl)
 
     @classmethod
     def _record_usage(cls, usage: Dict[str, int]) -> None:
@@ -627,7 +725,7 @@ class LLMUtil:
         cache_key: Optional[str] = None
         if use_cache and cls._is_cacheable(temperature):
             cache_key = cls._compute_prompt_hash(prompt, system_prompt, model, temperature)
-            cached = cls._get_cached_response(cache_key)
+            cached = await asyncio.to_thread(cls._get_cached_response, cache_key)
             if cached is not None:
                 logger.debug(f"[LLM] 缓存命中: key={cache_key[:12]}...")
                 return cached
@@ -660,7 +758,7 @@ class LLMUtil:
             if settings.LLM_CIRCUIT_BREAKER_ENABLED:
                 cls._circuit_breaker._on_success()
             if cache_key and result[0]:
-                cls._set_cached_response(cache_key, result)
+                await asyncio.to_thread(cls._set_cached_response, cache_key, result)
             return result
         except Exception as e:
             if settings.LLM_CIRCUIT_BREAKER_ENABLED:

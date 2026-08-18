@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { lazy, Suspense, useEffect, useState } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { agentApi, coreApi } from '@/api'
 import { useStore } from '@/store'
@@ -10,7 +10,7 @@ import Input from '@/components/Input'
 import Select from '@/components/Select'
 import LoadingState from '@/components/LoadingState'
 import EmptyState from '@/components/EmptyState'
-import MarkdownContent from '@/components/MarkdownContent'
+const MarkdownContent = lazy(() => import('@/components/MarkdownContent'))
 import type { PositionDetail } from '@/types/training'
 import type { LearningResource } from '@/types'
 
@@ -221,7 +221,9 @@ export default function EmbeddedResourceGeneration({ position, learnerId }: Prop
                   <Badge variant="success">匹配度 {selectedResource.matchScore}</Badge>
                 )}
               </div>
-              <MarkdownContent content={selectedResource.content} />
+              <Suspense fallback={<LoadingState />}>
+                <MarkdownContent content={selectedResource.content} />
+              </Suspense>
             </div>
           ) : (
             <EmptyState type="default" title="暂无预览" description="生成资料后选择左侧列表项查看内容" />

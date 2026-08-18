@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { lazy, Suspense, useState, useEffect, useCallback, useRef } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
@@ -9,7 +9,7 @@ import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
 import Modal from '@/components/Modal'
-import MarkdownContent from '@/components/MarkdownContent'
+const MarkdownContent = lazy(() => import('@/components/MarkdownContent'))
 import { normalizeResourceContent } from '@/lib/resourceContent'
 import {
   FileText,
@@ -471,7 +471,9 @@ export default function ResourceGeneration() {
               <span>资源内容</span>
             </div>
             {shouldRenderMarkdown ? (
-              <MarkdownContent content={normalizedContent.content} />
+              <Suspense fallback={<div className="text-sm text-text-tertiary">正在加载内容预览...</div>}>
+                <MarkdownContent content={normalizedContent.content} />
+              </Suspense>
             ) : (
               <pre className="text-xs font-mono text-text-primary leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto">
                 {normalizedContent.content}
@@ -1041,7 +1043,9 @@ export default function ResourceGeneration() {
             </h2>
             <div className="mt-5">
               {isMarkdownResource(selectedResource) ? (
-                <MarkdownContent content={getResourceText()} />
+                <Suspense fallback={<div className="text-sm text-text-tertiary">正在加载内容预览...</div>}>
+                  <MarkdownContent content={getResourceText()} />
+                </Suspense>
               ) : (
                 <pre className="text-sm font-mono text-text-primary leading-relaxed whitespace-pre-wrap">
                   {getResourceText()}

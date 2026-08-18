@@ -8,6 +8,7 @@
   - 跳过: 健康检查、指标采集、OPTIONS预检、静态资源
 """
 import time
+import asyncio
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import Response
@@ -150,19 +151,22 @@ class AuditMiddleware(BaseHTTPMiddleware):
 
         duration_ms = int((time.time() - start_time) * 1000)
 
-        _write_audit_log({
-            "user_id": user_id,
-            "username": username,
-            "action": action,
-            "resource_type": resource_type,
-            "resource_id": resource_id,
-            "method": method,
-            "path": path[:255],
-            "status_code": response.status_code,
-            "ip_address": ip_address,
-            "user_agent": user_agent,
-            "duration_ms": duration_ms,
-            "request_id": request_id,
-        })
+        await asyncio.to_thread(
+            _write_audit_log,
+            {
+                "user_id": user_id,
+                "username": username,
+                "action": action,
+                "resource_type": resource_type,
+                "resource_id": resource_id,
+                "method": method,
+                "path": path[:255],
+                "status_code": response.status_code,
+                "ip_address": ip_address,
+                "user_agent": user_agent,
+                "duration_ms": duration_ms,
+                "request_id": request_id,
+            },
+        )
 
         return response

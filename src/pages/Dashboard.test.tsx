@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor } from '@testing-library/react'
 import { MemoryRouter } from 'react-router-dom'
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 
 vi.mock('@/api/dashboard', () => ({
   dashboardApi: {
@@ -20,6 +21,19 @@ import Dashboard from './Dashboard'
 import { resetMockStore, setMockStore } from '@/test/mockStore'
 
 describe('role adaptive dashboard', () => {
+  function renderDashboard() {
+    const queryClient = new QueryClient({
+      defaultOptions: { queries: { retry: false, refetchOnWindowFocus: false } },
+    })
+    return render(
+      <QueryClientProvider client={queryClient}>
+        <MemoryRouter>
+          <Dashboard />
+        </MemoryRouter>
+      </QueryClientProvider>,
+    )
+  }
+
   beforeEach(() => {
     resetMockStore()
     vi.clearAllMocks()
@@ -43,11 +57,7 @@ describe('role adaptive dashboard', () => {
       moduleErrors: {},
     } as never)
 
-    render(
-      <MemoryRouter>
-        <Dashboard />
-      </MemoryRouter>,
-    )
+    renderDashboard()
 
     expect(await screen.findByText('下一步该做什么')).toBeInTheDocument()
     expect(dashboardApi.getLearner).toHaveBeenCalledTimes(1)
@@ -67,11 +77,7 @@ describe('role adaptive dashboard', () => {
       moduleErrors: {},
     } as never)
 
-    render(
-      <MemoryRouter>
-        <Dashboard />
-      </MemoryRouter>,
-    )
+    renderDashboard()
 
     expect(await screen.findByText('培训管理台')).toBeInTheDocument()
     expect(dashboardApi.getTeacher).toHaveBeenCalledWith(
@@ -92,11 +98,7 @@ describe('role adaptive dashboard', () => {
       fetchTasks,
     })
 
-    render(
-      <MemoryRouter>
-        <Dashboard />
-      </MemoryRouter>,
-    )
+    renderDashboard()
 
     await waitFor(() => expect(screen.getByText('管理员 Dashboard')).toBeInTheDocument())
     expect(fetchSystemMetrics).toHaveBeenCalledTimes(1)

@@ -5,21 +5,22 @@ import ToastContainer from './components/Toast'
 import { PageSkeleton } from './components/Skeleton'
 import { ProtectedRoute, PublicOnlyRoute } from './components/ProtectedRoute'
 import { useStore } from './store'
+import { routeLoaders } from './lib/routePrefetch'
 
-const Login = lazy(() => import('./pages/Login'))
-const OnboardingName = lazy(() => import('./pages/OnboardingName'))
-const Dashboard = lazy(() => import('./pages/Dashboard'))
-const MultiAgentVisualization = lazy(() => import('./pages/MultiAgentVisualization'))
-const TaskEvidenceWorkspace = lazy(() => import('./pages/multi-agent/TaskEvidenceWorkspace'))
-const LearnerProfile = lazy(() => import('./pages/LearnerProfile'))
-const KnowledgeBase = lazy(() => import('./pages/KnowledgeBase'))
-const ResourceGeneration = lazy(() => import('./pages/ResourceGeneration'))
-const LearningReport = lazy(() => import('./pages/LearningReport'))
-const AdaptiveGuidance = lazy(() => import('./pages/AdaptiveGuidance'))
-const SystemTest = lazy(() => import('./pages/SystemTest'))
-const MetricsDashboard = lazy(() => import('./pages/MetricsDashboard'))
-const AdminOpsOverview = lazy(() => import('./pages/AdminOpsOverview'))
-const CareerTraining = lazy(() => import('./pages/CareerTraining'))
+const Login = lazy(routeLoaders['/login'])
+const OnboardingName = lazy(routeLoaders['/onboarding/name'])
+const Dashboard = lazy(routeLoaders['/dashboard'])
+const MultiAgentVisualization = lazy(routeLoaders['/multi-agent'])
+const TaskEvidenceWorkspace = lazy(routeLoaders['/multi-agent/tasks/:taskId/evidence'])
+const LearnerProfile = lazy(routeLoaders['/profile'])
+const KnowledgeBase = lazy(routeLoaders['/knowledge-base'])
+const ResourceGeneration = lazy(routeLoaders['/resources'])
+const LearningReport = lazy(routeLoaders['/report'])
+const AdaptiveGuidance = lazy(routeLoaders['/guidance'])
+const SystemTest = lazy(routeLoaders['/monitoring'])
+const MetricsDashboard = lazy(routeLoaders['/metrics'])
+const AdminOpsOverview = lazy(routeLoaders['/ops'])
+const CareerTraining = lazy(routeLoaders['/career-training'])
 
 function PageFallback() {
   return <PageSkeleton />
