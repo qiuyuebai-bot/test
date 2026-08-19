@@ -18,6 +18,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    # Preserve schemas created by the legacy create_all-before-Alembic startup.
+    if all(inspector.has_table(table) for table in (
+        'certifications', 'certification_rules', 'certification_records'
+    )):
+        return
+
     # 认证定义表
     op.create_table('certifications',
         sa.Column('id', sa.Integer(), autoincrement=True, nullable=False, comment='认证ID'),

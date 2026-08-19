@@ -19,6 +19,15 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    # Older startup code ran create_all before recording this revision. Keep
+    # that complete schema and allow Alembic to advance the version table.
+    if all(inspector.has_table(table) for table in (
+        'competencies', 'positions', 'position_competencies'
+    )):
+        return
+
     # 岗位与胜任力域：创建 positions、competencies、position_competencies 三张表
     op.create_table('competencies',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False, comment='胜任力ID'),

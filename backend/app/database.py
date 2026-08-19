@@ -5,7 +5,7 @@
 - PostgreSQL：使用连接池（pool_size + max_overflow），pool_pre_ping 保活
 """
 from pathlib import Path
-from sqlalchemy import create_engine, event
+from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from typing import Generator
 from contextlib import contextmanager
@@ -110,30 +110,38 @@ def init_database() -> None:
     """
     初始化数据库：运行 alembic 迁移
 
-    策略：
-    - 生产环境（APP_ENV=production）：仅运行 alembic upgrade head，迁移失败即报错
-    - 开发/预发布环境：先用 create_all 保证最低可用性，再运行 alembic upgrade head
+    Alembic 是已存在数据库的 schema source of truth。只有没有版本表的首次
+    启动才使用 ``create_all`` 建立初始基线；有版本记录的数据库必须只通过
+    Alembic 演进，避免 ORM 模型提前创建后续迁移中的表而产生 schema drift。
     """
     import app.models as models
     import warnings
 
     logger.info(f"正在初始化数据库（已注册 {len(models.__all__)} 个模型，APP_ENV={settings.APP_ENV}）...")
 
-    # 始终先运行 create_all（幂等操作，已存在的表不会重复创建）
-    # 这确保首次部署或空数据库启动时表结构齐全，避免空迁移基线导致缺表
-    Base.metadata.create_all(bind=engine)
-    logger.info("create_all 完成（幂等，已存在的表跳过）")
-
     is_production = settings.APP_ENV == "production"
 
-    # 运行 alembic 迁移（确保 schema 最新）
     alembic_ini_path = Path(__file__).resolve().parent.parent / "alembic.ini"
     if not alembic_ini_path.exists():
         if is_production:
             logger.error(f"生产环境未找到 alembic.ini: {alembic_ini_path}")
             raise RuntimeError(f"生产环境必须配置 alembic.ini: {alembic_ini_path}")
+        Base.metadata.create_all(bind=engine)
         logger.warning(f"未找到 alembic.ini: {alembic_ini_path}，跳过 alembic 迁移")
     else:
+        table_names = set(inspect(engine).get_table_names())
+        has_version_table = "alembic_version" in table_names
+        user_tables = table_names - {"alembic_version"}
+
+        # 初始迁移是历史基线（不创建表），所以新数据库需要先建立 ORM
+        # 基线；后续启动一律跳过 create_all，让迁移文件管理 schema。
+        if not has_version_table or not user_tables:
+            Base.metadata.create_all(bind=engine)
+            logger.info("create_all 完成（仅用于无 Alembic 版本的初始基线）")
+        else:
+            logger.info("检测到 Alembic 版本表，跳过 create_all，按迁移链升级")
+
+        # 运行 alembic 迁移（确保 schema 最新）
         try:
             from alembic.config import Config
             from alembic import command

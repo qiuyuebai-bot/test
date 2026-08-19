@@ -19,6 +19,14 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    # Preserve schemas created by the legacy create_all-before-Alembic startup.
+    if all(inspector.has_table(table) for table in (
+        'training_projects', 'training_enrollments', 'training_plans'
+    )):
+        return
+
     # 培训项目表
     op.create_table('training_projects',
     sa.Column('id', sa.Integer(), autoincrement=True, nullable=False, comment='项目ID'),

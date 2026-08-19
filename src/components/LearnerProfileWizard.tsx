@@ -93,7 +93,7 @@ export default function LearnerProfileWizard({ isOpen, onClose, learner, onSave 
     setManualAdjustments({})
     setNewBlindArea('')
     setError(null)
-  }, [isOpen, learner?.id])
+  }, [isOpen, learner])
 
   const currentQuestion = useMemo(
     () => session?.questions.find((question) => !question.answered) ?? null,

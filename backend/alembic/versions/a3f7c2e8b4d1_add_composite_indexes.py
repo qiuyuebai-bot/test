@@ -23,26 +23,26 @@ depends_on: Union[str, Sequence[str], None] = None
 
 
 def upgrade() -> None:
-    op.create_index(
-        'ix_learning_resources_learner_id_created_at',
-        'learning_resources',
-        ['learner_id', sa.text('created_at DESC')],
-    )
-    op.create_index(
-        'ix_answer_records_learner_id_created_at',
-        'answer_records',
-        ['learner_id', sa.text('created_at DESC')],
-    )
-    op.create_index(
-        'ix_knowledge_docs_status_updated_at',
-        'knowledge_docs',
-        ['status', 'updated_at'],
-    )
-    op.create_index(
-        'ix_agent_tasks_status_created_at',
-        'agent_tasks',
-        ['status', 'created_at'],
-    )
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    indexes = {
+        'ix_learning_resources_learner_id_created_at': (
+            'learning_resources', ['learner_id', sa.text('created_at DESC')]
+        ),
+        'ix_answer_records_learner_id_created_at': (
+            'answer_records', ['learner_id', sa.text('created_at DESC')]
+        ),
+        'ix_knowledge_docs_status_updated_at': (
+            'knowledge_docs', ['status', 'updated_at']
+        ),
+        'ix_agent_tasks_status_created_at': (
+            'agent_tasks', ['status', 'created_at']
+        ),
+    }
+    for name, (table, columns) in indexes.items():
+        existing = {index['name'] for index in inspector.get_indexes(table)}
+        if name not in existing:
+            op.create_index(name, table, columns)
 
 
 def downgrade() -> None:

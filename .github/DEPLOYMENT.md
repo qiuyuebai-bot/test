@@ -113,6 +113,22 @@ Slack 通知（成功/失败）
 3. 可选勾选 `skip-smoke-test`（紧急回滚跳过验证）
 4. 运行 → 复用 `deploy/scripts/rollback.sh` → rollout 等待 → smoke-test → 通知
 
+### 3.4 生产数据库迁移门禁
+
+Helm migration Job 只负责执行 `alembic upgrade head`，不会自动创建数据库备份。生产发布前必须完成以下步骤：
+
+1. 暂停后台写入任务，确认生产数据库连接和当前 revision：
+   ```bash
+   alembic current
+   alembic heads
+   ```
+2. 创建并验证数据库原生备份：PostgreSQL 使用 `pg_dump --format=custom`；SQLite 停止服务后使用 SQLite `.backup`，不要只复制可能仍有 WAL 写入的主文件。
+3. 在 staging 恢复该备份，执行 `alembic upgrade head`，并运行健康检查、登录、匿名化接口和冒烟测试。
+4. 生产执行前由发布审批人确认备份位置、校验结果和恢复负责人。
+5. 迁移完成后记录 `alembic current`、表结构和核心业务行数，再恢复流量。
+
+当前迁移 `f9a6b7c8d9e0` 会删除匿名化原文列；`downgrade` 只能重新创建空列，不能恢复已删除数据。迁移失败或需要回退时，应从完整备份恢复数据库，而不是依赖 Alembic downgrade。
+
 ---
 
 ## 四、双模式说明
