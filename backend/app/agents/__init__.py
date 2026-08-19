@@ -6,6 +6,7 @@ from app.agents.base import BaseAgent, AgentStatus
 from app.agents.diagnosis_agent import DiagnosisAgent
 from app.agents.generation_agent import GenerationAgent
 from app.agents.judge_agent import JudgeAgent
+from app.agents.knowledge_agent import KnowledgeAgent
 from app.agents.orchestrator import AgentOrchestrator, orchestrator
 
 __all__ = [
@@ -14,6 +15,7 @@ __all__ = [
     "DiagnosisAgent",
     "GenerationAgent",
     "JudgeAgent",
+    "KnowledgeAgent",
     "AgentOrchestrator",
     "orchestrator",
 ]

@@ -1,0 +1,15 @@
+{
+  "schema_version": "1.0",
+  "domain": "industrial_robotics",
+  "required_fields": [
+    "case_id",
+    "topic",
+    "generated_content",
+    "reference_slice_ids",
+    "expert_label",
+    "reviewer_id",
+    "reviewed_at"
+  ],
+  "allowed_labels": ["supported", "contradicted", "insufficient_evidence"],
+  "annotations": []
+}

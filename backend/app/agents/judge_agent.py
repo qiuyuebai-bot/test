@@ -8,6 +8,7 @@ from typing import Dict, Any, List
 from loguru import logger
 from app.agents.base import BaseAgent, AgentStatus
 from app.utils.hallucination import HallucinationUtil
+from app.utils.industry_rules import IndustrialRoboticsRules
 from app.agents.llm_debater import LLMDebater
 from app.utils.llm import LLMUtil
 
@@ -148,6 +149,7 @@ class JudgeAgent(BaseAgent):
             "knowledge_gap": hallucination_info.get("knowledge_gap", {"present": False}),
             "consistency_score": consistency_result.get("score", 100),
             "standard_score": standard_result.get("score", 100),
+            "industry_rules": standard_result.get("industry_rule_result", {}),
             "issues": issues,
             "corrections": correction_suggestions,
             "debate_record": debate_record,
@@ -168,6 +170,7 @@ class JudgeAgent(BaseAgent):
         reference_knowledge: List[Dict],
         previous_debates: List[Dict] = None,
         max_rounds: int = 3,
+        generation_response: Dict[str, Any] = None,
     ) -> Dict[str, Any]:
         """
         与生成Agent进行辩论交叉验证（核心创新机制）
@@ -194,32 +197,43 @@ class JudgeAgent(BaseAgent):
             "debate_round": current_round,
         })
         
-        # 优先使用真实 LLM 辩论；失败时保留确定性辩论回应。
+        generation_response = generation_response or self._unavailable_generation_response(current_round)
+
+        # The judge gets its own model turn. The generation position is
+        # supplied by GenerationAgent from a separate call, so the judge no
+        # longer fabricates a defense on the generation agent's behalf.
         llm_round = None
         has_reference = any(k.get("content") for k in reference_knowledge)
         if LLMUtil.is_available() and has_reference:
             try:
-                llm_round = LLMDebater.run_debate_round(
-                    generated_content, reference_knowledge, audit_result, current_round
+                llm_round = LLMDebater.run_judge_round(
+                    generated_content,
+                    reference_knowledge,
+                    audit_result,
+                    generation_response,
+                    current_round,
                 )
             except Exception as exc:
-                logger.warning(f"[审核裁判Agent] LLM 辩论失败，使用规则兜底: {exc}")
+                logger.warning(f"[审核裁判Agent] LLM 裁判轮次失败，转人工复核: {exc}")
 
         merged_issues = audit_result["issues"] + (llm_round.get("issues", []) if llm_round else [])
         corrections = self._generate_corrections(generated_content, reference_knowledge, merged_issues)
         debate_result = {
             "round": current_round,
             "judge_standpoint": audit_result["debate_record"]["judge_view"],
-            "generation_counterargument": (
-                llm_round["generation_counterargument"] if llm_round
-                else self._generate_counterargument(generated_content, audit_result, current_round)
-            ),
+            "generation_counterargument": generation_response,
             "final_decision": llm_round.get("final_decision") if llm_round else audit_result["debate_record"]["judge_view"]["decision"],
             "corrections": corrections,
             "conflict_points": [i for i in merged_issues if i["severity"] in ("high", "medium")],
             "confidence": llm_round.get("confidence") if llm_round else audit_result.get("overall_score", 0) / 100,
-            "judge_rebuttal": llm_round.get("judge_rebuttal", "") if llm_round else "",
-            "debate_method": "llm" if llm_round else "deterministic_fallback",
+            "judge_rebuttal": llm_round.get("judge_rebuttal", "") if llm_round else "裁判已依据规则和参考资料完成独立复核。",
+            "debate_method": "llm_dual_agent" if llm_round and generation_response.get("available") else "deterministic_review",
+            "agent_response_status": generation_response.get("status", "unavailable"),
+            "generation_stance": generation_response.get("stance", "unavailable"),
+            "requires_human_review": bool(
+                generation_response.get("requires_human_review", True)
+                or not llm_round
+            ),
         }
 
         if current_round >= max_rounds:
@@ -229,6 +243,23 @@ class JudgeAgent(BaseAgent):
         self.status = AgentStatus.IDLE
         
         return debate_result
+
+    @staticmethod
+    def _unavailable_generation_response(round_num: int) -> Dict[str, Any]:
+        """Explicitly represent a missing generation-agent turn."""
+        return {
+            "available": False,
+            "status": "unavailable",
+            "stance": "unavailable",
+            "accepts": None,
+            "response": "生成Agent当前不可用，无法提供独立辩护意见。",
+            "revisions_made": 0,
+            "disputed_issues": [],
+            "evidence_citations": [],
+            "method": "unavailable",
+            "requires_human_review": True,
+            "round": round_num,
+        }
     
     def _check_fact_consistency(
         self,
@@ -282,6 +313,18 @@ class JudgeAgent(BaseAgent):
                     "description": f"术语'{term}'在参考资料中未找到对应内容，需人工确认",
                     "term": term,
                 })
+
+        for item in IndustrialRoboticsRules.terms_missing_from_reference(
+            generated_content, ref_text
+        ):
+            score -= 3
+            issues.append({
+                "type": "industry_term_missing",
+                "severity": "low",
+                "description": f"工业机器人术语未在参考资料中找到：{item['terms']}",
+                "term": item["terms"],
+                "domain": "industrial_robotics",
+            })
         
         return {
             "score": max(0, score),
@@ -326,10 +369,21 @@ class JudgeAgent(BaseAgent):
                     "description": description,
                     "matches": matches[:5],
                 })
+
+        industry_result = IndustrialRoboticsRules.evaluate(
+            generated_content,
+            self._extract_reference_text(reference_knowledge),
+        )
+        for industry_issue in industry_result["issues"]:
+            issues.append(industry_issue)
+            score -= {"high": 20, "medium": 8, "low": 3}.get(
+                industry_issue.get("severity", "low"), 3
+            )
         
         return {
             "score": max(0, min(100, score)),
             "issues": issues,
+            "industry_rule_result": industry_result,
         }
     
     def _calculate_validation_score(
@@ -452,24 +506,9 @@ class JudgeAgent(BaseAgent):
         Returns:
             生成Agent的回应
         """
-        # 模拟生成Agent的辩护
-        passed = audit_result.get("passed", False)
-        issues = audit_result.get("issues", [])
-        
-        if passed:
-            return {
-                "accepts": True,
-                "response": "内容已通过审核，确认无误。",
-                "revisions_made": 0,
-            }
-        else:
-            high_severity = [i for i in issues if i["severity"] == "high"]
-            return {
-                "accepts": len(high_severity) > 0,  # 高严重度问题接受修正
-                "response": f"收到第{round_num}轮审核意见，{len(high_severity)}个高优先级问题将修正，其余问题可商榷。",
-                "revisions_made": len(high_severity),
-                "disputed_issues": [i for i in issues if i["severity"] == "low"],
-            }
+        # Kept for compatibility with callers of the old private helper. A
+        # judge must never synthesize a generation-agent position.
+        return self._unavailable_generation_response(round_num)
     
     def _extract_reference_text(self, reference_knowledge: List[Dict]) -> str:
         """提取参考文本"""

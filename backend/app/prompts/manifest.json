@@ -35,6 +35,16 @@
     "description": "基于参考资料的生成内容辩论与最终裁决",
     "variables": ["round_num", "generated_content", "reference_knowledge", "rule_issues"]
   },
+  "generation_review": {
+    "version": "1.0.0",
+    "description": "生成Agent独立回应审核意见并维护自身立场",
+    "variables": ["round_num", "generated_content", "reference_knowledge", "audit_result"]
+  },
+  "judge_review": {
+    "version": "1.0.0",
+    "description": "裁判Agent在生成Agent独立回应后进行最终裁决",
+    "variables": ["round_num", "generated_content", "reference_knowledge", "rule_issues", "generation_response"]
+  },
   "path_planning": {
     "version": "1.0.0",
     "description": "根据能力、盲区与可用资源规划学习路径",

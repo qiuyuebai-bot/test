@@ -19,6 +19,7 @@ from loguru import logger
 from app.agents.diagnosis_agent import DiagnosisAgent
 from app.agents.generation_agent import GenerationAgent
 from app.agents.judge_agent import JudgeAgent
+from app.agents.knowledge_agent import KnowledgeAgent
 from app.agents.event_bus import create_event_bus
 from app.agents.task_repository import TaskRepository
 from app.agents.content_corrector import ContentCorrector
@@ -46,6 +47,9 @@ class AgentOrchestrator:
         self.diagnosis_agent = DiagnosisAgent()
         self.generation_agent = GenerationAgent()
         self.judge_agent = JudgeAgent()
+        self.knowledge_agent = KnowledgeAgent()
+        # Kept as a compatibility attribute for integrations that inspect the
+        # orchestrator, while retrieval itself is owned by KnowledgeAgent.
         self.knowledge_service = KnowledgeService()
         self.learner_service = LearnerService()
 
@@ -65,6 +69,7 @@ class AgentOrchestrator:
     def get_all_agents_status(self) -> List[Dict[str, Any]]:
         return [
             self.diagnosis_agent.get_status(),
+            self.knowledge_agent.get_status(),
             self.generation_agent.get_status(),
             self.judge_agent.get_status(),
         ]
@@ -141,7 +146,9 @@ class AgentOrchestrator:
 
             # 阶段2：知识库检索
             self._update_task_stage(task_id, "knowledge_retrieval", 30, "正在检索相关知识库...")
-            knowledge_results = self._retrieve_knowledge(target_topic, diagnosis_result, industry)
+            knowledge_results = self._retrieve_knowledge(
+                target_topic, diagnosis_result, industry, task_id=task_id
+            )
             self._update_running_task(task_id, knowledge_results=knowledge_results)
 
             # 阶段3：内容生成
@@ -314,16 +321,30 @@ class AgentOrchestrator:
         return result
 
     def _retrieve_knowledge(
-        self, target_topic: str, diagnosis_result: Dict[str, Any], industry: str = None
+        self,
+        target_topic: str,
+        diagnosis_result: Dict[str, Any],
+        industry: str = None,
+        task_id: Optional[int] = None,
     ) -> List[Dict]:
-        started_at = time.perf_counter()
-        with get_db_context() as db:
-            results = KnowledgeService.search(db=db, query=target_topic, industry=industry, top_k=8)
-        duration_ms = round((time.perf_counter() - started_at) * 1000, 1)
-        logger.info(
-            f"[Agent调度中心] 知识库检索: {len(results)} 条结果, duration={duration_ms}ms"
+        result = self.knowledge_agent.run(
+            task_id=task_id or 0,
+            input_data={
+                "query": target_topic,
+                "industry": industry,
+                "top_k": 8,
+            },
         )
-        return results
+        if not result.get("_meta", {}).get("success", False):
+            raise Exception(f"知识检索失败: {result.get('error')}")
+        if task_id:
+            self.task_repo.update_output_data(
+                task_id,
+                "knowledge_retrieval",
+                result,
+                agent_type="knowledge",
+            )
+        return result.get("results", [])
 
     def _run_generation(
         self, task_id: int, learner_id: int, diagnosis_result: Dict[str, Any],
@@ -391,6 +412,12 @@ class AgentOrchestrator:
             })
 
             debate_result = self.judge_agent.debate_with_generation(
+                generation_response=self.generation_agent.respond_to_review(
+                    generated_content=current_content,
+                    reference_knowledge=reference_knowledge,
+                    audit_result=initial_audit,
+                    round_num=current_round,
+                ),
                 generated_content=current_content,
                 reference_knowledge=reference_knowledge,
                 previous_debates=debate_records,

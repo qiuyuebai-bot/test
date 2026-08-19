@@ -3,11 +3,14 @@
 读取专业知识库向量检索结果，基于学情参数生成初稿学习资源
 """
 import hashlib
+import json
 from uuid import uuid4
 from typing import Dict, Any, List
 from loguru import logger
 from app.agents.base import BaseAgent
 from app.agents.llm_generator import LLMGenerator
+from app.services.ai_content_service import AIContentService
+from app.utils.llm_response import bounded_list, bounded_text, parse_json_object
 from app.utils.llm import LLMUtil, LLMUnavailableError
 from app.config import settings
 
@@ -35,6 +38,93 @@ class GenerationAgent(BaseAgent):
             agent_type="generation",
             agent_name="领域知识生成Agent",
         )
+
+    def respond_to_review(
+        self,
+        generated_content: str,
+        reference_knowledge: List[Dict[str, Any]],
+        audit_result: Dict[str, Any],
+        round_num: int = 1,
+    ) -> Dict[str, Any]:
+        """Return the generation agent's independent position in a debate.
+
+        This is deliberately a separate model call from the judge.  When a
+        model is unavailable we return an explicit unavailable response rather
+        than inventing a defense that was never produced by the agent.
+        """
+        unavailable = {
+            "available": False,
+            "status": "unavailable",
+            "stance": "unavailable",
+            "accepts": None,
+            "response": "生成Agent当前不可用，无法提供独立辩护意见。",
+            "revisions_made": 0,
+            "disputed_issues": [],
+            "evidence_citations": [],
+            "method": "unavailable",
+            "requires_human_review": True,
+            "round": round_num,
+        }
+        if not LLMUtil.is_available():
+            return unavailable
+
+        try:
+            response, _ = AIContentService.call_with_prompt_template(
+                "generation_review",
+                {
+                    "round_num": round_num,
+                    "generated_content": (generated_content or "")[:12000],
+                    "reference_knowledge": self._reference_text(reference_knowledge),
+                    "audit_result": json.dumps(
+                        audit_result.get("issues", [])[:12], ensure_ascii=False
+                    ),
+                },
+                temperature=0.2,
+                use_cache=False,
+                allow_mock=False,
+            )
+            payload = parse_json_object(response)
+            if payload.get("_meta", {}).get("model") == "mock":
+                raise ValueError("LLM returned fallback mock response")
+            stance = payload.get("stance")
+            if stance not in {"accept", "defend", "mixed"}:
+                raise ValueError("invalid generation agent stance")
+            issues = []
+            for item in bounded_list(payload.get("disputed_issues", []), "disputed_issues", maximum=12):
+                if isinstance(item, str):
+                    issues.append(bounded_text(item, "disputed_issue", maximum=500))
+            citations = []
+            for item in bounded_list(payload.get("evidence_citations", []), "evidence_citations", maximum=12):
+                if isinstance(item, str):
+                    citations.append(bounded_text(item, "evidence_citation", maximum=300))
+            return {
+                "available": True,
+                "status": "available",
+                "stance": stance,
+                "accepts": bool(payload.get("accepts", stance == "accept")),
+                "response": bounded_text(payload.get("response"), "generation_response", maximum=3000),
+                "revisions_made": max(0, min(12, int(payload.get("revisions_made", len(issues))))),
+                "disputed_issues": issues,
+                "evidence_citations": citations,
+                "method": "llm",
+                "requires_human_review": False,
+                "round": round_num,
+            }
+        except Exception as exc:
+            logger.warning(f"[知识生成Agent] 独立审核回应失败，转人工复核: {exc}")
+            return {
+                **unavailable,
+                "status": "error",
+                "error_code": "generation_review_failed",
+            }
+
+    @staticmethod
+    def _reference_text(knowledge: List[Dict[str, Any]]) -> str:
+        return "\n\n".join(
+            f"[{item.get('slice_id', 'unknown')}] {item.get('title', '知识片段')}: {str(item.get('content', ''))[:2200]}"
+            for item in (knowledge or [])[:6]
+            if item.get("content")
+        ) or "无可用参考资料"
     
     def execute(self, input_data: Dict[str, Any], context: Dict[str, Any] = None) -> Dict[str, Any]:
         """

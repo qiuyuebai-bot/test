@@ -14,6 +14,7 @@ from app.utils.text_slice import TextSliceUtil
 
 # 幻觉检测工具
 from app.utils.hallucination import HallucinationUtil
+from app.utils.industry_rules import IndustrialRoboticsRules
 
 # 指标计算工具
 from app.utils.metrics import MetricsUtil
@@ -27,6 +28,7 @@ __all__ = [
     "LLMUtil",
     "TextSliceUtil",
     "HallucinationUtil",
+    "IndustrialRoboticsRules",
     "MetricsUtil",
     "LoggerUtil",
 ]

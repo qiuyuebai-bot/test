@@ -11,6 +11,7 @@ from loguru import logger
 from app.config import settings
 from app.services.ai_content_service import AIContentService
 from app.utils.llm import LLMUtil
+from app.utils.industry_rules import IndustrialRoboticsRules
 
 
 class HallucinationUtil:
@@ -225,6 +226,8 @@ class HallucinationUtil:
     def _detect_against_knowledge(content: str, reference_knowledge: List[Dict]) -> Tuple[bool, Dict[str, Any]]:
         claims = HallucinationUtil._split_claims(content)
         candidates = [item for item in (reference_knowledge or []) if isinstance(item, dict)]
+        reference_text = "\n".join(str(item.get("content", "")) for item in candidates)
+        industry_result = IndustrialRoboticsRules.evaluate(content, reference_text)
         claim_results = []
         citations = []
         contradictions = []
@@ -289,10 +292,17 @@ class HallucinationUtil:
             credibility = "low"
 
         evidence_coverage = supported / len(claim_results) if claim_results else 0.0
-        detected = bool(contradictions)
+        industry_high_risk = [
+            item for item in industry_result["issues"] if item.get("severity") == "high"
+        ]
+        detected = bool(contradictions or industry_high_risk)
+        industry_score = sum(
+            {"high": 60, "medium": 15, "low": 5}.get(item.get("severity", "low"), 5)
+            for item in industry_result["issues"]
+        )
         info = {
             "is_hallucination": detected,
-            "score": round(min(100.0, len(contradictions) * 80.0 + len(gaps) * 10.0), 2),
+            "score": round(min(100.0, len(contradictions) * 80.0 + len(gaps) * 10.0 + industry_score), 2),
             "threshold": settings.HALLUCINATION_THRESHOLD,
             "confidence": round(evidence_coverage if not contradictions else 0.9, 3),
             "credibility": credibility,
@@ -303,6 +313,7 @@ class HallucinationUtil:
             "knowledge_gap": HallucinationUtil._knowledge_gap(gaps, gap_entities),
             "detected_keywords": [],
             "contradictions": contradictions,
+            "industry_rules": industry_result,
             "layer": "knowledge",
         }
         return detected, info
