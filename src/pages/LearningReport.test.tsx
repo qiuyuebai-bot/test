@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import { screen } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
+import { useLocation } from 'react-router-dom'
 import { renderWithRouter } from '../test/renderPage'
 import type { LearnerReport } from '@/types'
 
@@ -31,8 +33,12 @@ vi.mock('recharts', () => ({
   AreaChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Area: () => <div />,
   XAxis: () => <div />,
-  YAxis: () => <div />,
-  Tooltip: () => <div />,
+  YAxis: ({ tickFormatter }: { tickFormatter?: (value: number) => string }) => (
+    <div data-testid="y-axis-value">{tickFormatter?.(100 / 3)}</div>
+  ),
+  Tooltip: ({ formatter }: { formatter?: (value: number) => string }) => (
+    <div data-testid="tooltip-value">{formatter?.(100 / 3)}</div>
+  ),
   CartesianGrid: () => <div />,
   LineChart: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   Line: ({ dataKey }: { dataKey: string }) => <div data-testid={`line-${dataKey}`} />,
@@ -180,6 +186,43 @@ describe('LearningReport page', () => {
     expect(screen.queryByText('暂无热力图数据')).not.toBeInTheDocument()
     expect(screen.getByTestId('line-learnerAbility')).toBeInTheDocument()
     expect(screen.getByTestId('line-matchScore')).toBeInTheDocument()
+  })
+
+  it('formats match curve values with two decimal places', async () => {
+    const { default: Page } = await import('./LearningReport')
+    renderWithRouter(<Page />)
+
+    expect((await screen.findAllByTestId('y-axis-value')).some((item) => item.textContent === '33.33')).toBe(true)
+    expect(screen.getAllByTestId('tooltip-value').some((item) => item.textContent === '33.33')).toBe(true)
+  })
+
+  it('opens dimension actions and preserves context for each destination', async () => {
+    const user = userEvent.setup()
+    const { default: Page } = await import('./LearningReport')
+    function LocationProbe() {
+      const location = useLocation()
+      return <output data-testid="location">{location.pathname}{location.search}</output>
+    }
+
+    renderWithRouter(<><Page /><LocationProbe /></>)
+    await user.click(await screen.findByRole('button', { name: '打开理论基础行动选项' }))
+
+    expect(screen.getByRole('heading', { name: '理论基础' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '开始针对性练习' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '查看相关资源' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '生成学习资源' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: '开始针对性练习' }))
+    expect(screen.getByTestId('location')).toHaveTextContent('/guidance?dimension=theoretical_foundation&learnerId=1')
+
+    await user.click(screen.getByRole('button', { name: '打开理论基础行动选项' }))
+    await user.click(screen.getByRole('button', { name: '查看相关资源' }))
+    expect(screen.getByTestId('location')).toHaveTextContent('/resources?mode=list&dimension=theoretical_foundation&topic=')
+    expect(screen.getByTestId('location')).toHaveTextContent('learnerId=1')
+
+    await user.click(screen.getByRole('button', { name: '打开理论基础行动选项' }))
+    await user.click(screen.getByRole('button', { name: '生成学习资源' }))
+    expect(screen.getByTestId('location')).toHaveTextContent('/resources?mode=generate&dimension=theoretical_foundation&topic=')
   })
 
   it('offers the knowledge upload action when there is no evidence', async () => {

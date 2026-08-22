@@ -13,6 +13,7 @@ export interface ResourceSlice {
     page?: number
     pageSize?: number
     learnerId?: number
+    topic?: string
   }) => Promise<void>
   generateResources: (params: {
     learnerId: number

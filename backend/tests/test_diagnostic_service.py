@@ -88,6 +88,92 @@ def test_diagnostic_session_resumes_active_questions(db_session, sample_user, sa
     assert resumed["total_questions"] == 12
 
 
+def test_practice_replacement_does_not_supersede_diagnostic_questions(
+    db_session, sample_user, sample_learner_profile, monkeypatch
+):
+    @contextmanager
+    def shared_db_context():
+        yield db_session
+        db_session.commit()
+
+    monkeypatch.setattr(tutoring_service_module, "get_db_context", shared_db_context)
+    monkeypatch.setattr(common_service_module, "get_db_context", shared_db_context)
+    monkeypatch.setattr(
+        tutoring_service_module.LLMUtil,
+        "is_available",
+        classmethod(lambda cls: False),
+    )
+
+    payload = DiagnosticService.create_or_resume(
+        db_session, sample_user.id, sample_learner_profile.id, questions_per_dimension=2
+    )
+    diagnostic_question = next(
+        question for question in db_session.query(IssuedTutoringQuestion).filter(
+            IssuedTutoringQuestion.diagnostic_session_id == payload["session_id"],
+            IssuedTutoringQuestion.ability_dimension == "algorithm_design",
+        )
+    )
+
+    AdaptiveTutoringService = tutoring_service_module.AdaptiveTutoringService
+    AdaptiveTutoringService._persist_issued_questions(
+        sample_user.id,
+        sample_learner_profile.id,
+        [{
+            "question": "A replacement practice question?",
+            "options": ["A", "B"],
+            "correctAnswer": "A",
+            "difficulty": 3,
+        }],
+        [],
+        topic="algorithm design",
+        replace_pending=True,
+        assessment_mode="batch_practice",
+        session_id="batch-session",
+    )
+    db_session.refresh(diagnostic_question)
+
+    assert diagnostic_question.status == "issued"
+
+
+def test_superseded_diagnostic_question_from_older_sessions_can_be_answered(
+    db_session, sample_user, sample_learner_profile, monkeypatch
+):
+    @contextmanager
+    def shared_db_context():
+        yield db_session
+        db_session.commit()
+
+    monkeypatch.setattr(tutoring_service_module, "get_db_context", shared_db_context)
+    monkeypatch.setattr(common_service_module, "get_db_context", shared_db_context)
+    monkeypatch.setattr(
+        tutoring_service_module.LLMUtil,
+        "is_available",
+        classmethod(lambda cls: False),
+    )
+
+    payload = DiagnosticService.create_or_resume(
+        db_session, sample_user.id, sample_learner_profile.id, questions_per_dimension=2
+    )
+    question = db_session.query(IssuedTutoringQuestion).filter(
+        IssuedTutoringQuestion.diagnostic_session_id == payload["session_id"]
+    ).first()
+    question.status = "superseded"
+    db_session.commit()
+
+    result = DiagnosticService.submit_answer(
+        db_session,
+        sample_user.id,
+        sample_learner_profile.id,
+        payload["session_id"],
+        str(question.id),
+        question.answer_key,
+        1000,
+    )
+
+    assert result["success"] is True
+    assert question.status == "answered"
+
+
 def test_diagnostic_routes_create_resume_and_answer(
     client, sample_learner_profile, auth_headers, monkeypatch
 ):

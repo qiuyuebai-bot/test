@@ -252,6 +252,7 @@ def generate_resources_sync(
 def get_resource_list(
     learner_id: Optional[int] = Query(None, description="学习者ID"),
     resource_type: Optional[str] = Query(None, description="资源类型"),
+    topic: Optional[str] = Query(None, description="知识主题"),
     difficulty_level: Optional[int] = Query(None, description="难度等级"),
     status: Optional[str] = Query(None, description="状态"),
     page: int = Query(1, ge=1, description="页码"),
@@ -262,7 +263,7 @@ def get_resource_list(
     """
     获取资源列表（支持分页、筛选）
 
-    - 支持按学习者、类型、难度、状态筛选
+    - 支持按学习者、主题、类型、难度、状态筛选
     - 返回资源匹配度等关键指标
     """
     if not current_user.is_admin:
@@ -279,6 +280,7 @@ def get_resource_list(
         result = ResourceGenerationService.get_resource_list(
             learner_id=learner_id,
             resource_type=resource_type,
+            topic=topic,
             difficulty_level=difficulty_level,
             status=status,
             page=page,

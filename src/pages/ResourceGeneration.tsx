@@ -38,6 +38,7 @@ import { CardSkeleton } from '@/components/Skeleton'
 import { toast } from '@/components/toastStore'
 
 type ResourceType = 'guide' | 'exercise' | 'lecture'
+type ResourceViewMode = 'list' | 'generate'
 
 const resourceTypeConfig: Record<
   ResourceType,
@@ -98,6 +99,11 @@ const stageToStepIndex: Record<string, number> = {
 export default function ResourceGeneration() {
   const [searchParams] = useSearchParams()
   const requestedResourceId = Number(searchParams.get('resourceId'))
+  const requestedMode = searchParams.get('mode') as ResourceViewMode | null
+  const requestedLearnerId = Number(searchParams.get('learnerId'))
+  const requestedDimension = searchParams.get('dimension') || ''
+  const requestedTopic = searchParams.get('topic') || ''
+  const viewMode = requestedMode === 'list' || requestedMode === 'generate' ? requestedMode : null
   const { learners, currentLearner, resources, resourceLoading, resourcesTotal } = useStore(
     useShallow((s) => ({
       learners: s.learners,
@@ -123,8 +129,10 @@ export default function ResourceGeneration() {
   const [selectedResource, setSelectedResource] = useState<LearningResource | null>(null)
   const [isPreviewOpen, setIsPreviewOpen] = useState(false)
   const [loadingDetail, setLoadingDetail] = useState(false)
-  const [selectedLearnerId, setSelectedLearnerId] = useState<number | null>(null)
-  const [targetTopic, setTargetTopic] = useState('')
+  const [selectedLearnerId, setSelectedLearnerId] = useState<number | null>(
+    Number.isInteger(requestedLearnerId) && requestedLearnerId > 0 ? requestedLearnerId : null,
+  )
+  const [targetTopic, setTargetTopic] = useState(requestedTopic)
   const [selectedIndustry, setSelectedIndustry] = useState('人工智能训练')
   const [isGenerating, setIsGenerating] = useState(false)
   const [currentStepDesc, setCurrentStepDesc] = useState('')
@@ -234,7 +242,12 @@ export default function ResourceGeneration() {
       if (completeTimeoutRef.current) clearTimeout(completeTimeoutRef.current)
       completeTimeoutRef.current = setTimeout(() => {
         setIsGenerating(false)
-        void fetchResources({ page: 1, pageSize: 20 })
+        void fetchResources({
+          page: 1,
+          pageSize: 50,
+          learnerId: selectedLearnerId || undefined,
+          topic: requestedTopic || undefined,
+        })
         const completed = data as { result?: { resourceId?: number; resource_id?: number } }
         const resourceId = completed?.result?.resourceId ?? completed?.result?.resource_id
         if (resourceId) void selectResourceById(resourceId)
@@ -248,8 +261,21 @@ export default function ResourceGeneration() {
 
   useEffect(() => {
     fetchLearners({ page: 1, pageSize: 50 })
-    fetchResources({ page: 1, pageSize: 20 })
-  }, [fetchLearners, fetchResources])
+  }, [fetchLearners])
+
+  useEffect(() => {
+    if (!selectedLearnerId) return
+    void fetchResources({
+      page: 1,
+      pageSize: 50,
+      learnerId: selectedLearnerId,
+      topic: requestedTopic || undefined,
+    })
+  }, [fetchResources, requestedTopic, selectedLearnerId])
+
+  useEffect(() => {
+    if (requestedTopic) setTargetTopic(requestedTopic)
+  }, [requestedTopic])
 
   useEffect(() => {
     if (learners.length === 0) return
@@ -258,9 +284,12 @@ export default function ResourceGeneration() {
     const hasSelectedLearner = selectedLearnerId
       ? learners.some((l) => l.id === selectedLearnerId)
       : false
+    const requestedLearner = requestedLearnerId > 0
+      ? learners.find((l) => l.id === requestedLearnerId)
+      : undefined
     const nextLearner = hasSelectedLearner
       ? learners.find((l) => l.id === selectedLearnerId)
-      : learners.find((l) => l.id === currentId) || learners[0]
+      : requestedLearner || learners.find((l) => l.id === currentId) || learners[0]
 
     if (!nextLearner) return
     if (selectedLearnerId !== nextLearner.id) {
@@ -269,7 +298,7 @@ export default function ResourceGeneration() {
     if (currentLearner?.id !== nextLearner.id) {
       setCurrentLearner(nextLearner)
     }
-  }, [learners, currentLearner, selectedLearnerId, setCurrentLearner])
+  }, [learners, currentLearner, requestedLearnerId, selectedLearnerId, setCurrentLearner])
 
   useEffect(() => {
     setCurrentStepDesc(stageDescription)
@@ -520,9 +549,15 @@ export default function ResourceGeneration() {
       <div className="space-y-4 animate-fade-in">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="hero-anchor text-xl font-semibold text-text-primary">个性化资源生成</h1>
+            <h1 className="hero-anchor text-xl font-semibold text-text-primary">
+              {viewMode === 'list' ? '相关学习资源' : viewMode === 'generate' ? '生成学习资源' : '个性化资源生成'}
+            </h1>
             <p className="text-sm text-text-secondary mt-1">
-              多 Agent 协同产出学习路径指南、图文讲义、案例场景、测试题、学习路线图
+              {viewMode === 'list'
+                ? `查看${requestedTopic || requestedDimension || '当前学习者'}的已有资源`
+                : viewMode === 'generate'
+                  ? `已填入${requestedTopic || requestedDimension || '目标主题'}，确认后开始生成`
+                  : '多 Agent 协同产出学习路径指南、图文讲义、案例场景、测试题、学习路线图'}
             </p>
           </div>
           {error && (
@@ -539,6 +574,7 @@ export default function ResourceGeneration() {
         <div className="grid grid-cols-12 gap-4">
           {/* 左侧：学情参数配置 */}
           <div className="col-span-12 lg:col-span-3">
+            {viewMode !== 'list' && (
             <Card padding="md" className="space-y-5">
               <h3 className="text-sm font-semibold text-text-primary flex items-center gap-2">
                 <User className="w-4 h-4 text-text-secondary" />
@@ -692,6 +728,7 @@ export default function ResourceGeneration() {
                 </div>
               </div>
             </Card>
+            )}
 
             {/* 资源统计 */}
             <Card padding="md" className="mt-4">
@@ -727,6 +764,7 @@ export default function ResourceGeneration() {
 
           {/* 中间：生成进度 + 资源列表 */}
           <div className="col-span-12 lg:col-span-4">
+            {viewMode !== 'list' && (
             <Card padding="md">
               <h3 className="text-sm font-semibold text-text-primary mb-4 flex items-center gap-2">
                 <Brain className="w-4 h-4 text-text-secondary" />多 Agent 协同生成进度
@@ -827,6 +865,7 @@ export default function ResourceGeneration() {
                 </div>
               )}
             </Card>
+            )}
 
             {/* 资源列表 */}
             <Card padding="md" className="mt-4">
@@ -835,7 +874,12 @@ export default function ResourceGeneration() {
                   {resourceTypeConfig[activeTab].label}列表
                 </h4>
                 <button
-                  onClick={() => fetchResources({ page: 1, pageSize: 20 })}
+                  onClick={() => fetchResources({
+                    page: 1,
+                    pageSize: 50,
+                    learnerId: selectedLearnerId || undefined,
+                    topic: requestedTopic || undefined,
+                  })}
                   className="text-xs text-primary hover:text-primary/80 flex items-center gap-1"
                 >
                   <Search className="w-3 h-3" />

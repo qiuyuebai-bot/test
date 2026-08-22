@@ -148,7 +148,10 @@ class DiagnosticService:
             raise ValueError("diagnostic_question_not_found")
         if question.status == "answered":
             return {"success": True, "already_answered": True, "is_correct": None, "score": None}
-        if question.status != "issued":
+        # Older practice generation could incorrectly supersede an active
+        # diagnostic question. It remains valid because it is still bound to
+        # this active diagnostic session.
+        if question.status not in {"issued", "superseded"}:
             raise ValueError("diagnostic_question_unavailable")
 
         answers = user_answer if isinstance(user_answer, list) else str(user_answer).split(",")

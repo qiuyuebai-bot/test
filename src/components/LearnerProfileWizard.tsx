@@ -205,7 +205,14 @@ export default function LearnerProfileWizard({ isOpen, onClose, learner, onSave 
       const adjustments = Object.fromEntries(
         Object.entries(manualAdjustments).filter(([, value]) => Number.isFinite(value) && value !== 0),
       )
-      await onSave({ ...baseSaveData(), manualAbilityAdjustments: adjustments })
+      await onSave({
+        realName: formData.realName.trim(),
+        educationLevel: formData.educationLevel,
+        major: formData.major.trim(),
+        learningStyle: formData.learningStyle,
+        knowledgeBlindAreas: formData.knowledgeBlindAreas,
+        manualAbilityAdjustments: adjustments,
+      })
     } catch (err) {
       setError(err instanceof Error ? err.message : '画像保存失败，请重试')
     } finally {

@@ -587,6 +587,7 @@ class AdaptiveTutoringService(BaseService):
                     IssuedTutoringQuestion.learner_id == learner_id,
                     IssuedTutoringQuestion.topic == normalized_topic,
                     IssuedTutoringQuestion.status == "issued",
+                    IssuedTutoringQuestion.assessment_mode == assessment_mode,
                 ).update({"status": "superseded"}, synchronize_session=False)
             for question in questions:
                 content = str(question.get("question", "")).strip()

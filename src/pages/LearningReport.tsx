@@ -3,6 +3,8 @@ import { useStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
+import Button from '@/components/Button'
+import Modal from '@/components/Modal'
 import { SCORE_EXCELLENT_THRESHOLD, SCORE_GOOD_THRESHOLD } from '@/lib/constants'
 import { CHART_COLORS, CHART_TOOLTIP_PROPS } from '@/lib/chartTheme'
 import {
@@ -23,6 +25,7 @@ import {
   Circle,
   Users,
   Crosshair,
+  Sparkles,
 } from 'lucide-react'
 import EmptyState from '@/components/EmptyState'
 import ErrorState from '@/components/ErrorState'
@@ -147,6 +150,7 @@ export default function LearningReport() {
   const [abilityTrendData, setAbilityTrendData] = useState<{ week: string; score: number }[]>([])
   const [pdfExporting, setPdfExporting] = useState(false)
   const [pdfError, setPdfError] = useState<string | null>(null)
+  const [selectedHeatmapItem, setSelectedHeatmapItem] = useState<LearnerReport['blindAreaHeatmap']['data'][number] | null>(null)
   const cancelledRef = useRef(false)
 
   useEffect(() => {
@@ -275,6 +279,29 @@ export default function LearningReport() {
   const matchCurveChartData = matchCurveData.length > 0
     ? matchCurveData
     : []
+  const formatMatchValue = (value: number | string) => Number(value).toFixed(2)
+
+  const openResourceFlow = (mode: 'list' | 'generate') => {
+    if (!selectedHeatmapItem) return
+    const params = new URLSearchParams({
+      mode,
+      dimension: selectedHeatmapItem.dimensionKey,
+      topic: selectedHeatmapItem.dimension,
+      learnerId: String(learner.id),
+    })
+    setSelectedHeatmapItem(null)
+    navigate(`/resources?${params.toString()}`)
+  }
+
+  const startDimensionPractice = () => {
+    if (!selectedHeatmapItem) return
+    const params = new URLSearchParams({
+      dimension: selectedHeatmapItem.dimensionKey,
+      learnerId: String(learner.id),
+    })
+    setSelectedHeatmapItem(null)
+    navigate(`/guidance?${params.toString()}`)
+  }
 
   const displayName = learnerInfo?.name || learner?.realName || '-'
   const displayEducation = learnerInfo?.education || educationLabels[learner?.educationLevel] || learner?.educationLevel || '-'
@@ -583,8 +610,8 @@ export default function LearningReport() {
                   <LineChart data={matchCurveChartData}>
                     <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
                     <XAxis dataKey="difficulty" tick={{ fontSize: 10, fill: CHART_COLORS.text }} axisLine={false} tickLine={false} label={{ value: '难度等级', position: 'bottom', fontSize: 10, fill: CHART_COLORS.text }} />
-                    <YAxis tick={{ fontSize: 10, fill: CHART_COLORS.text }} axisLine={false} tickLine={false} domain={[30, 100]} />
-                    <Tooltip {...CHART_TOOLTIP_PROPS} />
+                    <YAxis tick={{ fontSize: 10, fill: CHART_COLORS.text }} axisLine={false} tickLine={false} domain={[30, 100]} tickFormatter={formatMatchValue} />
+                    <Tooltip {...CHART_TOOLTIP_PROPS} formatter={formatMatchValue} />
                     <Line type="monotone" dataKey="learnerAbility" stroke={CHART_COLORS.text} strokeWidth={2} strokeDasharray="6 4" dot={false} name="学习者能力" />
                     <Line type="monotone" dataKey="matchScore" stroke={CHART_COLORS.primary} strokeWidth={2.5} dot={{ fill: CHART_COLORS.primary, strokeWidth: 2, r: 4 }} name="实际匹配度" />
                   </LineChart>
@@ -614,7 +641,7 @@ export default function LearningReport() {
                 <AlertTriangle className="w-4 h-4 text-warning" />
                 <h3 className="text-sm font-semibold text-text-primary">知识盲区热力定位</h3>
               </div>
-              <p className="text-xs text-text-tertiary mt-1">点击色块可快速跳转学习资源</p>
+              <p className="text-xs text-text-tertiary mt-1">点击维度查看练习与资源选项</p>
             </div>
             <div className="p-4">
               {heatmapData.length > 0 ? (
@@ -626,7 +653,8 @@ export default function LearningReport() {
                         key={item.dimension}
                         className="relative p-3 rounded-xl transition-all hover:scale-105 hover:shadow-lift cursor-pointer group"
                         style={{ backgroundColor: `${color}15`, border: `1px solid ${color}30` }}
-                        onClick={() => navigate('/resources')}
+                        onClick={() => setSelectedHeatmapItem(item)}
+                        aria-label={`打开${item.dimension}行动选项`}
                         title={item.description}
                       >
                         <div className="flex flex-col items-center gap-1">
@@ -876,6 +904,51 @@ export default function LearningReport() {
           </div>
         )}
       </Card>
+
+      <Modal
+        isOpen={Boolean(selectedHeatmapItem)}
+        onClose={() => setSelectedHeatmapItem(null)}
+        maxWidth="max-w-md"
+        header={selectedHeatmapItem ? (
+          <div>
+            <p className="text-xs font-medium text-primary">知识盲区行动</p>
+            <h2 className="mt-1 text-lg font-semibold text-text-primary">{selectedHeatmapItem.dimension}</h2>
+          </div>
+        ) : undefined}
+      >
+        {selectedHeatmapItem && (
+          <div className="space-y-5 p-6">
+            <div className="rounded-lg border border-border bg-bg-secondary/40 p-4">
+              <div className="flex items-center justify-between gap-3">
+                <span className="text-sm text-text-secondary">当前能力评分</span>
+                <span className="text-2xl font-semibold text-text-primary">{selectedHeatmapItem.score.toFixed(0)}</span>
+              </div>
+              <p className="mt-2 text-sm leading-relaxed text-text-secondary">{selectedHeatmapItem.description}</p>
+              <div className="mt-3">
+                <Badge variant={selectedHeatmapItem.isBlind ? 'error' : 'warning'} size="sm">
+                  {selectedHeatmapItem.isBlind ? '盲区' : selectedHeatmapItem.severityLabel}
+                </Badge>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Button className="w-full justify-center" onClick={startDimensionPractice}>
+                <Play className="h-4 w-4" />
+                开始针对性练习
+              </Button>
+              <Button variant="outline" className="w-full justify-center" onClick={() => openResourceFlow('list')}>
+                <BookOpen className="h-4 w-4" />
+                查看相关资源
+              </Button>
+              <Button variant="outline" className="w-full justify-center" onClick={() => openResourceFlow('generate')}>
+                <Sparkles className="h-4 w-4" />
+                生成学习资源
+              </Button>
+            </div>
+            <p className="text-center text-xs text-text-tertiary">生成资源前会先填好该维度主题，不会自动提交生成。</p>
+          </div>
+        )}
+      </Modal>
     </div>
   )
 }

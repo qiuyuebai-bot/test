@@ -6,7 +6,7 @@ import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy.orm import Session
 
-from app.models import IssuedTutoringQuestion, User, LearnerProfile, KnowledgeDoc, AnswerRecord
+from app.models import IssuedTutoringQuestion, User, LearnerProfile, KnowledgeDoc, AnswerRecord, LearningResource
 from app.services import tutoring_service as tutoring_service_module
 
 
@@ -312,6 +312,42 @@ class TestCoreRoutes:
         assert response.status_code == 200
         data = response.json()
         assert data["code"] == 200
+
+    def test_get_resources_filters_by_topic(
+        self,
+        client: TestClient,
+        db_session: Session,
+        auth_headers: dict,
+        sample_learner_profile: LearnerProfile,
+    ):
+        db_session.add_all([
+            LearningResource(
+                learner_id=sample_learner_profile.id,
+                title="算法设计指南",
+                resource_type="guide",
+                knowledge_topic="算法设计",
+                content="# 算法设计",
+                status="ready",
+            ),
+            LearningResource(
+                learner_id=sample_learner_profile.id,
+                title="数据分析指南",
+                resource_type="guide",
+                knowledge_topic="数据分析",
+                content="# 数据分析",
+                status="ready",
+            ),
+        ])
+        db_session.commit()
+
+        response = client.get(
+            f"/api/v1/resources?learner_id={sample_learner_profile.id}&topic=算法设计",
+            headers=auth_headers,
+        )
+
+        assert response.status_code == 200
+        items = response.json()["data"]["items"]
+        assert [item["knowledge_topic"] for item in items] == ["算法设计"]
 
     def test_get_report(self, client: TestClient, sample_learner_profile: LearnerProfile, auth_headers: dict):
         """测试获取学情报告"""

@@ -296,6 +296,7 @@ class ResourceGenerationService(BaseService):
         cls,
         learner_id: Optional[int] = None,
         resource_type: Optional[str] = None,
+        topic: Optional[str] = None,
         difficulty_level: Optional[int] = None,
         status: Optional[str] = None,
         page: int = 1,
@@ -309,6 +310,8 @@ class ResourceGenerationService(BaseService):
                 query = query.filter(LearningResource.learner_id == learner_id)
             if resource_type:
                 query = query.filter(LearningResource.resource_type == resource_type)
+            if topic and topic.strip():
+                query = query.filter(LearningResource.knowledge_topic.ilike(f"%{topic.strip()}%"))
             if difficulty_level:
                 query = query.filter(LearningResource.difficulty_level == difficulty_level)
             if status:

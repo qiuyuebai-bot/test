@@ -95,7 +95,7 @@ export const coreApi = {
     return http.get(`/tasks/${taskId}/status`)
   },
 
-  getResourceList(params?: PaginationParams & { learnerId?: number; resourceType?: string; difficultyLevel?: number; status?: string }): Promise<PagedData<LearningResource>> {
+  getResourceList(params?: PaginationParams & { learnerId?: number; resourceType?: string; difficultyLevel?: number; status?: string; topic?: string }): Promise<PagedData<LearningResource>> {
     return http.get<PagedData<LearningResource>>('/resources', params as Record<string, string | number | boolean | undefined>)
   },
 

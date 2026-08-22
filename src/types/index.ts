@@ -320,6 +320,7 @@ export interface LearningResource {
   generationTime: string
   metaData?: Record<string, unknown>
   difficultyLevel?: number
+  knowledgeTopic?: string
   targetTopic?: string
   content?: string
   contentJson?: Record<string, unknown>
