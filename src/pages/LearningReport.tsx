@@ -95,6 +95,10 @@ function formatTestDate(isoString: string | null): string {
   }
 }
 
+function isFiniteMatchScore(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value)
+}
+
 const educationLabels: Record<string, string> = {
   high_school: '高中',
   highschool: '高中',
@@ -252,10 +256,10 @@ export default function LearningReport() {
   const stats = {
     knowledgeCoverage: learnerMetricResults
       ? (metricReady(learnerKnowledgeMetric) ? learnerKnowledgeMetric?.value ?? null : null)
-      : coreMetrics?.knowledgeCoverageRate ?? 0,
+      : coreMetrics?.knowledgeCoverageRate ?? null,
     resourceMatch: learnerMetricResults
       ? (metricReady(learnerResourceMatchMetric) ? learnerResourceMatchMetric?.value ?? null : null)
-      : coreMetrics?.resourceMatchAccuracy ?? 0,
+      : coreMetrics?.resourceMatchAccuracy ?? null,
     hallucinationRate: systemHallucinationRate,
     totalResources: statistics?.totalResources ?? 0,
     completedTasks: Math.max(0, report?.learningPathTopology.currentStep ?? 0),
@@ -263,10 +267,10 @@ export default function LearningReport() {
   }
   const knowledgeCoverageDisplay = learnerMetricResults
     ? formatMetricValue(learnerKnowledgeMetric, metricStatusLabel(learnerKnowledgeMetric))
-    : `${(stats.knowledgeCoverage ?? 0).toFixed(1)}%`
+    : stats.knowledgeCoverage === null ? '暂无数据' : `${stats.knowledgeCoverage.toFixed(1)}%`
   const resourceMatchDisplay = learnerMetricResults
     ? formatMetricValue(learnerResourceMatchMetric, metricStatusLabel(learnerResourceMatchMetric))
-    : `${(stats.resourceMatch ?? 0).toFixed(1)}%`
+    : stats.resourceMatch === null ? '暂无数据' : `${stats.resourceMatch.toFixed(1)}%`
   const resourceEffectivenessDisplay = learnerMetricResults
     ? formatMetricValue(learnerEffectivenessMetric, metricStatusLabel(learnerEffectivenessMetric))
     : '暂无数据'
@@ -279,9 +283,20 @@ export default function LearningReport() {
   const matchCurveChartData = matchCurveData.length > 0
     ? matchCurveData
     : []
+  const scoredMatchCurveData = matchCurveChartData.filter((item) => isFiniteMatchScore(item.matchScore))
+  const pendingMatchCurveCount = matchCurveChartData.length - scoredMatchCurveData.length
+  const matchCurveMode = scoredMatchCurveData.length === 0
+    ? 'pending'
+    : scoredMatchCurveData.length === 1
+      ? 'single'
+      : 'trend'
   const formatMatchValue = (value: unknown) => {
-    if (typeof value !== 'number' && typeof value !== 'string') return '-'
-    return Number(value).toFixed(2)
+    const numericValue = typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim() !== ''
+        ? Number(value)
+        : Number.NaN
+    return Number.isFinite(numericValue) ? numericValue.toFixed(2) : '-'
   }
 
   const openResourceFlow = (mode: 'list' | 'generate') => {
@@ -608,33 +623,65 @@ export default function LearningReport() {
               <p className="text-xs text-text-tertiary mt-1">学习者能力与资源难度匹配度分析</p>
             </div>
             <div className="p-4 h-[220px]">
-              {matchCurveChartData.length > 0 ? (
+              {matchCurveMode === 'trend' ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <LineChart data={matchCurveChartData}>
+                  <LineChart data={scoredMatchCurveData}>
                     <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} vertical={false} />
                     <XAxis dataKey="difficulty" tick={{ fontSize: 10, fill: CHART_COLORS.text }} axisLine={false} tickLine={false} label={{ value: '难度等级', position: 'bottom', fontSize: 10, fill: CHART_COLORS.text }} />
-                    <YAxis tick={{ fontSize: 10, fill: CHART_COLORS.text }} axisLine={false} tickLine={false} domain={[30, 100]} tickFormatter={formatMatchValue} />
+                    <YAxis tick={{ fontSize: 10, fill: CHART_COLORS.text }} axisLine={false} tickLine={false} domain={[0, 100]} tickFormatter={formatMatchValue} />
                     <Tooltip {...CHART_TOOLTIP_PROPS} formatter={formatMatchValue} />
                     <Line type="monotone" dataKey="learnerAbility" stroke={CHART_COLORS.text} strokeWidth={2} strokeDasharray="6 4" dot={false} name="学习者能力" />
                     <Line type="monotone" dataKey="matchScore" stroke={CHART_COLORS.primary} strokeWidth={2.5} dot={{ fill: CHART_COLORS.primary, strokeWidth: 2, r: 4 }} name="实际匹配度" />
                   </LineChart>
                 </ResponsiveContainer>
+              ) : matchCurveMode === 'single' ? (
+                <div data-testid="match-curve-single" className="h-full flex flex-col items-center justify-center text-center">
+                  <span className="text-xs text-text-tertiary">当前资源匹配度</span>
+                  <span className="mt-1 text-3xl font-semibold text-primary">
+                    {formatMatchValue(scoredMatchCurveData[0].matchScore)}
+                  </span>
+                  <span className="mt-2 text-xs text-text-secondary">
+                    难度 {scoredMatchCurveData[0].difficulty} · 学习者能力 {formatMatchValue(scoredMatchCurveData[0].learnerAbility)}
+                  </span>
+                  {pendingMatchCurveCount > 0 && (
+                    <span className="mt-2 text-xs text-text-tertiary">
+                      另有 {pendingMatchCurveCount} 条资源待计算
+                    </span>
+                  )}
+                </div>
               ) : (
-                <div className="h-full flex items-center justify-center">
-                  <EmptyState type="default" title="暂无匹配数据" description="完成答题后生成匹配曲线" />
+                <div data-testid="match-curve-pending" className="h-full flex flex-col items-center justify-center text-center px-6">
+                  <Zap className="w-8 h-8 text-text-tertiary mb-3" />
+                  <p className="text-sm font-medium text-text-primary">
+                    {matchCurveChartData.length > 0 ? '匹配度待计算' : '暂无匹配数据'}
+                  </p>
+                  <p className="mt-1 text-xs leading-relaxed text-text-tertiary">
+                    {matchCurveChartData.length > 0
+                      ? '匹配度完成计算后显示趋势'
+                      : '完成答题后生成匹配曲线'}
+                  </p>
                 </div>
               )}
             </div>
-            <div className="px-4 pb-4 flex items-center gap-4">
-              <div className="flex items-center gap-1.5">
-                <div className="w-6 h-0.5 bg-border" style={{ backgroundImage: 'repeating-linear-gradient(90deg, var(--color-border) 0, var(--color-border) 6px, transparent 6px, transparent 10px)' }} />
-                <span className="text-xs text-text-tertiary">推荐匹配</span>
+            {matchCurveMode === 'trend' && (
+              <div className="px-4 pb-4">
+                {pendingMatchCurveCount > 0 && (
+                  <p className="mb-3 text-xs text-text-tertiary">
+                    另有 {pendingMatchCurveCount} 条资源待计算
+                  </p>
+                )}
+                <div className="flex items-center gap-4">
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-6 h-0.5 bg-border" style={{ backgroundImage: 'repeating-linear-gradient(90deg, var(--color-border) 0, var(--color-border) 6px, transparent 6px, transparent 10px)' }} />
+                    <span className="text-xs text-text-tertiary">推荐匹配</span>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <div className="w-3 h-3 rounded-full bg-primary" />
+                    <span className="text-xs text-text-tertiary">实际匹配</span>
+                  </div>
+                </div>
               </div>
-              <div className="flex items-center gap-1.5">
-                <div className="w-3 h-3 rounded-full bg-primary" />
-                <span className="text-xs text-text-tertiary">实际匹配</span>
-              </div>
-            </div>
+            )}
           </Card>
 
           {/* 知识盲区热力图 */}

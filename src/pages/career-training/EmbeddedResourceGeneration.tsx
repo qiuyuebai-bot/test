@@ -37,6 +37,12 @@ const STAGE_LABEL: Record<string, string> = {
   task_failed: '失败',
 }
 
+function formatMatchScore(value: number | null | undefined): string | null {
+  if (value == null || !Number.isFinite(value)) return null
+  const normalized = value >= 0 && value <= 1 ? value * 100 : value
+  return `${normalized.toFixed(2)}%`
+}
+
 export default function EmbeddedResourceGeneration({ position, learnerId }: Props) {
   const trainingContext = useStore(useShallow((state) => state.activeTrainingContext))
   const [topic, setTopic] = useState('')
@@ -133,6 +139,7 @@ export default function EmbeddedResourceGeneration({ position, learnerId }: Prop
   }
 
   const currentStageLabel = sse.currentStage ? (STAGE_LABEL[sse.currentStage] ?? sse.currentStage) : null
+  const selectedMatchScore = formatMatchScore(selectedResource?.matchScore)
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
@@ -218,8 +225,8 @@ export default function EmbeddedResourceGeneration({ position, learnerId }: Prop
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-medium text-text-primary">{selectedResource.title}</h3>
-                {selectedResource.matchScore != null && (
-                  <Badge variant="success">匹配度 {selectedResource.matchScore}</Badge>
+                {selectedMatchScore && (
+                  <Badge variant="success">匹配度 {selectedMatchScore}</Badge>
                 )}
               </div>
               <Suspense fallback={<LoadingState />}>

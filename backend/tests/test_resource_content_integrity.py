@@ -242,6 +242,31 @@ def test_task_repository_marks_missing_match_score_as_pending(
     assert resource.content_json["match_score_status"] == "pending"
 
 
+def test_resource_display_and_export_hide_historical_placeholder_values(
+    db_session,
+    sample_learner_profile,
+    resource_persistence_context,
+):
+    resource = LearningResource(
+        learner_id=sample_learner_profile.id,
+        title="None - 精通级实操指南",
+        resource_type="guide",
+        knowledge_topic="反向传播",
+        difficulty_level=4,
+        content="# Guide",
+        status="ready",
+        match_score=None,
+    )
+    db_session.add(resource)
+    db_session.commit()
+
+    exported = ResourceGenerationService.export_resource(resource.id)
+
+    assert "None - 精通级实操指南" not in exported
+    assert "反向传播 - 精通级实操指南" in exported
+    assert "匹配度: 待计算" in exported
+
+
 def test_sync_resource_save_rejects_mock_payload_before_persisting(
     db_session,
     sample_learner_profile,

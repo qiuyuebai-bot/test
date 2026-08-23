@@ -17,6 +17,7 @@ from app.models import (
 from app.services.common import (
     BaseService,
     LearnerServiceHelper,
+    ResourceServiceHelper,
 )
 from app.services.path_planner import PathPlanner
 from app.services.metric_service import MetricService
@@ -171,7 +172,7 @@ class ReportService(BaseService):
                 "match_score": match_score,
                 "learner_ability": avg_ability,
                 "resource_id": r.id,
-                "title": r.title,
+                "title": ResourceServiceHelper.safe_resource_title(r),
             })
         
         return {
@@ -208,7 +209,7 @@ class ReportService(BaseService):
                 resources_by_diff[diff] = []
             resources_by_diff[diff].append({
                 "resource_id": r.id,
-                "title": r.title,
+                "title": ResourceServiceHelper.safe_resource_title(r),
                 "type": r.resource_type,
                 "match_score": r.match_score,
             })
@@ -321,7 +322,7 @@ class ReportService(BaseService):
                     LearningResource.match_score.isnot(None),
                 )
                 .scalar()
-            ) or 0
+            )
 
             # 知识点覆盖率：substring 匹配无法纯 SQL，仅取 content 列降低内存占用
             if blind_areas:
@@ -353,7 +354,7 @@ class ReportService(BaseService):
                 .count()
             )
             answer_accuracy = (
-                correct_answers / total_answers * 100 if total_answers > 0 else 0
+                correct_answers / total_answers * 100 if total_answers > 0 else None
             )
 
             standard_metrics = MetricService.calculate_metrics(
@@ -363,9 +364,15 @@ class ReportService(BaseService):
             )
 
         return {
-            "resource_match_accuracy": round(resource_match_accuracy, 2),
+            "resource_match_accuracy": (
+                round(resource_match_accuracy, 2)
+                if resource_match_accuracy is not None
+                else None
+            ),
             "knowledge_coverage_rate": round(knowledge_coverage_rate, 2),
-            "answer_accuracy": round(answer_accuracy, 2),
+            "answer_accuracy": (
+                round(answer_accuracy, 2) if answer_accuracy is not None else None
+            ),
             # Standard results are the source of truth for new consumers. The
             # legacy scalar fields stay available for existing PDF/report code.
             "metrics": standard_metrics,

@@ -16,8 +16,10 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.database import get_db_context
 from app.models import AgentTask, DebateRecord, LearningResource, LearnerProfile
+from app.services.common import ResourceServiceHelper
 from app.utils.resource_content import (
     normalize_resource_content,
+    record_resource_quality_event,
     validate_match_score,
     validate_resource_title,
 )
@@ -320,6 +322,7 @@ class TaskRepository:
             )
             if match_score is None:
                 content_json["match_score_status"] = "pending"
+                record_resource_quality_event("match_score_pending", "missing")
             resource = db.query(LearningResource).filter(
                 LearningResource.generation_task_id == task_id
             ).first()
@@ -436,7 +439,7 @@ class TaskRepository:
                 return None
             return {
                 "id": resource.id,
-                "title": resource.title,
+                "title": ResourceServiceHelper.safe_resource_title(resource),
                 "resource_type": resource.resource_type,
                 "knowledge_topic": resource.knowledge_topic or topic,
                 "difficulty_level": resource.difficulty_level,
@@ -476,6 +479,7 @@ class TaskRepository:
         generation_result["match_score"] = validate_match_score(generation_result["match_score"])
         if generation_result["match_score"] is None:
             generation_result["content_json"]["match_score_status"] = "pending"
+            record_resource_quality_event("match_score_pending", "missing")
         generation_result["content"] = normalize_resource_content(
             generation_result["content"]
         )

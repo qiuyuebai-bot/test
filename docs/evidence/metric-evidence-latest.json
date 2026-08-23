@@ -1,0 +1,392 @@
+{
+  "report_version": "evidence-report-v2",
+  "generated_at": "2026-08-23T13:53:48.592869+00:00",
+  "git_revision": "bcf9df66c0935e4cb069204416716c737b871fd8",
+  "working_tree_dirty": true,
+  "report_kind": "development_validation",
+  "acceptance_eligible": false,
+  "model": {
+    "provider": "configured_server_side_provider",
+    "model_name": "redacted_in_report"
+  },
+  "knowledge_base": {
+    "version": "faa24e4b0bc1e821",
+    "slice_count": 3,
+    "indexed_slice_count": 3
+  },
+  "formal_evidence_policy": {
+    "minimum_sample_size": 10,
+    "target_percent": 85.0,
+    "status_values": [
+      "passed",
+      "failed",
+      "insufficient_evidence"
+    ]
+  },
+  "target_thresholds": {
+    "hallucination_rate_percent": {
+      "operator": "<",
+      "target": 5
+    },
+    "adaptation_accuracy_percent": {
+      "operator": ">=",
+      "target": 85
+    },
+    "resource_match_score_percent": {
+      "operator": ">=",
+      "target": 85.0
+    },
+    "resource_match_effectiveness_percent": {
+      "operator": ">=",
+      "target": 85.0
+    },
+    "answer_accuracy_percent": {
+      "operator": ">=",
+      "target": 85.0
+    },
+    "generated_content_coverage_percent": {
+      "operator": ">=",
+      "target": 90
+    }
+  },
+  "metrics": [
+    {
+      "metric_id": "hallucination_rate",
+      "display_name": "幻觉率",
+      "scope": "global",
+      "scope_id": null,
+      "value": 0.0,
+      "unit": "%",
+      "status": "ready",
+      "numerator": 0,
+      "denominator": 5,
+      "sample_count": 5,
+      "minimum_sample_size": 5,
+      "formula": "confirmed hallucination reviews / completed evidence reviews",
+      "source": [
+        "debate_records.is_hallucination",
+        "debate_records.resolution_status"
+      ],
+      "calculated_at": "2026-08-23T13:53:48.288418",
+      "message": null,
+      "metadata": {
+        "total_checks": 14,
+        "evaluated_checks": 5,
+        "pending_checks": 8,
+        "confirmed_hallucinations": 0,
+        "evidence_gaps": 9,
+        "pass_rate": 100.0
+      }
+    },
+    {
+      "metric_id": "resource_match_score",
+      "display_name": "资源匹配分",
+      "scope": "global",
+      "scope_id": null,
+      "value": 73.14,
+      "unit": "%",
+      "status": "ready",
+      "numerator": 512.0,
+      "denominator": 7,
+      "sample_count": 7,
+      "minimum_sample_size": 1,
+      "formula": "average generation-time match score across generated resources",
+      "source": [
+        "learning_resources.match_score"
+      ],
+      "calculated_at": "2026-08-23T13:53:48.288418",
+      "message": null,
+      "metadata": null
+    },
+    {
+      "metric_id": "resource_match_effectiveness",
+      "display_name": "资源匹配效果",
+      "scope": "global",
+      "scope_id": null,
+      "value": 20.0,
+      "unit": "%",
+      "status": "ready",
+      "numerator": 1,
+      "denominator": 5,
+      "sample_count": 5,
+      "minimum_sample_size": 3,
+      "formula": "correct answers after a resource recommendation / completed answers linked to a resource",
+      "source": [
+        "answer_records.result",
+        "answer_records.next_resource_id"
+      ],
+      "calculated_at": "2026-08-23T13:53:48.288418",
+      "message": null,
+      "metadata": null
+    },
+    {
+      "metric_id": "answer_accuracy",
+      "display_name": "答题正确率",
+      "scope": "global",
+      "scope_id": null,
+      "value": 24.24,
+      "unit": "%",
+      "status": "ready",
+      "numerator": 8,
+      "denominator": 33,
+      "sample_count": 33,
+      "minimum_sample_size": 1,
+      "formula": "correct answers / completed answers",
+      "source": [
+        "answer_records.result"
+      ],
+      "calculated_at": "2026-08-23T13:53:48.288418",
+      "message": null,
+      "metadata": null
+    },
+    {
+      "metric_id": "knowledge_index_coverage",
+      "display_name": "知识索引覆盖率",
+      "scope": "global",
+      "scope_id": null,
+      "value": 100.0,
+      "unit": "%",
+      "status": "ready",
+      "numerator": 3,
+      "denominator": 3,
+      "sample_count": 3,
+      "minimum_sample_size": 1,
+      "formula": "indexed knowledge slices / total knowledge slices",
+      "source": [
+        "knowledge_slices.is_indexed"
+      ],
+      "calculated_at": "2026-08-23T13:53:48.288418",
+      "message": null,
+      "metadata": {
+        "coverage_type": "index",
+        "definition": "indexed knowledge slices / total knowledge slices",
+        "warning": "This is vector-index coverage, not generated-content knowledge-point coverage"
+      }
+    },
+    {
+      "metric_id": "generated_content_coverage",
+      "display_name": "生成内容覆盖率",
+      "scope": "global",
+      "scope_id": null,
+      "value": 0.0,
+      "unit": "%",
+      "status": "ready",
+      "numerator": 0,
+      "denominator": 5,
+      "sample_count": 5,
+      "minimum_sample_size": 1,
+      "formula": "source slices referenced by ready resources and represented in resource content",
+      "source": [
+        "learning_resources.source_slice_ids",
+        "learning_resources.content",
+        "knowledge_slices.keywords"
+      ],
+      "calculated_at": "2026-08-23T13:53:48.288418",
+      "message": null,
+      "metadata": {
+        "coverage_type": "generated_content",
+        "resources_evaluated": 5,
+        "source_slice_count": 1,
+        "definition": "source slices referenced by ready resources and represented in resource content"
+      }
+    }
+  ],
+  "evidence": {
+    "claims": {
+      "resource_match_score": {
+        "metric_id": "resource_match_score",
+        "display_name": "资源匹配分",
+        "value": 73.14,
+        "target": 85.0,
+        "operator": ">=",
+        "numerator": 512.0,
+        "denominator": 7,
+        "sample_count": 7,
+        "minimum_sample_size": 10,
+        "status": "insufficient_evidence",
+        "reason": "有效样本 7 条，正式验收至少需要 10 条",
+        "metric_status": "ready"
+      },
+      "resource_match_effectiveness": {
+        "metric_id": "resource_match_effectiveness",
+        "display_name": "资源匹配效果",
+        "value": 20.0,
+        "target": 85.0,
+        "operator": ">=",
+        "numerator": 1,
+        "denominator": 5,
+        "sample_count": 5,
+        "minimum_sample_size": 10,
+        "status": "insufficient_evidence",
+        "reason": "有效样本 5 条，正式验收至少需要 10 条",
+        "metric_status": "ready"
+      },
+      "answer_accuracy": {
+        "metric_id": "answer_accuracy",
+        "display_name": "答题正确率",
+        "value": 24.24,
+        "target": 85.0,
+        "operator": ">=",
+        "numerator": 8,
+        "denominator": 33,
+        "sample_count": 33,
+        "minimum_sample_size": 10,
+        "status": "failed",
+        "reason": "指标值 24.24% 未达到目标 85.00%",
+        "metric_status": "ready"
+      }
+    },
+    "formal_claim_status": "failed",
+    "hallucination": {
+      "numerator": 0,
+      "denominator": 5,
+      "sample_count": 5,
+      "status": "ready"
+    },
+    "adaptation": {
+      "resource_match_score": {
+        "metric_id": "resource_match_score",
+        "display_name": "资源匹配分",
+        "scope": "global",
+        "scope_id": null,
+        "value": 73.14,
+        "unit": "%",
+        "status": "ready",
+        "numerator": 512.0,
+        "denominator": 7,
+        "sample_count": 7,
+        "minimum_sample_size": 1,
+        "formula": "average generation-time match score across generated resources",
+        "source": [
+          "learning_resources.match_score"
+        ],
+        "calculated_at": "2026-08-23T13:53:48.288418",
+        "message": null,
+        "metadata": {
+          "source_filter": [
+            "agent_generation_pipeline",
+            "backfill_match_scores"
+          ],
+          "resources_evaluated": 7
+        }
+      },
+      "resource_match_effectiveness": {
+        "metric_id": "resource_match_effectiveness",
+        "display_name": "资源匹配效果",
+        "scope": "global",
+        "scope_id": null,
+        "value": 20.0,
+        "unit": "%",
+        "status": "ready",
+        "numerator": 1,
+        "denominator": 5,
+        "sample_count": 5,
+        "minimum_sample_size": 3,
+        "formula": "correct answers after a resource recommendation / completed answers linked to a resource",
+        "source": [
+          "answer_records.result",
+          "answer_records.next_resource_id"
+        ],
+        "calculated_at": "2026-08-23T13:53:48.288418",
+        "message": null,
+        "metadata": null
+      },
+      "resources_total": 7,
+      "resources_post_fix": 7,
+      "post_fix_nonzero_scores": 7,
+      "legacy_rows_excluded_from_post_fix_claim": 0,
+      "claim_status": "insufficient_evidence",
+      "minimum_post_fix_samples_for_competition_claim": 10,
+      "claims": {
+        "resource_match_score": {
+          "metric_id": "resource_match_score",
+          "display_name": "资源匹配分",
+          "value": 73.14,
+          "target": 85.0,
+          "operator": ">=",
+          "numerator": 512.0,
+          "denominator": 7,
+          "sample_count": 7,
+          "minimum_sample_size": 10,
+          "status": "insufficient_evidence",
+          "reason": "有效样本 7 条，正式验收至少需要 10 条",
+          "metric_status": "ready"
+        },
+        "resource_match_effectiveness": {
+          "metric_id": "resource_match_effectiveness",
+          "display_name": "资源匹配效果",
+          "value": 20.0,
+          "target": 85.0,
+          "operator": ">=",
+          "numerator": 1,
+          "denominator": 5,
+          "sample_count": 5,
+          "minimum_sample_size": 10,
+          "status": "insufficient_evidence",
+          "reason": "有效样本 5 条，正式验收至少需要 10 条",
+          "metric_status": "ready"
+        }
+      }
+    },
+    "coverage": {
+      "index_coverage": {
+        "metric_id": "knowledge_index_coverage",
+        "display_name": "知识索引覆盖率",
+        "scope": "global",
+        "scope_id": null,
+        "value": 100.0,
+        "unit": "%",
+        "status": "ready",
+        "numerator": 3,
+        "denominator": 3,
+        "sample_count": 3,
+        "minimum_sample_size": 1,
+        "formula": "indexed knowledge slices / total knowledge slices",
+        "source": [
+          "knowledge_slices.is_indexed"
+        ],
+        "calculated_at": "2026-08-23T13:53:48.288418",
+        "message": null,
+        "metadata": {
+          "coverage_type": "index",
+          "definition": "indexed knowledge slices / total knowledge slices",
+          "warning": "This is vector-index coverage, not generated-content knowledge-point coverage"
+        }
+      },
+      "generated_content_coverage": {
+        "metric_id": "generated_content_coverage",
+        "display_name": "生成内容覆盖率",
+        "scope": "global",
+        "scope_id": null,
+        "value": 0.0,
+        "unit": "%",
+        "status": "ready",
+        "numerator": 0,
+        "denominator": 5,
+        "sample_count": 5,
+        "minimum_sample_size": 1,
+        "formula": "source slices referenced by ready resources and represented in resource content",
+        "source": [
+          "learning_resources.source_slice_ids",
+          "learning_resources.content",
+          "knowledge_slices.keywords"
+        ],
+        "calculated_at": "2026-08-23T13:53:48.288418",
+        "message": null,
+        "metadata": {
+          "coverage_type": "generated_content",
+          "resources_evaluated": 5,
+          "source_slice_count": 1,
+          "definition": "source slices referenced by ready resources and represented in resource content"
+        }
+      },
+      "index_and_content_are_reported_separately": true
+    },
+    "expert_review": {
+      "domain": "industrial_robotics",
+      "annotation_count": 0,
+      "status": "insufficient_evidence",
+      "message": "需要行业专家标注后才能证明领域规范与岗位需求符合度。"
+    }
+  }
+}

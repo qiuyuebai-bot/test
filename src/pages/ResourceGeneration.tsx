@@ -189,6 +189,7 @@ export default function ResourceGeneration() {
       const listItem = resources.find((r) => r.id === resourceId)
       try {
         const detail = await coreApi.getResourceDetail(resourceId)
+        const effectiveMatchScore = detail.matchScore ?? listItem?.matchScore
         const normalized = {
           ...(listItem || detail),
           ...detail,
@@ -200,7 +201,13 @@ export default function ResourceGeneration() {
           formatType: detail.formatType ?? listItem?.formatType,
           qualityScore:
             detail.qualityScore ??
-            Math.round((detail.matchScore || listItem?.matchScore || 0) * 100),
+            (effectiveMatchScore == null
+              ? null
+              : Math.round(
+                  effectiveMatchScore >= 0 && effectiveMatchScore <= 1
+                    ? effectiveMatchScore * 100
+                    : effectiveMatchScore,
+                )),
           hallucinationDetected:
             detail.hallucinationDetected ??
             detail.hasHallucination ??

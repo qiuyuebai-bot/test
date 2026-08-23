@@ -310,7 +310,7 @@ export interface LearningResource {
   contentPath?: string
   contentType: 'pdf' | 'html' | 'video' | 'text'
   formatType?: 'md' | 'text' | 'html' | 'json'
-  qualityScore: number
+  qualityScore: number | null
   hallucinationDetected: boolean
   reviewStatus: 'pending' | 'approved' | 'rejected' | 'revised'
   versionNumber: number
@@ -454,9 +454,9 @@ export interface LearnerReportRadarItem {
 }
 
 export interface LearnerReportCoreMetrics {
-  resourceMatchAccuracy: number
-  knowledgeCoverageRate: number
-  answerAccuracy: number
+  resourceMatchAccuracy: number | null
+  knowledgeCoverageRate: number | null
+  answerAccuracy: number | null
   resourceMatchScore?: number | null
   resourceMatchEffectiveness?: number | null
   metrics?: MetricResult[]

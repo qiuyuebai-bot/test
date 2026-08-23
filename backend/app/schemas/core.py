@@ -32,7 +32,7 @@ class GeneratedResourceItem(BaseModel):
     content: str
     content_json: Dict[str, Any]
     word_count: int
-    match_score: float
+    match_score: Optional[float] = None
     saved_resource_id: Optional[int] = None
 
 
@@ -70,7 +70,7 @@ class ResourceDetailResponse(BaseModel):
     content: str
     content_json: Dict[str, Any]
     word_count: int
-    match_score: float
+    match_score: Optional[float] = None
     validation_score: float
     status: str
     view_count: int
@@ -104,7 +104,7 @@ class MatchCurveDataItem(BaseModel):
     """匹配曲线数据项"""
     name: str
     difficulty: int
-    match_score: float
+    match_score: Optional[float] = None
     learner_ability: float
     resource_id: int
     title: str
@@ -114,7 +114,7 @@ class DifficultyMatchCurveResponse(BaseModel):
     """难度匹配曲线响应"""
     labels: List[str]
     difficulty: List[int]
-    match_score: List[float]
+    match_score: List[Optional[float]]
     learner_ability: List[float]
     data: List[MatchCurveDataItem]
     learner_ability_raw: float
@@ -163,9 +163,9 @@ class AbilityRadarResponse(BaseModel):
 
 class CoreMetricsResponse(BaseModel):
     """核心指标响应"""
-    resource_match_accuracy: float
-    knowledge_coverage_rate: float
-    answer_accuracy: float
+    resource_match_accuracy: Optional[float] = None
+    knowledge_coverage_rate: Optional[float] = None
+    answer_accuracy: Optional[float] = None
 
 
 class LearnerReportResponse(BaseModel):

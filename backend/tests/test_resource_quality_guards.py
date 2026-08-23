@@ -4,6 +4,8 @@ from pydantic import ValidationError
 from app.agents.generation_agent import GenerationAgent
 from app.domains.agent.schemas import CreateAgentTaskRequest, GenerationRequest
 from app.schemas.core import GenerateResourcesRequest
+from app.services.common import ResourceServiceHelper
+from app.middleware.prometheus import resource_quality_events_total
 from app.utils.resource_content import (
     ResourceContentError,
     build_resource_title,
@@ -43,12 +45,36 @@ def test_resource_generation_requests_trim_and_require_topic(request_type):
 
 @pytest.mark.parametrize("title", ["None - 精通级实操指南", "null - 指南", "undefined - 指南", "  "])
 def test_placeholder_resource_titles_are_rejected(title):
+    before = resource_quality_events_total.get(event="title_rejected", reason="placeholder")
     with pytest.raises(ResourceContentError):
         validate_resource_title(title)
+    if "None" in title or "null" in title or "undefined" in title:
+        assert resource_quality_events_total.get(
+            event="title_rejected", reason="placeholder"
+        ) == before + 1
 
 
 def test_resource_title_builder_produces_a_valid_fallback():
     assert build_resource_title("反向传播", "guide", 4) == "反向传播 - 精通级实操指南"
+
+
+def test_safe_resource_title_does_not_count_read_time_fallbacks():
+    resource = type(
+        "Resource",
+        (),
+        {
+            "title": "None - 精通级实操指南",
+            "knowledge_topic": "反向传播",
+            "resource_type": "guide",
+            "difficulty_level": 4,
+        },
+    )()
+    before = resource_quality_events_total.get(event="title_rejected", reason="placeholder")
+
+    assert ResourceServiceHelper.safe_resource_title(resource) == "反向传播 - 精通级实操指南"
+    assert resource_quality_events_total.get(
+        event="title_rejected", reason="placeholder"
+    ) == before
 
 
 @pytest.mark.parametrize("topic", ["None", "null", "undefined", "  ", None])

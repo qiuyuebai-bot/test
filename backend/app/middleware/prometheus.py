@@ -257,6 +257,13 @@ learning_resources_total = Gauge(
 )
 registry.register(learning_resources_total)
 
+resource_quality_events_total = Counter(
+    "resource_quality_events_total",
+    "Resource quality guard events",
+    labels=("event", "reason"),
+)
+registry.register(resource_quality_events_total)
+
 
 # ===========================================
 # Prometheus 中间件

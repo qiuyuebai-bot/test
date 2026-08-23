@@ -51,7 +51,15 @@ export const createResourceSlice: StateCreator<AppState, [], [], ResourceSlice> 
         formatType:
           item.formatType ||
           (['guide', 'exercise', 'lecture'].includes(item.resourceType) ? 'md' : 'text'),
-        qualityScore: item.qualityScore ?? Math.round((item.matchScore || 0) * 100),
+        qualityScore:
+          item.qualityScore ??
+          (item.matchScore == null
+            ? null
+            : Math.round(
+                item.matchScore >= 0 && item.matchScore <= 1
+                  ? item.matchScore * 100
+                  : item.matchScore,
+              )),
         hallucinationDetected: item.hallucinationDetected ?? item.hasHallucination ?? false,
         reviewStatus: (item.reviewStatus || 'pending') as LearningResource['reviewStatus'],
         versionNumber: item.versionNumber ?? item.version ?? 1,
@@ -93,7 +101,7 @@ export const createResourceSlice: StateCreator<AppState, [], [], ResourceSlice> 
         targetLearnerId: params.learnerId,
         contentSummary: '',
         contentType: 'text',
-        qualityScore: 0,
+        qualityScore: null,
         hallucinationDetected: false,
         reviewStatus: 'pending',
         versionNumber: 1,

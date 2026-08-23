@@ -312,7 +312,12 @@ class PDFExporter:
 
     @staticmethod
     def _percent(value: Any) -> str:
-        numeric = float(value or 0)
+        if value is None or value == "":
+            return "待计算"
+        try:
+            numeric = float(value)
+        except (TypeError, ValueError):
+            return "待计算"
         if 0 <= numeric <= 1:
             numeric *= 100
         return f"{max(0, min(100, numeric)):.1f}%"

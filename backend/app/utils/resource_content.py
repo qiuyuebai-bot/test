@@ -15,6 +15,17 @@ class ResourceContentError(ValueError):
     """Raised when generated resource content is not safe Markdown text."""
 
 
+def record_resource_quality_event(event: str, reason: str) -> None:
+    """Record a quality guard event without making metrics a hard dependency."""
+    try:
+        from app.middleware.prometheus import resource_quality_events_total
+
+        resource_quality_events_total.inc(event=event, reason=reason)
+    except Exception:
+        # Observability must never change validation or persistence behavior.
+        pass
+
+
 _JSON_FENCE = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.IGNORECASE | re.DOTALL)
 _PLACEHOLDER_TITLE = re.compile(
     r"(?:^|[\s:_-])(none|null|undefined)(?=$|[\s:_-])",
@@ -62,14 +73,20 @@ def build_resource_title(topic: Any, resource_type: str, difficulty: Any) -> str
     )
 
 
-def validate_resource_title(raw_title: Any) -> str:
+def validate_resource_title(raw_title: Any, *, record_event: bool = True) -> str:
     """Reject blank or placeholder titles before they reach persistence."""
     if not isinstance(raw_title, str):
+        if record_event:
+            record_resource_quality_event("title_rejected", "invalid_type")
         raise ResourceContentError("资源标题不能为空")
     title = raw_title.strip()
     if not title:
+        if record_event:
+            record_resource_quality_event("title_rejected", "blank")
         raise ResourceContentError("资源标题不能为空")
     if _PLACEHOLDER_TITLE.search(title):
+        if record_event:
+            record_resource_quality_event("title_rejected", "placeholder")
         raise ResourceContentError("资源标题包含无效占位符")
     return title
 
@@ -81,8 +98,10 @@ def validate_match_score(raw_score: Any) -> float | None:
     try:
         score = float(raw_score)
     except (TypeError, ValueError) as exc:
+        record_resource_quality_event("match_score_rejected", "invalid_type")
         raise ResourceContentError("资源匹配度必须是数字") from exc
     if not math.isfinite(score) or not 0 <= score <= 100:
+        record_resource_quality_event("match_score_rejected", "out_of_range")
         raise ResourceContentError("资源匹配度必须在 0 到 100 之间")
     return score
 

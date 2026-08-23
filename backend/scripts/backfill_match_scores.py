@@ -159,12 +159,18 @@ def main() -> int:
                     unresolved_titles.append({
                         "resource_id": resource.id,
                         "title": resource.title,
+                        "reason": "missing_reliable_topic",
                     })
         if args.apply:
             db.commit()
         print(json.dumps({
             "apply": args.apply,
             "repair_titles": args.repair_titles,
+            "summary": {
+                "match_score_updates": len(updates),
+                "title_repairs": len(title_updates) if args.repair_titles else 0,
+                "unresolved_titles": len(unresolved_titles),
+            },
             "updates": updates,
             "title_updates": title_updates,
             "unresolved_titles": unresolved_titles,

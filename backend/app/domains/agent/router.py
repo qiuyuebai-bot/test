@@ -46,6 +46,7 @@ from app.utils.logger import LoggerUtil
 from app.utils.auth import get_current_user, CurrentUser
 from app.utils.metrics import MetricsUtil
 from app.services.metric_service import MetricService
+from app.services.common import ResourceServiceHelper
 from app.utils.resource_content import normalize_resource_topic
 
 router = APIRouter(prefix="/agent", tags=["Agent协同调度"])
@@ -792,7 +793,7 @@ def get_task_evidence(
             "initial_generation": {"content": initial_content},
             "final_generation": {
                 "content": final_content,
-                "title": resource.title if resource else None,
+                "title": ResourceServiceHelper.safe_resource_title(resource) if resource else None,
                 "resource_type": resource.resource_type if resource else None,
             },
             "revision_comparison": {

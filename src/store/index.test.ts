@@ -402,6 +402,26 @@ describe('store resource state normalization', () => {
     expect(useStore.getState().resourcesTotal).toBe(1)
   })
 
+  it('keeps an unknown match score out of the quality fallback', async () => {
+    vi.mocked(coreApi.getResourceList).mockResolvedValue({
+      items: [
+        {
+          resourceType: 'guide',
+          learnerId: 3,
+          title: 'Pending guide',
+          matchScore: null,
+        },
+      ],
+      total: 1,
+    } as never)
+    const useStore = await freshStore()
+    await useStore.getState().fetchResources({ page: 1 })
+
+    const resource = useStore.getState().resources[0]
+    expect(resource.matchScore).toBeNull()
+    expect(resource.qualityScore).toBeNull()
+  })
+
   it('generateResource returns a synthetic object with Date.now id (flagged tech debt)', async () => {
     vi.mocked(coreApi.generateResources).mockResolvedValue({ taskId: 't1' } as never)
     vi.mocked(coreApi.getResourceList).mockResolvedValue({ items: [], total: 0 } as never)

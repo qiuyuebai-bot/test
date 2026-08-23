@@ -84,8 +84,42 @@ class TestCalculateCoreMetrics:
             sample_learner_profile.id,
             blind_areas=["任意"],
         )
-        assert metrics["resource_match_accuracy"] == 0
+        assert metrics["resource_match_accuracy"] is None
         assert metrics["knowledge_coverage_rate"] == 0.0
+        assert metrics["answer_accuracy"] is None
+
+    def test_real_zero_values_are_preserved(
+        self,
+        db_session: Session,
+        sample_learner_profile: LearnerProfile,
+    ):
+        resource = LearningResource(
+            learner_id=sample_learner_profile.id,
+            title="零匹配资源",
+            resource_type="guide",
+            industry="AI",
+            difficulty_level=3,
+            content="内容",
+            match_score=0,
+            status="ready",
+        )
+        answer = AnswerRecord(
+            user_id=sample_learner_profile.user_id,
+            learner_id=sample_learner_profile.id,
+            question_type="single_choice",
+            user_answer=[1],
+            result="wrong",
+            score=0,
+        )
+        db_session.add_all([resource, answer])
+        db_session.commit()
+
+        metrics = ReportService._calculate_core_metrics(
+            sample_learner_profile.id,
+            blind_areas=["任意"],
+        )
+
+        assert metrics["resource_match_accuracy"] == 0
         assert metrics["answer_accuracy"] == 0
 
     def test_coverage_counts_each_blind_area_at_most_once_per_resource(

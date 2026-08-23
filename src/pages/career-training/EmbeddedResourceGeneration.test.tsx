@@ -90,6 +90,26 @@ describe('EmbeddedResourceGeneration', () => {
     })
   })
 
+  it('以百分比两位小数显示资源匹配度', async () => {
+    vi.mocked(coreApi.getResourceList).mockResolvedValue({
+      items: [{
+        id: 1,
+        title: '前端工程师指南',
+        resourceType: 'guide',
+        content: '# 指南',
+        matchScore: 0.755,
+      }],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+    } as never)
+
+    render(<EmbeddedResourceGeneration position={mockPosition} learnerId={10} />)
+
+    expect(await screen.findByText('匹配度 75.50%')).toBeInTheDocument()
+  })
+
   it('点击生成调用 runFullPipeline 并预填岗位与行业', async () => {
     render(<EmbeddedResourceGeneration position={mockPosition} learnerId={10} />)
     await userEvent.click(screen.getByRole('button', { name: /生成资料/ }))

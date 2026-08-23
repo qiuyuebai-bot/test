@@ -184,16 +184,96 @@ describe('LearningReport page', () => {
     expect(screen.getByText('82.5%')).toBeInTheDocument()
     expect(screen.getByText('理论基础')).toBeInTheDocument()
     expect(screen.queryByText('暂无热力图数据')).not.toBeInTheDocument()
-    expect(screen.getByTestId('line-learnerAbility')).toBeInTheDocument()
-    expect(screen.getByTestId('line-matchScore')).toBeInTheDocument()
+    expect(screen.getByTestId('match-curve-single')).toBeInTheDocument()
   })
 
   it('formats match curve values with two decimal places', async () => {
+    apiMocks.getLearnerReport.mockResolvedValue({
+      ...sampleReport,
+      difficultyMatchCurve: {
+        ...sampleReport.difficultyMatchCurve,
+        matchScore: [75.5, 80],
+        difficulty: [4, 3],
+        learnerAbility: [68, 68],
+        data: [
+          sampleReport.difficultyMatchCurve.data[0],
+          { ...sampleReport.difficultyMatchCurve.data[0], name: '资源2', difficulty: 3, matchScore: 80 },
+        ],
+      },
+    })
     const { default: Page } = await import('./LearningReport')
     renderWithRouter(<Page />)
 
     expect((await screen.findAllByTestId('y-axis-value')).some((item) => item.textContent === '33.33')).toBe(true)
     expect(screen.getAllByTestId('tooltip-value').some((item) => item.textContent === '33.33')).toBe(true)
+  })
+
+  it('renders the trend chart only when multiple scores are available', async () => {
+    apiMocks.getLearnerReport.mockResolvedValue({
+      ...sampleReport,
+      difficultyMatchCurve: {
+        ...sampleReport.difficultyMatchCurve,
+        matchScore: [75.5, 80],
+        data: [
+          sampleReport.difficultyMatchCurve.data[0],
+          { ...sampleReport.difficultyMatchCurve.data[0], name: '资源2', matchScore: 80 },
+        ],
+      },
+    })
+    const { default: Page } = await import('./LearningReport')
+    renderWithRouter(<Page />)
+
+    expect(await screen.findByTestId('line-matchScore')).toBeInTheDocument()
+    expect(screen.getByTestId('line-learnerAbility')).toBeInTheDocument()
+  })
+
+  it('does not render a zero-valued chart when every match score is pending', async () => {
+    apiMocks.getLearnerReport.mockResolvedValue({
+      ...sampleReport,
+      difficultyMatchCurve: {
+        ...sampleReport.difficultyMatchCurve,
+        matchScore: [null],
+        data: [{ ...sampleReport.difficultyMatchCurve.data[0], matchScore: null }],
+      },
+    })
+    const { default: Page } = await import('./LearningReport')
+    renderWithRouter(<Page />)
+
+    expect(await screen.findByTestId('match-curve-pending')).toBeInTheDocument()
+    expect(screen.getByText('匹配度待计算')).toBeInTheDocument()
+    expect(screen.queryByTestId('line-matchScore')).not.toBeInTheDocument()
+  })
+
+  it('shows a real zero match score as a single measured value', async () => {
+    apiMocks.getLearnerReport.mockResolvedValue({
+      ...sampleReport,
+      difficultyMatchCurve: {
+        ...sampleReport.difficultyMatchCurve,
+        matchScore: [0],
+        data: [{ ...sampleReport.difficultyMatchCurve.data[0], matchScore: 0 }],
+      },
+    })
+    const { default: Page } = await import('./LearningReport')
+    renderWithRouter(<Page />)
+
+    expect(await screen.findByTestId('match-curve-single')).toBeInTheDocument()
+    expect(screen.getByTestId('match-curve-single')).toHaveTextContent('0.00')
+    expect(screen.queryByTestId('match-curve-pending')).not.toBeInTheDocument()
+  })
+
+  it('does not turn missing legacy core metrics into zero', async () => {
+    apiMocks.getLearnerReport.mockResolvedValue({
+      ...sampleReport,
+      coreMetrics: {
+        resourceMatchAccuracy: null,
+        knowledgeCoverageRate: null,
+        answerAccuracy: null,
+      },
+    })
+    const { default: Page } = await import('./LearningReport')
+    renderWithRouter(<Page />)
+
+    expect(await screen.findAllByText('暂无数据')).toHaveLength(2)
   })
 
   it('opens dimension actions and preserves context for each destination', async () => {

@@ -20,6 +20,7 @@ from app.models import KnowledgeDoc, KnowledgeSlice, LearningResource, IndustryE
 from app.utils.text_slice import TextSliceUtil
 from app.utils.logger import LoggerUtil
 from app.domains.knowledge.parser import KnowledgeDocumentParser
+from app.services.common import ResourceServiceHelper
 from app.domains.knowledge.schemas import (
     KnowledgeDocCreate,
     KnowledgeDocUpdate,
@@ -1026,7 +1027,7 @@ class KnowledgeService:
                 "name": "学习资源",
                 "id": resource_id,
                 "type": "resource",
-                "title": resource.title,
+                "title": ResourceServiceHelper.safe_resource_title(resource),
             },
             {
                 "step": 2,
@@ -1047,7 +1048,7 @@ class KnowledgeService:
         return {
             "resource": {
                 "id": resource.id,
-                "title": resource.title,
+                "title": ResourceServiceHelper.safe_resource_title(resource),
                 "type": resource.resource_type,
             },
             "source_slices": source_slices,

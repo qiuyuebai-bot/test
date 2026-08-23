@@ -19,6 +19,7 @@ from app.services.common import BaseService, ResourceServiceHelper, MetricsServi
 from app.utils.resource_content import (
     normalize_resource_content,
     normalize_resource_topic,
+    record_resource_quality_event,
     validate_match_score,
     validate_resource_title,
 )
@@ -248,6 +249,7 @@ class ResourceGenerationService(BaseService):
         }
         if match_score is None:
             content_json["match_score_status"] = "pending"
+            record_resource_quality_event("match_score_pending", "missing")
         with get_db_context() as db:
             resource = LearningResource(
                 learner_id=learner_id,
@@ -368,12 +370,23 @@ class ResourceGenerationService(BaseService):
         resource = cls.get_resource_detail(resource_id, include_answers=include_answers)
         if not resource:
             return ""
+
+        raw_match_score = resource.get("match_score")
+        if raw_match_score is None:
+            match_score_text = "待计算"
+        else:
+            normalized_match_score = (
+                raw_match_score * 100
+                if 0 <= raw_match_score <= 1
+                else raw_match_score
+            )
+            match_score_text = f"{normalized_match_score:.2f}%"
         
         if fmt == "md":
             content = f"# {resource['title']}\n\n"
             content += f"**类型**: {resource['resource_type_name']}\n"
             content += f"**难度**: {'★' * resource['difficulty_level']}\n"
-            content += f"**匹配度**: {resource['match_score']}%\n"
+            content += f"**匹配度**: {match_score_text}\n"
             content += f"**字数**: {resource['word_count']}\n\n"
             content += "---\n\n"
             content += resource.get("content", "")
@@ -381,7 +394,7 @@ class ResourceGenerationService(BaseService):
             content = f"{resource['title']}\n"
             content += f"类型: {resource['resource_type_name']}\n"
             content += f"难度: {'★' * resource['difficulty_level']}\n"
-            content += f"匹配度: {resource['match_score']}%\n"
+            content += f"匹配度: {match_score_text}\n"
             content += "\n" + resource.get("content", "")
         
         return content

@@ -17,7 +17,7 @@ from app.models import (
 )
 from app.agents.diagnosis_agent import DiagnosisAgent
 from app.services.ai_content_service import AIContentService
-from app.services.common import BaseService
+from app.services.common import BaseService, ResourceServiceHelper
 from app.constants import ADAPTIVE_DECISION_THRESHOLD, MAX_DIFFICULTY
 from app.utils.seed_loader import load_seed_payload
 from app.services.llm_question_generator import LLMQuestionGenerator
@@ -363,7 +363,9 @@ class AdaptiveTutoringService(BaseService):
         if existing:
             return existing
 
-        normalized_topic = str(topic or resource.knowledge_topic or resource.title).strip()
+        normalized_topic = str(
+            topic or resource.knowledge_topic or ResourceServiceHelper.safe_resource_title(resource)
+        ).strip()
         db.query(IssuedTutoringQuestion).filter(
             IssuedTutoringQuestion.learner_id == learner.id,
             IssuedTutoringQuestion.topic == normalized_topic,
@@ -1211,7 +1213,7 @@ class AdaptiveTutoringService(BaseService):
             for r in resources:
                 suggested_resources.append({
                     "resource_id": r.id,
-                    "title": r.title,
+                    "title": ResourceServiceHelper.safe_resource_title(r),
                     "type": r.resource_type,
                     "match_score": r.match_score,
                 })
@@ -1370,7 +1372,7 @@ class AdaptiveTutoringService(BaseService):
             "suggested_resources": [
                 {
                     "resource_id": resource.id,
-                    "title": resource.title,
+                    "title": ResourceServiceHelper.safe_resource_title(resource),
                     "type": resource.resource_type,
                     "difficulty_level": resource.difficulty_level,
                 }
@@ -1460,7 +1462,7 @@ class AdaptiveTutoringService(BaseService):
             for r in resources:
                 challenge["suggested_resources"].append({
                     "resource_id": r.id,
-                    "title": r.title,
+                    "title": ResourceServiceHelper.safe_resource_title(r),
                     "type": r.resource_type,
                     "difficulty_level": r.difficulty_level,
                 })

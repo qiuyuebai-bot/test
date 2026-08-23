@@ -18,6 +18,7 @@ from app.models import (
     TestMetrics,
 )
 from app.utils.logger import LoggerUtil
+from app.utils.resource_content import build_resource_title, validate_resource_title
 from app.constants import MAX_DIFFICULTY
 
 T = TypeVar('T')
@@ -419,6 +420,21 @@ class ResourceServiceHelper(BaseService):
     """
     资源相关公共方法
     """
+
+    @classmethod
+    def safe_resource_title(cls, resource: LearningResource) -> str:
+        """Return a display-safe title without mutating historical rows."""
+        try:
+            return validate_resource_title(resource.title, record_event=False)
+        except ValueError:
+            try:
+                return build_resource_title(
+                    resource.knowledge_topic,
+                    resource.resource_type,
+                    resource.difficulty_level or 3,
+                )
+            except (TypeError, ValueError):
+                return "资源标题待修复"
     
     @classmethod
     def format_resource(cls, resource: LearningResource) -> Dict[str, Any]:
@@ -435,7 +451,7 @@ class ResourceServiceHelper(BaseService):
             "id": resource.id,
             "resource_id": resource.id,
             "learner_id": resource.learner_id,
-            "title": resource.title,
+            "title": cls.safe_resource_title(resource),
             "resource_type": resource.resource_type,
             "format_type": resource.format_type or "md",
             "summary": resource.summary,
