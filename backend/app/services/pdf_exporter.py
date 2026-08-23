@@ -162,10 +162,11 @@ class _HeatmapFlowable(Flowable):
 def _line_chart_drawing(points: List[Dict[str, Any]], width: float = 400, height: float = 180) -> Drawing:
     """Simple ReportLab line chart for resource difficulty/match curves."""
     drawing = Drawing(width, height)
-    if not points:
+    scored_points = [item for item in points if item.get("match_score") is not None]
+    if not scored_points:
         return drawing
-    difficulties = [float(item.get("difficulty", 0)) for item in points]
-    match_scores = [max(0, min(100, float(item.get("match_score", 0)))) for item in points]
+    difficulties = [float(item.get("difficulty", 0)) for item in scored_points]
+    match_scores = [max(0, min(100, float(item["match_score"]))) for item in scored_points]
     x_min, x_max = 1, 5
     y_min, y_max = 0, 100
     padding = 40

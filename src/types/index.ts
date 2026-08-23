@@ -326,7 +326,7 @@ export interface LearningResource {
   contentJson?: Record<string, unknown>
   createdAt?: string
   status?: string
-  matchScore?: number
+  matchScore?: number | null
   hasHallucination?: boolean
   sourceSliceIds?: number[]
   summary?: string
@@ -394,7 +394,7 @@ export interface LearnerReportHeatmapItem {
 export interface DifficultyMatchCurve {
   labels: string[]
   difficulty: number[]
-  matchScore: number[]
+  matchScore: Array<number | null>
   learnerAbility: number[]
   data: LearnerReportMatchCurveItem[]
   learnerAbilityRaw: number
@@ -403,7 +403,7 @@ export interface DifficultyMatchCurve {
 export interface LearnerReportMatchCurveItem {
   name: string
   difficulty: number
-  matchScore: number
+  matchScore: number | null
   learnerAbility: number
   resourceId: number
   title: string

@@ -46,6 +46,7 @@ from app.utils.logger import LoggerUtil
 from app.utils.auth import get_current_user, CurrentUser
 from app.utils.metrics import MetricsUtil
 from app.services.metric_service import MetricService
+from app.utils.resource_content import normalize_resource_topic
 
 router = APIRouter(prefix="/agent", tags=["Agent协同调度"])
 
@@ -253,16 +254,23 @@ def create_agent_task(
             if not LearnerService.check_data_permission(db, current_user.user_id, request.learner_id):
                 return unauthorized("无权限为该学习者创建任务")
 
+        task_input = {
+            "target_topic": request.target_topic,
+            "resource_type": request.resource_type,
+            "industry": request.industry,
+            **(request.input_data or {}),
+        }
+        if request.task_type in {"resource_generation", "full_pipeline"}:
+            try:
+                task_input["target_topic"] = normalize_resource_topic(task_input.get("target_topic"))
+            except ValueError as exc:
+                return bad_request(message=str(exc))
+
         task_info = orchestrator.create_task(
             learner_id=request.learner_id,
             task_name=request.task_name,
             task_type=request.task_type,
-            input_data={
-                "target_topic": request.target_topic,
-                "resource_type": request.resource_type,
-                "industry": request.industry,
-                **(request.input_data or {}),
-            },
+            input_data=task_input,
         )
         
         LoggerUtil.log_api_request("POST /api/v1/agent/tasks", request.model_dump())
@@ -306,7 +314,13 @@ def start_agent_task(
             except Exception as e:
                 logger.warning(f"解析任务 input_data 失败，使用默认值: task_id={task.id}, error={e}")
         
-        target_topic = input_data.get("target_topic", "未指定主题")
+        if task.task_type in {"resource_generation", "full_pipeline"}:
+            try:
+                target_topic = normalize_resource_topic(input_data.get("target_topic"))
+            except ValueError as exc:
+                return bad_request(message=str(exc))
+        else:
+            target_topic = str(input_data.get("target_topic") or "未指定主题").strip()
         resource_type = input_data.get("resource_type", "guide")
         industry = input_data.get("industry")
 

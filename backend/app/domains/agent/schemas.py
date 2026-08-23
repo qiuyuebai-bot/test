@@ -2,7 +2,7 @@
 Agent 相关 Pydantic Schema
 """
 from typing import Dict, Any, List, Optional
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 
 # ========== 状态相关 ==========
@@ -27,6 +27,18 @@ class CreateAgentTaskRequest(BaseModel):
     resource_type: Optional[str] = Field("guide", description="资源类型: guide/exercise/lecture")
     industry: Optional[str] = Field(None, description="行业领域")
     input_data: Optional[Dict[str, Any]] = Field(None, description="额外输入数据")
+
+    @model_validator(mode="after")
+    def validate_generation_topic(self):
+        if self.target_topic is not None:
+            self.target_topic = self.target_topic.strip() or None
+        input_topic = self.input_data.get("target_topic") if self.input_data else None
+        effective_topic = self.target_topic or input_topic
+        if isinstance(effective_topic, str):
+            effective_topic = effective_topic.strip() or None
+        if self.task_type in {"resource_generation", "full_pipeline"} and not effective_topic:
+            raise ValueError("资源生成任务必须提供目标主题")
+        return self
 
 
 class TaskStatusResponse(BaseModel):
@@ -96,6 +108,14 @@ class GenerationRequest(BaseModel):
     resource_type: str = Field("guide", description="资源类型: guide/exercise/lecture")
     industry: Optional[str] = Field(None, description="行业领域")
     training_context: Optional[Dict[str, Any]] = Field(None, description="岗位培训阶段上下文")
+
+    @field_validator("target_topic")
+    @classmethod
+    def normalize_target_topic(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("目标主题不能为空")
+        return value
 
 
 # ========== 审核校验相关 ==========

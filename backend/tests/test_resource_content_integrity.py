@@ -195,6 +195,53 @@ def test_task_repository_persists_calculated_match_score(
     assert resource.match_score == 73.5
 
 
+def test_task_repository_rejects_placeholder_title_before_persisting(
+    db_session,
+    sample_agent_task,
+    sample_learner_profile,
+    resource_persistence_context,
+):
+    with pytest.raises(ResourceContentError, match="占位符"):
+        TaskRepository().save_resource_and_complete(
+            task_id=sample_agent_task.id,
+            learner_id=sample_learner_profile.id,
+            generation_result={
+                "resource_type": "guide",
+                "resource_title": "None - 精通级实操指南",
+                "content": "# Valid guide",
+                "content_json": {},
+            },
+            audit_result={"passed": True, "overall_score": 90},
+            debate_rounds=1,
+        )
+
+    assert db_session.query(LearningResource).count() == 0
+
+
+def test_task_repository_marks_missing_match_score_as_pending(
+    db_session,
+    sample_agent_task,
+    sample_learner_profile,
+    resource_persistence_context,
+):
+    result = TaskRepository().save_resource_and_complete(
+        task_id=sample_agent_task.id,
+        learner_id=sample_learner_profile.id,
+        generation_result={
+            "resource_type": "guide",
+            "resource_title": "Pending score guide",
+            "content": "# Pending score guide",
+            "content_json": {},
+        },
+        audit_result={"passed": True, "overall_score": 90},
+        debate_rounds=1,
+    )
+
+    resource = db_session.get(LearningResource, result["resource_id"])
+    assert resource.match_score is None
+    assert resource.content_json["match_score_status"] == "pending"
+
+
 def test_sync_resource_save_rejects_mock_payload_before_persisting(
     db_session,
     sample_learner_profile,

@@ -279,7 +279,10 @@ export default function LearningReport() {
   const matchCurveChartData = matchCurveData.length > 0
     ? matchCurveData
     : []
-  const formatMatchValue = (value: number | string) => Number(value).toFixed(2)
+  const formatMatchValue = (value: unknown) => {
+    if (typeof value !== 'number' && typeof value !== 'string') return '-'
+    return Number(value).toFixed(2)
+  }
 
   const openResourceFlow = (mode: 'list' | 'generate') => {
     if (!selectedHeatmapItem) return

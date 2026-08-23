@@ -12,6 +12,11 @@ from app.agents.llm_generator import LLMGenerator
 from app.services.ai_content_service import AIContentService
 from app.utils.llm_response import bounded_list, bounded_text, parse_json_object
 from app.utils.llm import LLMUtil, LLMUnavailableError
+from app.utils.resource_content import (
+    build_resource_title,
+    normalize_resource_topic,
+    validate_resource_title,
+)
 from app.config import settings
 
 
@@ -141,7 +146,7 @@ class GenerationAgent(BaseAgent):
         knowledge_results = input_data.get("knowledge_results", [])
         learner_profile = input_data.get("learner_profile", {})
         resource_type = input_data.get("resource_type", "guide")
-        target_topic = input_data.get("target_topic", "")
+        target_topic = normalize_resource_topic(input_data.get("target_topic"))
         training_context = input_data.get("training_context") or {}
         base_seed = (
             input_data.get("variation_seed")
@@ -187,12 +192,13 @@ class GenerationAgent(BaseAgent):
         else:
             raise ValueError(f"不支持的资源类型: {resource_type}")
         
+        generated_title = resource_content.get(
+            "resource_title", self._generate_title(target_topic, resource_type, diagnosis_result)
+        )
         result = {
             "resource_type": resource_type,
             "knowledge_topic": target_topic,
-            "resource_title": resource_content.get(
-                "resource_title", self._generate_title(target_topic, resource_type, diagnosis_result)
-            ),
+            "resource_title": validate_resource_title(generated_title),
             "difficulty_level": resource_content.get(
                 "difficulty_level",
                 diagnosis_result.get("recommended_difficulty", {}).get("recommended_difficulty", 3),
@@ -775,17 +781,8 @@ class GenerationAgent(BaseAgent):
     
     def _generate_title(self, topic: str, resource_type: str, diagnosis: Dict) -> str:
         """生成资源标题"""
-        type_names = {
-            "guide": "实操指南",
-            "exercise": "分阶测试题",
-            "lecture": "专属知识讲义",
-        }
-        type_name = type_names.get(resource_type, "学习资源")
-        
         difficulty = diagnosis.get("recommended_difficulty", {}).get("recommended_difficulty", 3)
-        level_text = ["入门级", "基础级", "进阶级", "精通级", "专家级"][difficulty - 1]
-        
-        return f"{topic} - {level_text}{type_name}"
+        return build_resource_title(topic, resource_type, difficulty)
     
     def _difficulty_text(self, difficulty: int) -> str:
         """难度文字描述"""

@@ -16,7 +16,12 @@ from app.agents.diagnosis_agent import DiagnosisAgent
 from app.agents.generation_agent import GenerationAgent
 from app.domains.knowledge.service import KnowledgeService
 from app.services.common import BaseService, ResourceServiceHelper, MetricsServiceHelper
-from app.utils.resource_content import normalize_resource_content
+from app.utils.resource_content import (
+    normalize_resource_content,
+    normalize_resource_topic,
+    validate_match_score,
+    validate_resource_title,
+)
 
 
 class ResourceGenerationService(BaseService):
@@ -45,6 +50,8 @@ class ResourceGenerationService(BaseService):
             f"[资源生成服务] 开始生成三类资源: learner_id={learner_id}, "
             f"topic={target_topic}, industry={industry}"
         )
+
+        target_topic = normalize_resource_topic(target_topic)
         
         start_time = time.time()
         
@@ -230,23 +237,27 @@ class ResourceGenerationService(BaseService):
     ) -> LearningResource:
         """保存资源到数据库"""
         content = normalize_resource_content(resource_data.get("content"))
+        match_score = validate_match_score(resource_data.get("match_score"))
+        content_json = {
+            **(resource_data.get("content_json") or {}),
+            **(
+                {"match_score_metadata": resource_data["match_score_metadata"]}
+                if resource_data.get("match_score_metadata")
+                else {}
+            ),
+        }
+        if match_score is None:
+            content_json["match_score_status"] = "pending"
         with get_db_context() as db:
             resource = LearningResource(
                 learner_id=learner_id,
-                title=resource_data.get("resource_title", "未命名资源"),
+                title=validate_resource_title(resource_data.get("resource_title") or "未命名资源"),
                 resource_type=resource_type,
                 knowledge_topic=target_topic,
                 difficulty_level=resource_data.get("difficulty_level", 3),
                 version="1.0",
                 content=content,
-                content_json={
-                    **(resource_data.get("content_json") or {}),
-                    **(
-                        {"match_score_metadata": resource_data["match_score_metadata"]}
-                        if resource_data.get("match_score_metadata")
-                        else {}
-                    ),
-                },
+                content_json=content_json,
                 word_count=len(content),
                 source_slice_ids=resource_data.get("source_slice_ids", []),
                 source_doc_ids=resource_data.get("source_doc_ids", []),
@@ -257,7 +268,7 @@ class ResourceGenerationService(BaseService):
                 validation_score=resource_data.get("_meta", {}).get("score", 80),
                 hallucination_detected=False,
                 status="ready",
-                match_score=resource_data.get("match_score", 0),
+                match_score=match_score,
             )
             db.add(resource)
             db.flush()

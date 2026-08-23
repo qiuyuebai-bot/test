@@ -5,6 +5,7 @@ structured model envelopes, mock responses, and audit payloads must never be
 stored in ``LearningResource.content``.
 """
 import json
+import math
 import re
 from collections.abc import Mapping
 from typing import Any
@@ -15,6 +16,16 @@ class ResourceContentError(ValueError):
 
 
 _JSON_FENCE = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.IGNORECASE | re.DOTALL)
+_PLACEHOLDER_TITLE = re.compile(
+    r"(?:^|[\s:_-])(none|null|undefined)(?=$|[\s:_-])",
+    re.IGNORECASE,
+)
+_RESOURCE_TYPE_LABELS = {
+    "guide": "实操指南",
+    "exercise": "分阶测试题",
+    "lecture": "专属知识讲义",
+}
+_DIFFICULTY_LABELS = ("入门级", "基础级", "进阶级", "精通级", "专家级")
 _AUDIT_PAYLOAD_KEYS = frozenset(
     {
         "passed",
@@ -28,6 +39,52 @@ _AUDIT_PAYLOAD_KEYS = frozenset(
         "debate_record",
     }
 )
+
+
+def normalize_resource_topic(raw_topic: Any) -> str:
+    """Return a non-empty topic for resource generation."""
+    if not isinstance(raw_topic, str) or not raw_topic.strip():
+        raise ValueError("目标主题不能为空")
+    return raw_topic.strip()
+
+
+def build_resource_title(topic: Any, resource_type: str, difficulty: Any) -> str:
+    """Build the deterministic fallback title used by generation and repair."""
+    normalized_topic = normalize_resource_topic(topic)
+    try:
+        difficulty_value = int(difficulty)
+    except (TypeError, ValueError):
+        difficulty_value = 3
+    difficulty_value = min(max(difficulty_value, 1), len(_DIFFICULTY_LABELS))
+    type_label = _RESOURCE_TYPE_LABELS.get(resource_type, "学习资源")
+    return validate_resource_title(
+        f"{normalized_topic} - {_DIFFICULTY_LABELS[difficulty_value - 1]}{type_label}"
+    )
+
+
+def validate_resource_title(raw_title: Any) -> str:
+    """Reject blank or placeholder titles before they reach persistence."""
+    if not isinstance(raw_title, str):
+        raise ResourceContentError("资源标题不能为空")
+    title = raw_title.strip()
+    if not title:
+        raise ResourceContentError("资源标题不能为空")
+    if _PLACEHOLDER_TITLE.search(title):
+        raise ResourceContentError("资源标题包含无效占位符")
+    return title
+
+
+def validate_match_score(raw_score: Any) -> float | None:
+    """Validate a persisted match score without inventing a missing value."""
+    if raw_score is None:
+        return None
+    try:
+        score = float(raw_score)
+    except (TypeError, ValueError) as exc:
+        raise ResourceContentError("资源匹配度必须是数字") from exc
+    if not math.isfinite(score) or not 0 <= score <= 100:
+        raise ResourceContentError("资源匹配度必须在 0 到 100 之间")
+    return score
 
 
 def normalize_resource_content(raw_content: Any, *, allow_mock: bool = False) -> str:

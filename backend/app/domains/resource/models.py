@@ -165,7 +165,7 @@ class LearningResource(Base):
     hallucination_detected = Column(Boolean, default=False, comment="是否检测到幻觉")
     validation_notes = Column(Text, nullable=True, comment="校验备注")
 
-    match_score = Column(Float, default=0.0, comment="资源与学习者匹配度")
+    match_score = Column(Float, nullable=True, default=None, comment="资源与学习者匹配度")
     ability_match = Column(Float, default=0.0, comment="能力匹配分")
     interest_match = Column(Float, default=0.0, comment="兴趣匹配分")
     goal_match = Column(Float, default=0.0, comment="目标匹配分")

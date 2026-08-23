@@ -155,8 +155,14 @@ class ReportService(BaseService):
         for i, r in enumerate(resources):
             labels.append(f"资源{i+1}")
             difficulty_data.append(r.difficulty_level or DEFAULT_DIFFICULTY)
-            raw_match_score = r.match_score if r.match_score is not None else 70
-            match_score = raw_match_score * 100 if 0 <= raw_match_score <= 1 else raw_match_score
+            raw_match_score = r.match_score
+            match_score = (
+                None
+                if raw_match_score is None
+                else raw_match_score * 100
+                if 0 <= raw_match_score <= 1
+                else raw_match_score
+            )
             match_data.append(match_score)
 
             data_points.append({
@@ -310,7 +316,10 @@ class ReportService(BaseService):
             # 资源匹配准确率：SQL AVG 聚合，避免加载全部资源到内存
             resource_match_accuracy = (
                 db.query(func.avg(LearningResource.match_score))
-                .filter(LearningResource.learner_id == learner_id)
+                .filter(
+                    LearningResource.learner_id == learner_id,
+                    LearningResource.match_score.isnot(None),
+                )
                 .scalar()
             ) or 0
 

@@ -114,6 +114,29 @@ class TestCalculateCoreMetrics:
         # covered_blind 是按资源计数：1 个资源命中任一盲区记 1 次 → 1/3*100
         assert metrics["knowledge_coverage_rate"] == round(1 / 3 * 100, 2)
 
+    def test_unknown_match_score_is_not_presented_as_a_default_value(
+        self,
+        db_session: Session,
+        sample_learner_profile: LearnerProfile,
+    ):
+        resource = LearningResource(
+            learner_id=sample_learner_profile.id,
+            title="未计算资源",
+            resource_type="guide",
+            industry="AI",
+            difficulty_level=3,
+            content="内容",
+            status="ready",
+            match_score=None,
+        )
+        db_session.add(resource)
+        db_session.commit()
+
+        curve = ReportService._generate_match_curve(sample_learner_profile.id, 70)
+
+        assert curve["data"][0]["match_score"] is None
+        assert curve["match_score"] == [None]
+
 
 class TestGetStatistics:
     def test_statistics_counts_and_avg_score(

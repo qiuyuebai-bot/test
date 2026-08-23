@@ -16,7 +16,11 @@ from sqlalchemy.orm.attributes import flag_modified
 
 from app.database import get_db_context
 from app.models import AgentTask, DebateRecord, LearningResource, LearnerProfile
-from app.utils.resource_content import normalize_resource_content
+from app.utils.resource_content import (
+    normalize_resource_content,
+    validate_match_score,
+    validate_resource_title,
+)
 
 
 class TaskRepository:
@@ -310,6 +314,12 @@ class TaskRepository:
                 except json.JSONDecodeError:
                     task_input = {}
             topic = task_input.get("target_topic", "") if isinstance(task_input, dict) else ""
+            match_score = validate_match_score(generation_result.get("match_score"))
+            resource_title = validate_resource_title(
+                generation_result.get("resource_title") or "未命名资源"
+            )
+            if match_score is None:
+                content_json["match_score_status"] = "pending"
             resource = db.query(LearningResource).filter(
                 LearningResource.generation_task_id == task_id
             ).first()
@@ -318,7 +328,7 @@ class TaskRepository:
                     with db.begin_nested():
                         resource = LearningResource(
                             learner_id=learner_id,
-                            title=generation_result.get("resource_title", "未命名资源"),
+                            title=resource_title,
                             resource_type=generation_result.get("resource_type", "guide"),
                             knowledge_topic=topic or None,
                             difficulty_level=generation_result.get("difficulty_level", 3),
@@ -331,10 +341,7 @@ class TaskRepository:
                             generated_by_agent="generation_agent",
                             generation_task_id=task_id,
                             generation_method=generation_result.get("generation_method", "deterministic_fallback"),
-                            # This value is calculated by the orchestration
-                            # boundary. Keep the explicit fallback only for
-                            # legacy callers that do not provide it.
-                            match_score=generation_result.get("match_score", 0),
+                            match_score=match_score,
                             is_validated=audit_result.get("passed", False),
                             validation_passed=audit_result.get("passed", False),
                             validation_score=audit_result.get("overall_score", 0),
@@ -349,10 +356,10 @@ class TaskRepository:
                     ).first()
                     if not resource:
                         raise
-            elif generation_result.get("match_score") is not None and not resource.match_score:
+            elif match_score is not None and resource.match_score is None:
                 # Backfill resources created by the old Agent path when the
                 # task is retried after the scoring fix is deployed.
-                resource.match_score = generation_result["match_score"]
+                resource.match_score = match_score
             resource_id = resource.id
 
             issued_question_count = 0
@@ -454,7 +461,7 @@ class TaskRepository:
         generation_result = {
             "resource_type": reusable_resource.get("resource_type", "guide"),
             "knowledge_topic": reusable_resource.get("knowledge_topic"),
-            "resource_title": reusable_resource.get("title", "Unnamed resource"),
+            "resource_title": reusable_resource.get("title") or "未命名资源",
             "difficulty_level": reusable_resource.get("difficulty_level", 3),
             "content": reusable_resource.get("content", ""),
             "content_json": reusable_resource.get("content_json", {}),
@@ -463,8 +470,12 @@ class TaskRepository:
             "source_doc_ids": reusable_resource.get("source_doc_ids", []),
             "generation_method": "reused_existing",
             "reused_from_resource_id": reusable_resource.get("id"),
-            "match_score": reusable_resource.get("match_score", 0),
+            "match_score": reusable_resource.get("match_score"),
         }
+        generation_result["resource_title"] = validate_resource_title(generation_result["resource_title"])
+        generation_result["match_score"] = validate_match_score(generation_result["match_score"])
+        if generation_result["match_score"] is None:
+            generation_result["content_json"]["match_score_status"] = "pending"
         generation_result["content"] = normalize_resource_content(
             generation_result["content"]
         )
@@ -497,6 +508,7 @@ class TaskRepository:
                 validation_score=audit_result["overall_score"],
                 hallucination_detected=audit_result["hallucination_detected"],
                 status="ready",
+                match_score=generation_result["match_score"],
             )
             db.add(resource)
             db.flush()

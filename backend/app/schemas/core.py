@@ -3,7 +3,7 @@
 包含：个性化资源生成、学情报告、自适应导学
 """
 from typing import Dict, Any, List, Optional, Literal
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 
 
 # ========== 个性化资源生成 ==========
@@ -13,6 +13,14 @@ class GenerateResourcesRequest(BaseModel):
     learner_id: int = Field(..., description="学习者ID", gt=0)
     target_topic: str = Field(..., description="目标主题", min_length=1)
     industry: Optional[str] = Field(None, description="行业领域")
+
+    @field_validator("target_topic")
+    @classmethod
+    def normalize_target_topic(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("目标主题不能为空")
+        return value
 
 
 class GeneratedResourceItem(BaseModel):
