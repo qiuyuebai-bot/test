@@ -13,7 +13,7 @@ export interface KnowledgePublicationRequest {
   resourceId: number
   resourceVersion: string
   contentHash: string
-  status: 'pending' | 'publishing' | 'published' | 'rejected' | 'publish_failed' | string
+  status: 'pending' | 'waiting_validation' | 'publishing' | 'published' | 'rejected' | 'publish_failed' | string
   snapshot?: Record<string, unknown>
   submittedBy: number
   reviewedBy?: number | null

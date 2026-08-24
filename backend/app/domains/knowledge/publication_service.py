@@ -21,11 +21,14 @@ from app.utils.auth import CurrentUser
 
 
 PENDING = "pending"
+WAITING_VALIDATION = "waiting_validation"
 PUBLISHING = "publishing"
 PUBLISHED = "published"
 REJECTED = "rejected"
 PUBLISH_FAILED = "publish_failed"
-ACTIVE_STATUSES = (PENDING, PUBLISHING, PUBLISHED, PUBLISH_FAILED)
+ACTIVE_STATUSES = (PENDING, WAITING_VALIDATION, PUBLISHING, PUBLISHED, PUBLISH_FAILED)
+AUTOMATED_PUBLICATION_NOTE = "系统自动入库"
+_AUTO_TITLE_PLACEHOLDERS = {"none", "null", "undefined", "未命名", "未命名资源"}
 
 
 class PublicationError(ValueError):
@@ -96,6 +99,32 @@ class KnowledgePublicationService:
     """Validate, review, and publish immutable generated lecture snapshots."""
 
     @staticmethod
+    def _automatic_publication_reason(resource: LearningResource) -> Optional[str]:
+        """Return a diagnostic reason when a newly generated lecture is ineligible."""
+        if resource.resource_type != "lecture":
+            return "只有专属讲义可以自动加入知识库"
+        if not resource.is_latest:
+            return "仅最新版本讲义可以自动入库"
+        if resource.status != "ready":
+            return "讲义尚未完成生成"
+        if not resource.validation_passed:
+            return "讲义质量校验未通过"
+        if resource.hallucination_detected:
+            return "讲义检测到未经证实的内容"
+        title = str(resource.title or "").strip()
+        if not title or title.lower() in _AUTO_TITLE_PLACEHOLDERS:
+            return "讲义标题为空或为占位标题"
+        if not str(resource.industry or "").strip():
+            return "讲义未绑定领域"
+        if not str(resource.content or "").strip():
+            return "讲义正文为空"
+        if (resource.format_type or "md") not in ("md", "text", "html"):
+            return "讲义格式不支持入库"
+        if resource.review_status != "approved":
+            return "讲义审核状态未通过"
+        return None
+
+    @staticmethod
     def get_request(db: Session, request_id: int, current_user: CurrentUser) -> Optional[KnowledgePublicationRequest]:
         request = db.query(KnowledgePublicationRequest).filter(
             KnowledgePublicationRequest.id == request_id
@@ -119,6 +148,66 @@ class KnowledgePublicationService:
         ).order_by(KnowledgePublicationRequest.id.desc()).first()
 
     @staticmethod
+    def auto_publish_resource(db: Session, resource_id: int) -> Optional[KnowledgePublicationRequest]:
+        """Publish one newly generated, validated lecture without manual approval.
+
+        This entry point is intentionally explicit. Callers use it only for a
+        resource created by the current generation transaction; historical
+        resources are never discovered or changed by this method.
+        """
+        resource = db.query(LearningResource).filter(LearningResource.id == resource_id).first()
+        if not resource:
+            logger.warning("自动入库跳过：资源不存在 resource_id={}", resource_id)
+            return None
+
+        reason = KnowledgePublicationService._automatic_publication_reason(resource)
+        if reason:
+            logger.info("自动入库跳过：resource_id={}, reason={}", resource_id, reason)
+            return None
+
+        learner = db.query(LearnerProfile).filter(LearnerProfile.id == resource.learner_id).first()
+        if not learner or not learner.user_id:
+            logger.warning("自动入库跳过：资源缺少有效学习者 resource_id={}", resource_id)
+            return None
+
+        snapshot, content_hash = _snapshot(resource)
+        resource_version = str(resource.version or "1.0")
+        existing = db.query(KnowledgePublicationRequest).filter(
+            KnowledgePublicationRequest.resource_id == resource.id,
+            KnowledgePublicationRequest.resource_version == resource_version,
+            KnowledgePublicationRequest.content_hash == content_hash,
+            KnowledgePublicationRequest.status.in_(ACTIVE_STATUSES),
+        ).order_by(KnowledgePublicationRequest.id.desc()).first()
+        if existing:
+            return existing
+
+        request = KnowledgePublicationRequest(
+            resource_id=resource.id,
+            resource_version=resource_version,
+            content_hash=content_hash,
+            snapshot=snapshot,
+            status=PUBLISHING,
+            submitted_by=learner.user_id,
+            review_note=AUTOMATED_PUBLICATION_NOTE,
+        )
+        db.add(request)
+        db.commit()
+        db.refresh(request)
+        try:
+            return KnowledgePublicationService._continue_publication(db, request.id)
+        except Exception:
+            logger.exception("自动入库失败: request_id={}, resource_id={}", request.id, resource.id)
+            request = db.query(KnowledgePublicationRequest).filter(
+                KnowledgePublicationRequest.id == request.id
+            ).first()
+            if request:
+                request.status = PUBLISH_FAILED
+                request.error_message = "知识库自动发布失败，请由管理员重试"
+                db.commit()
+                db.refresh(request)
+            return request
+
+    @staticmethod
     def create_request(db: Session, resource_id: int, current_user: CurrentUser) -> KnowledgePublicationRequest:
         resource = db.query(LearningResource).filter(LearningResource.id == resource_id).first()
         if not resource:
@@ -129,16 +218,12 @@ class KnowledgePublicationService:
             raise PublicationError("只有专属讲义可以申请加入知识库", "resource_type_not_allowed")
         if not resource.is_latest:
             raise PublicationError("仅最新版本讲义可以申请入库", "resource_not_latest")
-        if resource.status != "ready":
-            raise PublicationError("讲义尚未处于可发布状态", "resource_not_ready")
+        if resource.status in ("failed", "archived"):
+            raise PublicationError("讲义生成失败或已归档，暂不能申请入库", "resource_not_publishable")
         if not (resource.content or "").strip():
             raise PublicationError("讲义正文不能为空", "content_empty")
         if (resource.format_type or "md") not in ("md", "text", "html"):
             raise PublicationError("讲义格式不支持入库", "format_invalid")
-        if not resource.validation_passed:
-            raise PublicationError("讲义质量校验未通过", "validation_failed")
-        if resource.hallucination_detected:
-            raise PublicationError("讲义检测到幻觉内容，不能入库", "hallucination_detected")
 
         snapshot, content_hash = _snapshot(resource)
         active_version = db.query(KnowledgePublicationRequest).filter(
@@ -220,7 +305,7 @@ class KnowledgePublicationService:
             db.commit()
         else:
             db.commit()
-        return KnowledgePublicationService._publish(db, request.id)
+        return KnowledgePublicationService._continue_publication(db, request.id)
 
     @staticmethod
     def retry_request(db: Session, request_id: int, current_user: CurrentUser) -> KnowledgePublicationRequest:
@@ -236,6 +321,74 @@ class KnowledgePublicationService:
         request.reviewed_by = current_user.user_id
         request.reviewed_at = datetime.now()
         db.commit()
+        return KnowledgePublicationService._continue_publication(db, request.id)
+
+    @staticmethod
+    def sync_resource_generation_state(db: Session, resource_id: int) -> None:
+        """Resume approved requests when a resource finishes generation.
+
+        Pending requests still require administrator approval. Requests already
+        approved while the resource was processing are resumed automatically.
+        """
+        resource = db.query(LearningResource).filter(LearningResource.id == resource_id).first()
+        if not resource:
+            return
+
+        requests = db.query(KnowledgePublicationRequest).filter(
+            KnowledgePublicationRequest.resource_id == resource_id,
+            KnowledgePublicationRequest.status.in_((PENDING, WAITING_VALIDATION, PUBLISHING)),
+        ).order_by(KnowledgePublicationRequest.id.asc()).all()
+        if not requests:
+            return
+
+        if resource.status in ("failed", "archived"):
+            for request in requests:
+                request.status = PUBLISH_FAILED
+                request.error_message = "讲义生成失败，无法发布到知识库"
+            db.commit()
+            return
+
+        if resource.status != "ready":
+            return
+
+        for request in requests:
+            if request.status == PENDING:
+                if not resource.validation_passed or resource.hallucination_detected:
+                    request.status = PUBLISH_FAILED
+                    request.error_message = "讲义质量校验未通过，无法发布到知识库"
+                continue
+            KnowledgePublicationService._continue_publication(db, request.id)
+        db.commit()
+
+    @staticmethod
+    def _continue_publication(db: Session, request_id: int) -> KnowledgePublicationRequest:
+        request = db.query(KnowledgePublicationRequest).filter(
+            KnowledgePublicationRequest.id == request_id
+        ).first()
+        if not request:
+            raise PublicationError("入库申请不存在", "request_not_found")
+        if request.status == PUBLISHED:
+            return request
+
+        resource = db.query(LearningResource).filter(LearningResource.id == request.resource_id).first()
+        if not resource:
+            return KnowledgePublicationService._mark_failed(db, request, "原讲义资源不存在")
+        if resource.status in ("generating", "validating"):
+            request.status = WAITING_VALIDATION
+            request.error_message = None
+            db.commit()
+            db.refresh(request)
+            return request
+        if resource.status in ("failed", "archived"):
+            return KnowledgePublicationService._mark_failed(db, request, "讲义生成失败，无法发布到知识库")
+        if resource.status != "ready":
+            return KnowledgePublicationService._mark_failed(db, request, "讲义状态不允许发布")
+        if not resource.validation_passed or resource.hallucination_detected:
+            return KnowledgePublicationService._mark_failed(db, request, "讲义质量校验未通过，无法发布到知识库")
+        if request.status == WAITING_VALIDATION:
+            request.status = PUBLISHING
+            request.error_message = None
+            db.commit()
         return KnowledgePublicationService._publish(db, request.id)
 
     @staticmethod
@@ -247,6 +400,20 @@ class KnowledgePublicationService:
             raise PublicationError("入库申请不存在", "request_not_found")
         if request.status == PUBLISHED:
             return request
+
+        resource = db.query(LearningResource).filter(LearningResource.id == request.resource_id).first()
+        if not resource:
+            return KnowledgePublicationService._mark_failed(db, request, "原讲义资源不存在")
+        if resource.status in ("generating", "validating"):
+            request.status = WAITING_VALIDATION
+            request.error_message = None
+            db.commit()
+            db.refresh(request)
+            return request
+        if resource.status != "ready":
+            return KnowledgePublicationService._mark_failed(db, request, "讲义状态不允许发布")
+        if not resource.validation_passed or resource.hallucination_detected:
+            return KnowledgePublicationService._mark_failed(db, request, "讲义质量校验未通过，无法发布到知识库")
 
         snapshot = request.snapshot or {}
         content = str(snapshot.get("content") or "")
@@ -318,6 +485,7 @@ __all__ = [
     "KnowledgePublicationService",
     "PublicationError",
     "PENDING",
+    "WAITING_VALIDATION",
     "PUBLISHING",
     "PUBLISHED",
     "REJECTED",

@@ -171,6 +171,7 @@ class LearningResource(Base):
     goal_match = Column(Float, default=0.0, comment="目标匹配分")
 
     status = Column(String(20), default="generating", index=True, comment="资源状态")
+    review_status = Column(String(20), default="pending", nullable=False, index=True, comment="资源审核状态")
     is_enabled = Column(Boolean, default=True, comment="是否启用")
     is_public = Column(Boolean, default=False, comment="是否公开")
 

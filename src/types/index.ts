@@ -314,6 +314,7 @@ export interface LearningResource {
   formatType?: 'md' | 'text' | 'html' | 'json'
   qualityScore: number | null
   hallucinationDetected: boolean
+  validationPassed?: boolean
   reviewStatus: 'pending' | 'approved' | 'rejected' | 'revised'
   versionNumber: number
   generatedByAgent: string

@@ -200,6 +200,14 @@ class TaskRepository:
                     task.execution_logs = existing_logs
                     flag_modified(task, "execution_logs")
                     task.completed_at = datetime.now()
+                    resource = db.query(LearningResource).filter(
+                        LearningResource.generation_task_id == task_id
+                    ).first()
+                    if resource and resource.status in ("generating", "validating", "failed"):
+                        resource.status = "failed"
+                        from app.domains.knowledge.publication_service import KnowledgePublicationService
+
+                        KnowledgePublicationService.sync_resource_generation_state(db, resource.id)
                     db.commit()
         except Exception as e:
             logger.warning(f"[TaskRepo] 标记失败到DB失败: {e}")
@@ -316,6 +324,8 @@ class TaskRepository:
                 except json.JSONDecodeError:
                     task_input = {}
             topic = task_input.get("target_topic", "") if isinstance(task_input, dict) else ""
+            industry = task_input.get("industry") if isinstance(task_input, dict) else None
+            industry = str(industry or "通用").strip() or "通用"
             match_score = validate_match_score(generation_result.get("match_score"))
             resource_title = validate_resource_title(
                 generation_result.get("resource_title") or "未命名资源"
@@ -334,6 +344,7 @@ class TaskRepository:
                             title=resource_title,
                             resource_type=generation_result.get("resource_type", "guide"),
                             knowledge_topic=topic or None,
+                            industry=industry,
                             difficulty_level=generation_result.get("difficulty_level", 3),
                             version="1.0",
                             content=generation_result.get("content", ""),
@@ -350,6 +361,7 @@ class TaskRepository:
                             validation_score=audit_result.get("overall_score", 0),
                             hallucination_detected=audit_result.get("hallucination_detected", False),
                             status="ready" if audit_result.get("passed", False) else "failed",
+                            review_status="approved" if audit_result.get("passed", False) else "pending",
                         )
                         db.add(resource)
                         db.flush()
@@ -363,6 +375,13 @@ class TaskRepository:
                 # Backfill resources created by the old Agent path when the
                 # task is retried after the scoring fix is deployed.
                 resource.match_score = match_score
+            if (
+                resource.review_status == "pending"
+                and resource.status == "ready"
+                and resource.validation_passed
+                and audit_result.get("passed", False)
+            ):
+                resource.review_status = "approved"
             resource_id = resource.id
 
             issued_question_count = 0
@@ -391,6 +410,14 @@ class TaskRepository:
                 if audit_result.get("_meta", {}).get("duration_ms"):
                     task.duration_ms = audit_result["_meta"]["duration_ms"]
             db.commit()
+            from app.domains.knowledge.publication_service import KnowledgePublicationService
+
+            if resource.resource_type == "lecture":
+                try:
+                    KnowledgePublicationService.auto_publish_resource(db, resource_id)
+                except Exception:
+                    logger.exception("新生成讲义自动入库异常: resource_id={}", resource_id)
+            KnowledgePublicationService.sync_resource_generation_state(db, resource_id)
 
         return {
             "task_id": task_id,
@@ -449,6 +476,7 @@ class TaskRepository:
                 "source_slice_ids": resource.source_slice_ids or [],
                 "source_doc_ids": resource.source_doc_ids or [],
                 "generation_method": resource.generation_method or "deterministic_fallback",
+                "industry": resource.industry or "通用",
                 "validation_score": resource.validation_score or 0,
                 "hallucination_detected": bool(resource.hallucination_detected),
                 "match_score": resource.match_score,
@@ -497,6 +525,7 @@ class TaskRepository:
                 title=generation_result["resource_title"],
                 resource_type=generation_result["resource_type"],
                 knowledge_topic=generation_result["knowledge_topic"],
+                industry=reusable_resource.get("industry") or "通用",
                 difficulty_level=generation_result["difficulty_level"],
                 version="1.0",
                 content=generation_result["content"],
@@ -512,6 +541,7 @@ class TaskRepository:
                 validation_score=audit_result["overall_score"],
                 hallucination_detected=audit_result["hallucination_detected"],
                 status="ready",
+                review_status="approved",
                 match_score=generation_result["match_score"],
             )
             db.add(resource)
@@ -529,6 +559,14 @@ class TaskRepository:
                 )
                 task.completed_at = datetime.now()
             db.commit()
+
+            if resource.resource_type == "lecture":
+                from app.domains.knowledge.publication_service import KnowledgePublicationService
+
+                try:
+                    KnowledgePublicationService.auto_publish_resource(db, resource_id)
+                except Exception:
+                    logger.exception("复用讲义自动入库异常: resource_id={}", resource_id)
 
         return {
             "task_id": task_id,

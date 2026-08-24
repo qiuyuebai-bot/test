@@ -26,7 +26,8 @@ const MarkdownContent = lazy(() => import('@/components/MarkdownContent'))
 type ReaderSize = 'small' | 'medium' | 'large'
 
 const publicationLabels: Record<string, { label: string; variant: 'default' | 'warning' | 'success' | 'error' }> = {
-  pending: { label: '待审核', variant: 'warning' },
+  pending: { label: '待管理员审核', variant: 'warning' },
+  waiting_validation: { label: '等待校验', variant: 'warning' },
   publishing: { label: '发布中', variant: 'warning' },
   published: { label: '已入库', variant: 'success' },
   rejected: { label: '已驳回', variant: 'error' },
@@ -106,9 +107,33 @@ export default function ResourceReader() {
       return [item]
     })
   }, [displayContent])
-  const publicationInfo = publication ? publicationLabels[publication.status] || { label: publication.status, variant: 'default' as const } : null
+  const automaticRequest = publication?.reviewNote === '系统自动入库'
+  const generationProcessing = resource?.resourceType === 'lecture' &&
+    (resource.status === 'generating' || resource.status === 'validating')
+  const autoProcessing = resource?.resourceType === 'lecture' &&
+    (generationProcessing || (automaticRequest && publication?.status === 'publishing'))
+  const publicationInfo = publication
+    ? publicationLabels[publication.status] || { label: publication.status, variant: 'default' as const }
+    : autoProcessing
+      ? { label: '自动入库中', variant: 'warning' as const }
+      : null
   const canSeeAnswers = user?.role === 'admin' || user?.role === 'teacher'
-  const canApplyPublication = resource?.resourceType === 'lecture' && (!publication || publication.status === 'rejected')
+  const canRequestPublication = resource?.resourceType === 'lecture' &&
+    (!publication || publication.status === 'rejected') &&
+    !automaticRequest && !generationProcessing
+  const canApplyPublication = canRequestPublication && resource.status !== 'failed' && resource.status !== 'archived' && Boolean(content.trim())
+  const publicationBlockedReason = canRequestPublication && !canApplyPublication
+    ? resource.status === 'failed'
+      ? '该讲义生成失败，暂不能加入知识库，请重新生成。'
+      : resource.status === 'archived'
+        ? '该讲义已归档，暂不能申请入库。'
+        : '讲义正文为空，暂不能申请入库。'
+    : null
+  const automaticPublicationMessage = autoProcessing
+    ? generationProcessing
+      ? '质量校验完成且符合条件后，系统会自动加入所属领域知识库。'
+      : '已通过质量校验，系统正在自动加入所属领域知识库。'
+    : null
   const textSize = size === 'small' ? 'text-[15px]' : size === 'large' ? 'text-[19px]' : 'text-[17px]'
 
   const copy = async () => {
@@ -166,8 +191,11 @@ export default function ResourceReader() {
           <article className={`resource-reader-content ${textSize} leading-8 text-text-primary`}>
             <Suspense fallback={<p className="text-sm text-text-tertiary">正在加载正文...</p>}><MarkdownContent content={displayContent} headingIdPrefix="reader" /></Suspense>
           </article>
-          {canApplyPublication && <div className="mt-12 border-t border-border pt-6 print:hidden"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-medium text-text-primary">将专属讲义加入领域知识库</p><p className="mt-1 text-sm text-text-secondary">提交当前版本快照，由管理员审核后在同领域共享。</p></div><Button variant="primary" onClick={() => void applyPublication()} disabled={submitting}><Send className="h-4 w-4" />{submitting ? '提交中...' : '申请加入知识库'}</Button></div></div>}
+          {canApplyPublication && <div className="mt-12 border-t border-border pt-6 print:hidden"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-medium text-text-primary">将历史专属讲义加入领域知识库</p><p className="mt-1 text-sm text-text-secondary">仅历史资源需要提交人工入库申请；新生成且达标的讲义会自动入库。</p></div><Button variant="primary" onClick={() => void applyPublication()} disabled={submitting}><Send className="h-4 w-4" />{submitting ? '提交中...' : '提交人工入库申请'}</Button></div></div>}
+          {automaticPublicationMessage && <div className="mt-12 border-t border-border pt-6 print:hidden"><p className="text-sm text-text-secondary">{automaticPublicationMessage}</p></div>}
+          {publicationBlockedReason && <div className="mt-12 border-t border-border pt-6 print:hidden"><p className="text-sm text-text-secondary">{publicationBlockedReason}</p></div>}
           {publication?.status === 'rejected' && <div className="mt-12 border-t border-error/20 pt-6 print:hidden"><p className="text-sm text-error">驳回原因：{publication.reviewNote || '未填写'}</p></div>}
+          {publication?.status === 'publish_failed' && <div className="mt-12 border-t border-error/20 pt-6 print:hidden"><p className="text-sm text-error">自动入库失败：{publication.errorMessage || '请联系管理员重试'}</p></div>}
           {publication?.status === 'published' && publication.knowledgeDocId && <div className="mt-12 border-t border-success/20 pt-6 print:hidden"><Link to="/knowledge-base" className="inline-flex items-center gap-2 text-sm text-success hover:underline"><Check className="h-4 w-4" />查看知识库文档</Link></div>}
         </main>
       </div>

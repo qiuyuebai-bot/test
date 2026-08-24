@@ -114,6 +114,8 @@ class ResourceGenerationService(BaseService):
                     resource_data=res_result,
                     diagnosis_result=diagnosis_result,
                     target_topic=target_topic,
+                    industry=industry,
+                    auto_publish=True,
                 )
                 res_result["saved_resource_id"] = saved.id
                 all_resources.append(res_result)
@@ -235,6 +237,8 @@ class ResourceGenerationService(BaseService):
         resource_data: Dict[str, Any],
         diagnosis_result: Dict[str, Any],
         target_topic: str = "",
+        industry: str = None,
+        auto_publish: bool = False,
     ) -> LearningResource:
         """保存资源到数据库"""
         content = normalize_resource_content(resource_data.get("content"))
@@ -256,6 +260,7 @@ class ResourceGenerationService(BaseService):
                 title=validate_resource_title(resource_data.get("resource_title") or "未命名资源"),
                 resource_type=resource_type,
                 knowledge_topic=target_topic,
+                industry=str(industry or "通用").strip() or "通用",
                 difficulty_level=resource_data.get("difficulty_level", 3),
                 version="1.0",
                 content=content,
@@ -270,6 +275,7 @@ class ResourceGenerationService(BaseService):
                 validation_score=resource_data.get("_meta", {}).get("score", 80),
                 hallucination_detected=False,
                 status="ready",
+                review_status="approved",
                 match_score=match_score,
             )
             db.add(resource)
@@ -287,6 +293,13 @@ class ResourceGenerationService(BaseService):
                     topic=target_topic,
                 )
             db.commit()
+            if auto_publish and resource.resource_type == "lecture":
+                from app.domains.knowledge.publication_service import KnowledgePublicationService
+
+                try:
+                    KnowledgePublicationService.auto_publish_resource(db, resource.id)
+                except Exception:
+                    logger.exception("同步生成讲义自动入库异常: resource_id={}", resource.id)
             return resource
     
     @classmethod

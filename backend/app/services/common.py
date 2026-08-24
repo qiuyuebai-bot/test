@@ -469,6 +469,7 @@ class ResourceServiceHelper(BaseService):
             "source_slice_ids": cls.parse_json_field(resource.source_slice_ids, []),
             "source_doc_ids": cls.parse_json_field(resource.source_doc_ids, []),
             "status": resource.status,
+            "review_status": resource.review_status,
             "version": resource.version,
             "is_latest": resource.is_latest,
             "view_count": resource.view_count or 0,

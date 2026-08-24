@@ -53,11 +53,18 @@ const reviewStatusMap: Record<
   string,
   { label: string; variant: 'success' | 'warning' | 'error' | 'default' }
 > = {
-  pending: { label: '待审核', variant: 'warning' },
+  pending: { label: '待处理', variant: 'warning' },
   approved: { label: '已通过', variant: 'success' },
   rejected: { label: '已拒绝', variant: 'error' },
   revised: { label: '已修订', variant: 'default' },
   published: { label: '已发布', variant: 'success' },
+}
+
+function getReviewStatusInfo(resource: LearningResource) {
+  if (resource.status === 'failed' && resource.reviewStatus === 'pending') {
+    return null
+  }
+  return reviewStatusMap[resource.reviewStatus] || reviewStatusMap.pending
 }
 
 const contentTypeMap: Record<string, string> = {
@@ -458,7 +465,7 @@ export default function ResourceGeneration() {
       return <EmptyState.Document />
     }
 
-    const statusInfo = reviewStatusMap[selectedResource.reviewStatus] || reviewStatusMap.pending
+    const statusInfo = getReviewStatusInfo(selectedResource)
     const shouldRenderMarkdown = isMarkdownResource(selectedResource)
     const normalizedContent = normalizeResourceContent(selectedResource.content)
 
@@ -467,9 +474,11 @@ export default function ResourceGeneration() {
         <div className="flex items-start justify-between gap-3">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-2 mb-2">
-              <Badge variant={statusInfo.variant} size="sm">
-                {statusInfo.label}
-              </Badge>
+              {statusInfo && (
+                <Badge variant={statusInfo.variant} size="sm">
+                  {statusInfo.label}
+                </Badge>
+              )}
               <Badge variant="default" size="sm">
                 {shouldRenderMarkdown
                   ? 'Markdown 文档'
@@ -914,8 +923,7 @@ export default function ResourceGeneration() {
                   </div>
                 ) : (
                   filteredResources.map((resource) => {
-                    const statusInfo =
-                      reviewStatusMap[resource.reviewStatus] || reviewStatusMap.pending
+                    const statusInfo = getReviewStatusInfo(resource)
                     const isSelected = selectedResource?.id === resource.id
                     return (
                       <button
@@ -933,9 +941,11 @@ export default function ResourceGeneration() {
                           </p>
                         </div>
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <Badge variant={statusInfo.variant} size="sm">
-                            {statusInfo.label}
-                          </Badge>
+                          {statusInfo && (
+                            <Badge variant={statusInfo.variant} size="sm">
+                              {statusInfo.label}
+                            </Badge>
+                          )}
                           {resource.hallucinationDetected && (
                             <Badge variant="error" size="sm">
                               幻觉

@@ -1,6 +1,7 @@
 """Regression coverage for generated-resource content integrity."""
 import json
 from contextlib import contextmanager
+from unittest.mock import patch
 
 import httpx
 import pytest
@@ -13,6 +14,7 @@ from app.agents.task_repository import TaskRepository
 from app.config import settings
 from app.domains.resource import service as resource_service_module
 from app.domains.resource.service import ResourceGenerationService
+from app.domains.knowledge.models import KnowledgePublicationRequest
 from app.models import LearningResource
 from app.services.ai_content_service import AIContentService
 from app.utils.llm import LLMUnavailableError, LLMUtil
@@ -168,6 +170,72 @@ def test_task_repository_persists_valid_deepseek_markdown(
     assert resource.content == markdown
     assert resource.word_count == len(markdown)
     assert resource.generation_method == "deepseek"
+    assert resource.review_status == "approved"
+
+
+def test_task_repository_auto_publishes_new_validated_lecture(
+    db_session,
+    sample_agent_task,
+    sample_learner_profile,
+    resource_persistence_context,
+):
+    sample_agent_task.input_data = json.dumps(
+        {"target_topic": "测试主题", "industry": "软件开发"},
+        ensure_ascii=False,
+    )
+    db_session.commit()
+
+    with patch(
+        "app.domains.knowledge.publication_service.KnowledgeService.process_doc",
+        return_value=True,
+    ):
+        result = TaskRepository().save_resource_and_complete(
+            task_id=sample_agent_task.id,
+            learner_id=sample_learner_profile.id,
+            generation_result={
+                "resource_type": "lecture",
+                "resource_title": "流水线自动讲义",
+                "content": "# 流水线自动讲义\n\n完整内容。",
+                "content_json": {},
+                "generation_method": "deepseek",
+            },
+            audit_result={"passed": True, "overall_score": 95},
+            debate_rounds=1,
+        )
+
+    resource = db_session.get(LearningResource, result["resource_id"])
+    request = db_session.query(KnowledgePublicationRequest).filter_by(resource_id=resource.id).one()
+    assert resource.industry == "软件开发"
+    assert request.status == "published"
+
+
+def test_task_repository_auto_publishes_reused_lecture(
+    db_session,
+    sample_agent_task,
+    sample_learner_profile,
+    resource_persistence_context,
+):
+    with patch(
+        "app.domains.knowledge.publication_service.KnowledgeService.process_doc",
+        return_value=True,
+    ):
+        result = TaskRepository().save_reused_resource_and_complete(
+            task_id=sample_agent_task.id,
+            learner_id=sample_learner_profile.id,
+            reusable_resource={
+                "id": None,
+                "title": "复用专属讲义",
+                "resource_type": "lecture",
+                "knowledge_topic": "测试主题",
+                "industry": "软件开发",
+                "content": "# 复用专属讲义\n\n完整内容。",
+                "content_json": {},
+                "validation_score": 90,
+            },
+        )
+
+    request = db_session.query(KnowledgePublicationRequest).filter_by(resource_id=result["resource_id"]).one()
+    assert request.status == "published"
 
 
 def test_task_repository_persists_calculated_match_score(
@@ -242,6 +310,30 @@ def test_task_repository_marks_missing_match_score_as_pending(
     assert resource.content_json["match_score_status"] == "pending"
 
 
+def test_task_repository_keeps_failed_resource_pending(
+    db_session,
+    sample_agent_task,
+    sample_learner_profile,
+    resource_persistence_context,
+):
+    result = TaskRepository().save_resource_and_complete(
+        task_id=sample_agent_task.id,
+        learner_id=sample_learner_profile.id,
+        generation_result={
+            "resource_type": "lecture",
+            "resource_title": "Failed lecture",
+            "content": "# Failed lecture",
+            "content_json": {},
+        },
+        audit_result={"passed": False, "overall_score": 40},
+        debate_rounds=1,
+    )
+
+    resource = db_session.get(LearningResource, result["resource_id"])
+    assert resource.status == "failed"
+    assert resource.review_status == "pending"
+
+
 def test_resource_display_and_export_hide_historical_placeholder_values(
     db_session,
     sample_learner_profile,
@@ -287,6 +379,56 @@ def test_sync_resource_save_rejects_mock_payload_before_persisting(
         )
 
     assert db_session.query(LearningResource).count() == 0
+
+
+def test_sync_resource_save_marks_validated_resource_approved(
+    db_session,
+    sample_learner_profile,
+    resource_persistence_context,
+):
+    resource = ResourceGenerationService._save_resource(
+        learner_id=sample_learner_profile.id,
+        resource_type="lecture",
+        resource_data={
+            "resource_title": "Validated lecture",
+            "content": "# Validated lecture\n\nThis is complete content.",
+            "_meta": {"score": 95},
+        },
+        diagnosis_result={},
+        target_topic="test",
+    )
+
+    assert resource.status == "ready"
+    assert resource.validation_passed is True
+    assert resource.review_status == "approved"
+
+
+def test_sync_resource_save_auto_publishes_new_lecture(
+    db_session,
+    sample_learner_profile,
+    resource_persistence_context,
+):
+    with patch(
+        "app.domains.knowledge.publication_service.KnowledgeService.process_doc",
+        return_value=True,
+    ):
+        resource = ResourceGenerationService._save_resource(
+            learner_id=sample_learner_profile.id,
+            resource_type="lecture",
+            resource_data={
+                "resource_title": "自动入库讲义",
+                "content": "# 自动入库讲义\n\nThis is complete content.",
+                "_meta": {"score": 95},
+            },
+            diagnosis_result={},
+            target_topic="test",
+            industry="软件开发",
+            auto_publish=True,
+        )
+
+    request = db_session.query(KnowledgePublicationRequest).filter_by(resource_id=resource.id).one()
+    assert request.status == "published"
+    assert request.review_note == "系统自动入库"
 
 
 def test_strict_llm_call_never_returns_a_mock_when_provider_is_missing(monkeypatch):

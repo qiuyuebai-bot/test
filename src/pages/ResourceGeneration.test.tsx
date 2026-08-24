@@ -106,4 +106,58 @@ describe('ResourceGeneration context modes', () => {
       }))
     })
   })
+
+  it('does not expose quality validation failure labels for any resource type', async () => {
+    setMockStore({
+      resources: [
+        {
+          id: 11,
+          title: '失败实操指南',
+          resourceType: 'guide',
+          content: '# 指南',
+          contentSummary: '',
+          status: 'failed',
+          reviewStatus: 'pending',
+          versionNumber: 1,
+        },
+        {
+          id: 12,
+          title: '失败分阶测试题',
+          resourceType: 'exercise',
+          content: '# 测试题',
+          contentSummary: '',
+          status: 'failed',
+          reviewStatus: 'pending',
+          versionNumber: 1,
+        },
+        {
+          id: 13,
+          title: '失败专属讲义',
+          resourceType: 'lecture',
+          content: '# 讲义',
+          contentSummary: '',
+          status: 'failed',
+          reviewStatus: 'pending',
+          versionNumber: 1,
+        },
+      ],
+      resourcesTotal: 3,
+    })
+
+    const { default: Page } = await import('./ResourceGeneration')
+    render(
+      <MemoryRouter initialEntries={['/resources?mode=list&learnerId=6']}>
+        <Page />
+      </MemoryRouter>,
+    )
+
+    await waitFor(() => expect(screen.getAllByText('失败实操指南').length).toBeGreaterThan(0))
+    expect(screen.queryByText('质量校验未通过')).not.toBeInTheDocument()
+
+    for (const [label, title] of [['分阶测试题', '失败分阶测试题'], ['专属讲义', '失败专属讲义']]) {
+      await userEvent.click(screen.getByRole('button', { name: new RegExp(label) }))
+      await waitFor(() => expect(screen.getAllByText(title).length).toBeGreaterThan(0))
+      expect(screen.queryByText('质量校验未通过')).not.toBeInTheDocument()
+    }
+  })
 })
