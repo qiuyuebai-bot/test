@@ -2,7 +2,7 @@
 知识库领域 ORM 模型
 合并 knowledge_doc + knowledge_slice
 """
-from sqlalchemy import Column, Integer, String, Boolean, DateTime, JSON, Text, Float, ForeignKey
+from sqlalchemy import Column, Integer, String, Boolean, DateTime, JSON, Text, Float, ForeignKey, Index
 from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.database import Base
@@ -62,6 +62,8 @@ class KnowledgeDoc(Base):
 
     # 来源与版本
     source = Column(String(100), nullable=True, comment="文档来源")
+    origin_type = Column(String(50), nullable=True, index=True, comment="来源类型")
+    origin_resource_id = Column(Integer, ForeignKey("learning_resources.id"), nullable=True, index=True, comment="来源资源ID")
     version = Column(String(20), default="1.0", comment="文档版本")
     author = Column(String(100), nullable=True, comment="作者")
 
@@ -88,6 +90,38 @@ class KnowledgeDoc(Base):
         if self.slice_count == 0:
             return 0.0
         return (self.indexed_slice_count / self.slice_count) * 100
+
+
+class KnowledgePublicationRequest(Base):
+    """Generated lecture publication request and immutable review snapshot."""
+
+    __tablename__ = "knowledge_publication_requests"
+    __table_args__ = (
+        Index("ix_knowledge_publication_requests_resource_status", "resource_id", "status"),
+        Index("ix_knowledge_publication_requests_submitted_by", "submitted_by"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True, comment="入库申请ID")
+    resource_id = Column(Integer, ForeignKey("learning_resources.id"), nullable=False, index=True, comment="原讲义资源ID")
+    resource_version = Column(String(20), nullable=False, comment="申请时资源版本")
+    content_hash = Column(String(64), nullable=False, comment="申请快照内容哈希")
+    snapshot = Column(JSON, nullable=False, comment="审核用不可变快照")
+    status = Column(String(20), nullable=False, default="pending", index=True, comment="申请状态")
+    submitted_by = Column(Integer, ForeignKey("users.id"), nullable=False, comment="提交用户ID")
+    reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True, comment="审核管理员ID")
+    review_note = Column(Text, nullable=True, comment="审核备注或驳回原因")
+    knowledge_doc_id = Column(Integer, ForeignKey("knowledge_docs.id"), nullable=True, index=True, comment="发布后的知识文档ID")
+    error_message = Column(Text, nullable=True, comment="脱敏后的发布错误摘要")
+    submitted_at = Column(DateTime, server_default=func.now(), nullable=False, comment="提交时间")
+    reviewed_at = Column(DateTime, nullable=True, comment="审核时间")
+    published_at = Column(DateTime, nullable=True, comment="入库完成时间")
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False, comment="更新时间")
+
+    resource = relationship("LearningResource", foreign_keys=[resource_id])
+    knowledge_doc = relationship("KnowledgeDoc", foreign_keys=[knowledge_doc_id])
+
+    def __repr__(self) -> str:
+        return f"<KnowledgePublicationRequest(id={self.id}, resource_id={self.resource_id}, status={self.status})>"
 
 
 class KnowledgeSlice(Base):

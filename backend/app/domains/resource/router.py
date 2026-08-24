@@ -25,6 +25,7 @@ from app.domains.learner.service import LearnerService
 from app.models import LearningResource
 from app.utils.logger import LoggerUtil
 from app.utils.auth import get_current_user, CurrentUser, require_admin
+from app.domains.knowledge.publication_service import KnowledgePublicationService, PublicationError
 
 # Celery 可选依赖
 try:
@@ -40,6 +41,14 @@ except ImportError:
     logger.warning("Celery 未安装，异步任务功能不可用，将使用同步模式")
 
 router = APIRouter(prefix="", tags=["个性化资源生成"])
+
+
+def _publication_error_response(exc: PublicationError):
+    if exc.code == "forbidden":
+        return forbidden(str(exc))
+    if exc.code == "resource_not_found":
+        return not_found(str(exc))
+    return bad_request(str(exc), {"code": exc.code})
 
 
 @router.post("/resources/generate", summary="生成三类个性化学习资源（Celery异步）")
@@ -334,6 +343,42 @@ def get_resource_detail(
     except Exception as e:
         LoggerUtil.log_error("获取资源详情失败", e)
         return error(message=f"获取资源详情失败: {str(e)}")
+
+
+@router.post("/resources/{resource_id}/knowledge-publication-requests", summary="申请讲义加入领域知识库")
+def create_knowledge_publication_request(
+    resource_id: int,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> BaseResponse:
+    try:
+        request = KnowledgePublicationService.create_request(db, resource_id, current_user)
+        return success(
+            data=KnowledgePublicationService._serialize(request),
+            message="入库申请已提交，等待管理员审核",
+        )
+    except PublicationError as exc:
+        return _publication_error_response(exc)
+    except Exception:
+        db.rollback()
+        logger.exception("创建讲义入库申请失败: resource_id={}", resource_id)
+        return error(message="入库申请失败，请稍后重试")
+
+
+@router.get("/resources/{resource_id}/knowledge-publication-request", summary="查询讲义入库申请")
+def get_knowledge_publication_request(
+    resource_id: int,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> BaseResponse:
+    try:
+        request = KnowledgePublicationService.get_resource_request(db, resource_id, current_user)
+        return success(data=KnowledgePublicationService._serialize(request) if request else None)
+    except PublicationError as exc:
+        return _publication_error_response(exc)
+    except Exception:
+        logger.exception("查询讲义入库申请失败: resource_id={}", resource_id)
+        return error(message="查询入库申请失败，请稍后重试")
 
 
 @router.get("/resources/{resource_id}/export", summary="导出资源")

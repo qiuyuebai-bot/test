@@ -121,6 +121,8 @@ export interface KnowledgeSearchResult {
   similarity: number
   keywords: string[]
   highlightedContent?: string
+  originType?: string
+  originResourceId?: number
   isKeyPoint?: boolean
 }
 
@@ -331,7 +333,8 @@ export interface LearningResource {
   sourceSliceIds?: number[]
   summary?: string
   learnerId?: number
-  version?: number
+  version?: string | number
+  isLatest?: boolean
 }
 
 export interface DiagnosisResult {

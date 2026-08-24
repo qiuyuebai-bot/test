@@ -43,7 +43,7 @@ export function AgentOverviewCard({ agent, icon: Icon }: Props) {
         </div>
         <div className="flex justify-between">
           <span className="text-text-tertiary">平均耗时</span>
-          <span className="font-medium text-text-primary">{agent.avgLatencyMs ? `${(agent.avgLatencyMs / 1000).toFixed(1)}s` : '-'}</span>
+          <span className="font-medium text-text-primary">{agent.avgLatencyMs != null ? `${(agent.avgLatencyMs / 1000).toFixed(1)}s` : '-'}</span>
         </div>
       </div>
 

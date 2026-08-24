@@ -5,6 +5,7 @@ import type { AppState } from './index'
 import { reportError } from '../lib/sentry'
 
 type AgentStatusRaw = Partial<AgentStatus> & {
+  status?: string
   failCount?: number
   avgDurationMs?: number | null
   lastActiveAt?: string | null
@@ -29,7 +30,8 @@ export interface AgentSlice {
   agentsLoading: boolean
   fetchAgentStatuses: (options?: { silent?: boolean }) => Promise<void>
   fetchTasks: (params?: { page?: number; pageSize?: number; status?: string }) => Promise<void>
-  startAgentTask: (params: { learnerId: number; taskType: string; taskName?: string }) => Promise<{ taskId: number }>
+  syncTaskTerminalState: (taskId: number, status: 'completed' | 'failed', errorMessage?: string) => void
+  startAgentTask: (params: { learnerId: number; taskType: string; taskName?: string; targetTopic?: string }) => Promise<{ taskId: number }>
   runFullPipeline: (params: { learnerId: number; targetTopic: string; resourceType?: string; industry?: string }) => Promise<{ taskId: number }>
   pollTaskStatus: (taskId: number, onUpdate?: (task: AgentTask) => void) => () => void
   setCurrentTask: (task: AgentTask | null) => void
@@ -156,6 +158,9 @@ export const createAgentSlice: StateCreator<AppState, [], [], AgentSlice> = (set
       const agents = result.agents.map((a: AgentStatusRaw) => ({
         ...a,
         agentType: (a.agentType as string) === 'judge' ? 'review' : a.agentType,
+        state: (a.state ?? a.status ?? 'idle') as AgentStatus['state'],
+        totalTasksHandled: a.totalTasksHandled ?? 0,
+        successCount: a.successCount ?? 0,
         failureCount: a.failureCount ?? a.failCount ?? 0,
         avgLatencyMs: a.avgLatencyMs ?? a.avgDurationMs,
         lastHeartbeat: a.lastHeartbeat ?? a.lastActiveAt,
@@ -195,6 +200,20 @@ export const createAgentSlice: StateCreator<AppState, [], [], AgentSlice> = (set
     }
   },
 
+  syncTaskTerminalState: (taskId, status, errorMessage) => {
+    const terminalPatch = status === 'completed'
+      ? { status, progress: 100, flowStage: 'complete', errorMessage: undefined }
+      : { status, flowStage: 'failed', errorMessage }
+    set((state) => ({
+      tasks: state.tasks.map((task) => (
+        task.taskId === taskId ? { ...task, ...terminalPatch } : task
+      )),
+      currentTask: state.currentTask?.taskId === taskId
+        ? { ...state.currentTask, ...terminalPatch }
+        : state.currentTask,
+    }))
+  },
+
   startAgentTask: async (params) => {
     const taskTypeMap: Record<string, string> = {
       diagnosis: 'learner_diagnosis',
@@ -213,6 +232,7 @@ export const createAgentSlice: StateCreator<AppState, [], [], AgentSlice> = (set
       learnerId: params.learnerId,
       taskName: params.taskName || taskNameMap[params.taskType] || '智能体任务',
       taskType: backendTaskType,
+      targetTopic: params.targetTopic?.trim() || undefined,
     })
     await agentApi.startTask(createResult.taskId)
     await get().fetchTasks()

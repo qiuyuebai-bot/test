@@ -15,6 +15,7 @@ const TaskEvidenceWorkspace = lazy(routeLoaders['/multi-agent/tasks/:taskId/evid
 const LearnerProfile = lazy(routeLoaders['/profile'])
 const KnowledgeBase = lazy(routeLoaders['/knowledge-base'])
 const ResourceGeneration = lazy(routeLoaders['/resources'])
+const ResourceReader = lazy(routeLoaders['/resources/:resourceId/read'])
 const LearningReport = lazy(routeLoaders['/report'])
 const AdaptiveGuidance = lazy(routeLoaders['/guidance'])
 const SystemTest = lazy(routeLoaders['/monitoring'])
@@ -94,6 +95,7 @@ function App() {
             <Route path="profile" element={<LearnerProfile />} />
             <Route path="knowledge-base" element={<KnowledgeBase />} />
             <Route path="resources" element={<ResourceGeneration />} />
+            <Route path="resources/:resourceId/read" element={<ResourceReader />} />
             <Route path="report" element={<LearningReport />} />
             <Route path="guidance" element={<AdaptiveGuidance />} />
             <Route

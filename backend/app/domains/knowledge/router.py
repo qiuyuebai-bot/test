@@ -13,7 +13,7 @@ from pathlib import Path
 
 from app.config import settings
 from app.database import get_db
-from app.schemas.response import success, bad_request, not_found, paged_success
+from app.schemas.response import success, bad_request, not_found, paged_success, forbidden
 from app.domains.knowledge.schemas import (
     KnowledgeDocCreate,
     KnowledgeDocUpdate,
@@ -24,8 +24,10 @@ from app.domains.knowledge.schemas import (
     KnowledgeBatchDeleteRequest,
     KnowledgeBatchOperationResponse,
     KnowledgeUploadResponse,
+    KnowledgePublicationRejectRequest,
 )
 from app.domains.knowledge.service import KnowledgeService
+from app.domains.knowledge.publication_service import KnowledgePublicationService, PublicationError
 from app.domains.knowledge.parser import KnowledgeDocumentParser
 from app.services.common import BaseService
 from app.utils.auth import require_admin, get_current_user, CurrentUser
@@ -35,6 +37,87 @@ router = APIRouter(
     tags=["知识库"],
     dependencies=[Depends(get_current_user)],
 )
+
+
+def _publication_error(exc: PublicationError):
+    if exc.code == "forbidden":
+        return forbidden(str(exc))
+    if exc.code == "resource_not_found" or exc.code == "request_not_found":
+        return not_found(str(exc))
+    return bad_request(str(exc), {"code": exc.code})
+
+
+@router.get("/publication-requests", summary="获取讲义入库审核申请")
+def list_publication_requests(
+    page: int = Query(1, ge=1),
+    page_size: int = Query(20, ge=1, le=100),
+    status: Optional[str] = Query(None),
+    industry: Optional[str] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_admin),
+):
+    items, total = KnowledgePublicationService.list_requests(
+        db, page=page, page_size=page_size, status=status, industry=industry
+    )
+    return paged_success(items=items, total=total, page=page, page_size=page_size)
+
+
+@router.get("/publication-requests/{request_id}", summary="获取讲义入库申请详情")
+def get_publication_request(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_admin),
+):
+    try:
+        request = KnowledgePublicationService.get_request(db, request_id, current_user)
+        if not request:
+            return not_found("入库申请不存在")
+        return success(data=KnowledgePublicationService._serialize(request))
+    except PublicationError as exc:
+        return _publication_error(exc)
+
+
+@router.post("/publication-requests/{request_id}/approve", summary="批准讲义入库申请")
+def approve_publication_request(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_admin),
+):
+    try:
+        request = KnowledgePublicationService.approve_request(db, request_id, current_user)
+        return success(
+            data=KnowledgePublicationService._serialize(request),
+            message="讲义入库处理完成" if request.status == "published" else "讲义已进入发布流程",
+        )
+    except PublicationError as exc:
+        return _publication_error(exc)
+
+
+@router.post("/publication-requests/{request_id}/reject", summary="驳回讲义入库申请")
+def reject_publication_request(
+    request_id: int,
+    payload: KnowledgePublicationRejectRequest,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_admin),
+):
+    try:
+        request = KnowledgePublicationService.reject_request(db, request_id, current_user, payload.reason)
+        return success(data=KnowledgePublicationService._serialize(request), message="入库申请已驳回")
+    except PublicationError as exc:
+        return _publication_error(exc)
+
+
+@router.post("/publication-requests/{request_id}/retry", summary="重试讲义入库发布")
+def retry_publication_request(
+    request_id: int,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_admin),
+):
+    try:
+        request = KnowledgePublicationService.retry_request(db, request_id, current_user)
+        return success(data=KnowledgePublicationService._serialize(request), message="讲义发布重试完成")
+    except PublicationError as exc:
+        return _publication_error(exc)
 
 _KNOWLEDGE_RESPONSES = {
     400: {"description": "请求参数错误（文件格式不支持、内容为空等）"},
@@ -293,6 +376,8 @@ def get_doc_list(
             updated_at=doc.updated_at,
             indexed_at=doc.indexed_at,
             error_message=doc.error_message,
+            origin_type=doc.origin_type,
+            origin_resource_id=doc.origin_resource_id,
         ))
     
     return paged_success(
@@ -346,6 +431,8 @@ def get_doc_detail(
         updated_at=doc.updated_at,
         indexed_at=doc.indexed_at,
         error_message=doc.error_message,
+        origin_type=doc.origin_type,
+        origin_resource_id=doc.origin_resource_id,
     )
     
     return success(response, "查询成功")

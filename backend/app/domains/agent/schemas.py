@@ -14,6 +14,10 @@ class AgentStatusResponse(BaseModel):
     status: str = Field(..., description="状态: idle/running/validating/error")
     current_task_id: Optional[int] = Field(None, description="当前任务ID")
     last_error: Optional[str] = Field(None, description="最后错误信息")
+    total_tasks_handled: int = 0
+    success_count: int = 0
+    failure_count: int = 0
+    avg_latency_ms: Optional[float] = None
 
 
 # ========== 任务相关 ==========

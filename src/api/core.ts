@@ -8,6 +8,24 @@ export interface GenerateResourcesRequest {
   industry?: string
 }
 
+export interface KnowledgePublicationRequest {
+  id: number
+  resourceId: number
+  resourceVersion: string
+  contentHash: string
+  status: 'pending' | 'publishing' | 'published' | 'rejected' | 'publish_failed' | string
+  snapshot?: Record<string, unknown>
+  submittedBy: number
+  reviewedBy?: number | null
+  reviewNote?: string | null
+  knowledgeDocId?: number | null
+  errorMessage?: string | null
+  submittedAt: string
+  reviewedAt?: string | null
+  publishedAt?: string | null
+  updatedAt: string
+}
+
 export interface TutoringQuestion {
   id: string
   type: 'single' | 'multiple'
@@ -105,6 +123,14 @@ export const coreApi = {
 
   exportResource(id: number, format: 'txt' | 'md' = 'txt'): Promise<Blob> {
     return http.get<Blob>(`/resources/${id}/export`, { format })
+  },
+
+  getKnowledgePublicationRequest(resourceId: number): Promise<KnowledgePublicationRequest | null> {
+    return http.get<KnowledgePublicationRequest | null>(`/resources/${resourceId}/knowledge-publication-request`)
+  },
+
+  createKnowledgePublicationRequest(resourceId: number): Promise<KnowledgePublicationRequest> {
+    return http.post<KnowledgePublicationRequest>(`/resources/${resourceId}/knowledge-publication-requests`)
   },
 
   getLearnerReport(learnerId: number): Promise<LearnerReport> {

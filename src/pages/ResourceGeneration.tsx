@@ -1,5 +1,5 @@
 import { lazy, Suspense, useState, useEffect, useCallback, useRef } from 'react'
-import { useSearchParams } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import type { LearningResource } from '@/types'
@@ -97,6 +97,7 @@ const stageToStepIndex: Record<string, number> = {
 }
 
 export default function ResourceGeneration() {
+  const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const requestedResourceId = Number(searchParams.get('resourceId'))
   const requestedMode = searchParams.get('mode') as ResourceViewMode | null
@@ -414,6 +415,11 @@ export default function ResourceGeneration() {
   const handlePreview = () => {
     if (!selectedResource) return
     setIsPreviewOpen(true)
+  }
+
+  const handleRead = () => {
+    if (!selectedResource) return
+    navigate(`/resources/${selectedResource.id}/read`)
   }
 
   const handlePrint = () => {
@@ -1042,6 +1048,15 @@ export default function ResourceGeneration() {
                     >
                       <Eye className="w-3.5 h-3.5" />
                       预览
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      disabled={!selectedResource}
+                      onClick={handleRead}
+                    >
+                      <BookOpen className="w-3.5 h-3.5" />
+                      阅读
                     </Button>
                     <Button
                       variant="ghost"

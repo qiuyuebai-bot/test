@@ -243,7 +243,7 @@ describe('store agent state normalization', () => {
   it('fetchAgentStatuses maps judge->review, failCount->failureCount, avgDurationMs->avgLatencyMs', async () => {
     vi.mocked(agentApi.getAllStatus).mockResolvedValue({
       agents: [
-        { agentType: 'judge', failCount: 2, avgDurationMs: 100, lastActiveAt: 't1' },
+        { agentType: 'judge', status: 'running', totalTasksHandled: 4, successCount: 2, failCount: 2, avgDurationMs: 100, lastActiveAt: 't1' },
         { agentType: 'generation', failureCount: 1, avgLatencyMs: 50, lastHeartbeat: 't2' },
       ],
     } as never)
@@ -251,6 +251,9 @@ describe('store agent state normalization', () => {
     await useStore.getState().fetchAgentStatuses()
     const agents = useStore.getState().agentStatuses
     expect(agents[0].agentType).toBe('review')
+    expect(agents[0].state).toBe('running')
+    expect(agents[0].totalTasksHandled).toBe(4)
+    expect(agents[0].successCount).toBe(2)
     expect(agents[0].failureCount).toBe(2)
     expect(agents[0].avgLatencyMs).toBe(100)
     expect(agents[0].lastHeartbeat).toBe('t1')
@@ -292,6 +295,47 @@ describe('store agent state normalization', () => {
       learnerId: 1,
       taskType: 'learner_diagnosis',
       taskName: '学情诊断任务',
+    }))
+  })
+
+  it('startAgentTask forwards the required target topic for a full pipeline', async () => {
+    vi.mocked(agentApi.createTask).mockResolvedValue({ taskId: 43 })
+    vi.mocked(agentApi.startTask).mockResolvedValue(undefined as never)
+    vi.mocked(agentApi.getAllStatus).mockResolvedValue({ agents: [] } as never)
+    vi.mocked(agentApi.getTaskList).mockResolvedValue({ items: [], total: 0 } as never)
+    const useStore = await freshStore()
+
+    await useStore.getState().startAgentTask({
+      learnerId: 1,
+      taskType: 'full_flow',
+      targetTopic: '  反向传播  ',
+    })
+
+    expect(agentApi.createTask).toHaveBeenCalledWith(expect.objectContaining({
+      learnerId: 1,
+      taskType: 'full_pipeline',
+      targetTopic: '反向传播',
+    }))
+  })
+
+  it('syncTaskTerminalState immediately reconciles a stale running task', async () => {
+    const useStore = await freshStore()
+    useStore.setState({
+      tasks: [{ taskId: 10, status: 'running', progress: 50, flowStage: 'generation' }],
+      currentTask: { taskId: 10, status: 'running', progress: 50, flowStage: 'generation' },
+    } as never)
+
+    useStore.getState().syncTaskTerminalState(10, 'completed')
+
+    expect(useStore.getState().tasks[0]).toEqual(expect.objectContaining({
+      taskId: 10,
+      status: 'completed',
+      progress: 100,
+      flowStage: 'complete',
+    }))
+    expect(useStore.getState().currentTask).toEqual(expect.objectContaining({
+      status: 'completed',
+      progress: 100,
     }))
   })
 

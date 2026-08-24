@@ -84,6 +84,86 @@ def _as_list(value):
     return [parsed] if parsed else []
 
 
+_AGENT_STAGE_GROUPS = {
+    "diagnosis": {"diagnosis"},
+    "knowledge": {"knowledge_retrieval"},
+    "generation": {"generation"},
+    "judge": {"judge_first", "debate", "final_revision"},
+}
+_FLOW_STAGE_ORDER = {
+    stage: index
+    for index, stage in enumerate(
+        ("diagnosis", "knowledge_retrieval", "generation", "judge_first", "debate", "final_revision")
+    )
+}
+
+
+def _calculate_agent_statistics(tasks) -> Dict[str, Dict[str, float | int]]:
+    """Aggregate durable per-agent counts and stage latency from task logs."""
+    stats = {
+        agent_type: {"total_tasks_handled": 0, "success_count": 0, "failure_count": 0, "duration_total": 0.0, "duration_count": 0}
+        for agent_type in _AGENT_STAGE_GROUPS
+    }
+
+    for task in tasks:
+        logs = [item for item in _as_list(task.execution_logs) if isinstance(item, dict)]
+        seen_stages = {item.get("stage") for item in logs}
+        stage_durations: Dict[str, float] = {}
+        previous_stage = None
+        for item in logs:
+            stage = item.get("stage")
+            duration = item.get("previous_stage_duration_ms")
+            if previous_stage in _FLOW_STAGE_ORDER and isinstance(duration, (int, float)):
+                stage_durations[previous_stage] = stage_durations.get(previous_stage, 0.0) + max(0.0, float(duration))
+            if stage in _FLOW_STAGE_ORDER:
+                previous_stage = stage
+
+        handled_agents = {
+            agent_type
+            for agent_type, stages in _AGENT_STAGE_GROUPS.items()
+            if seen_stages & stages
+        }
+        if task.task_type == "learner_diagnosis" and not handled_agents:
+            handled_agents.add("diagnosis")
+            if task.duration_ms is not None:
+                stage_durations["diagnosis"] = max(0.0, float(task.duration_ms))
+
+        last_stage = max(
+            (stage for stage in seen_stages if stage in _FLOW_STAGE_ORDER),
+            key=lambda stage: _FLOW_STAGE_ORDER[stage],
+            default=None,
+        )
+        failed_agent = next(
+            (agent_type for agent_type, stages in _AGENT_STAGE_GROUPS.items() if last_stage in stages),
+            None,
+        ) if task.status == "failed" else None
+
+        for agent_type in handled_agents:
+            agent_stats = stats[agent_type]
+            agent_stats["total_tasks_handled"] += 1
+            if task.status == "completed" or (task.status == "failed" and agent_type != failed_agent):
+                agent_stats["success_count"] += 1
+            elif task.status == "failed" and agent_type == failed_agent:
+                agent_stats["failure_count"] += 1
+
+            duration = sum(stage_durations.get(stage, 0.0) for stage in _AGENT_STAGE_GROUPS[agent_type])
+            if duration > 0:
+                agent_stats["duration_total"] += duration
+                agent_stats["duration_count"] += 1
+
+    return {
+        agent_type: {
+            "total_tasks_handled": int(values["total_tasks_handled"]),
+            "success_count": int(values["success_count"]),
+            "failure_count": int(values["failure_count"]),
+            "avg_latency_ms": round(values["duration_total"] / values["duration_count"], 1)
+            if values["duration_count"]
+            else None,
+        }
+        for agent_type, values in stats.items()
+    }
+
+
 def _score_percent(value):
     if value is None:
         return None
@@ -193,6 +273,9 @@ def get_all_agent_status(
     """
     try:
         statuses = orchestrator.get_all_agents_status()
+        statistics = _calculate_agent_statistics(db.query(AgentTask).all())
+        for status_item in statuses:
+            status_item.update(statistics.get(status_item["agent_type"], {}))
         
         LoggerUtil.log_api_request("GET /api/v1/agent/status", {})
         
@@ -220,6 +303,9 @@ def get_agent_status(
         status = orchestrator.get_agent_status(agent_type)
         if not status:
             return not_found(message=f"未找到Agent: {agent_type}")
+        status.update(
+            _calculate_agent_statistics(db.query(AgentTask).all()).get(agent_type, {})
+        )
         
         return success(data=status)
     except Exception as e:

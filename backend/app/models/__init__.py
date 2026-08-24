@@ -25,7 +25,7 @@ from app.domains.training.models import TrainingProject, TrainingEnrollment, Tra
 from app.domains.training.models import ProjectTypeEnum, ProjectStatusEnum, EnrollmentStatusEnum, PlanStatusEnum
 
 # 知识库相关模型
-from app.domains.knowledge.models import KnowledgeDoc, IndustryEnum, DocStatusEnum
+from app.domains.knowledge.models import KnowledgeDoc, KnowledgePublicationRequest, IndustryEnum, DocStatusEnum
 from app.domains.knowledge.models import KnowledgeSlice
 
 # 智能体相关模型
@@ -95,6 +95,7 @@ __all__ = [
     "PlanStatusEnum",
     # 知识库相关
     "KnowledgeDoc",
+    "KnowledgePublicationRequest",
     "IndustryEnum",
     "DocStatusEnum",
     "KnowledgeSlice",

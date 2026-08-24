@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
+import { BookOpen } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { agentApi, coreApi } from '@/api'
 import { useStore } from '@/store'
@@ -225,9 +226,12 @@ export default function EmbeddedResourceGeneration({ position, learnerId }: Prop
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <h3 className="text-base font-medium text-text-primary">{selectedResource.title}</h3>
-                {selectedMatchScore && (
-                  <Badge variant="success">匹配度 {selectedMatchScore}</Badge>
-                )}
+                <div className="flex items-center gap-2">
+                  {selectedMatchScore && <Badge variant="success">匹配度 {selectedMatchScore}</Badge>}
+                  <Button variant="outline" size="sm" onClick={() => { window.location.href = `/resources/${selectedResource.id}/read` }}>
+                    <BookOpen className="h-4 w-4" />阅读
+                  </Button>
+                </div>
               </div>
               <Suspense fallback={<LoadingState />}>
                 <MarkdownContent content={selectedResource.content} />

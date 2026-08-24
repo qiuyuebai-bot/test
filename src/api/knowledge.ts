@@ -1,5 +1,6 @@
 import { http, PagedData } from '../lib/request'
 import type { KnowledgeDoc, KnowledgeSlice, KnowledgeSearchResponse, PaginationParams } from '../types'
+import type { KnowledgePublicationRequest } from './core'
 
 export interface KnowledgeListParams extends PaginationParams {
   keyword?: string
@@ -127,6 +128,26 @@ function mapSliceFromApi(raw: RawSlice): KnowledgeSlice {
 }
 
 export const knowledgeApi = {
+  async getPublicationRequests(params?: PaginationParams & { status?: string; industry?: string }): Promise<PagedData<KnowledgePublicationRequest>> {
+    return http.get<PagedData<KnowledgePublicationRequest>>('/knowledge/publication-requests', params as Record<string, string | number | boolean | undefined>)
+  },
+
+  getPublicationRequest(id: number): Promise<KnowledgePublicationRequest> {
+    return http.get<KnowledgePublicationRequest>(`/knowledge/publication-requests/${id}`)
+  },
+
+  approvePublicationRequest(id: number): Promise<KnowledgePublicationRequest> {
+    return http.post<KnowledgePublicationRequest>(`/knowledge/publication-requests/${id}/approve`)
+  },
+
+  rejectPublicationRequest(id: number, reason: string): Promise<KnowledgePublicationRequest> {
+    return http.post<KnowledgePublicationRequest>(`/knowledge/publication-requests/${id}/reject`, { reason })
+  },
+
+  retryPublicationRequest(id: number): Promise<KnowledgePublicationRequest> {
+    return http.post<KnowledgePublicationRequest>(`/knowledge/publication-requests/${id}/retry`)
+  },
+
   async getList(params?: KnowledgeListParams): Promise<PagedData<KnowledgeDoc>> {
     const result = await http.get<{
       items: RawDoc[]

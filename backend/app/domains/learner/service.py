@@ -715,7 +715,15 @@ class LearnerService:
                 # 简化处理：企业管理员可查看所有
                 return True
             return False
-        
+
+        # Teacher resource access follows the same learner-list boundary used
+        # by teacher dashboards and management routes. The current deployment
+        # exposes all learner profiles in that list.
+        if user.role == UserRoleEnum.TEACHER:
+            return db.query(LearnerProfile.id).filter(
+                LearnerProfile.id == learner_id
+            ).first() is not None
+
         # 普通学习者：查看自己
         learner = db.query(LearnerProfile).filter(
             LearnerProfile.id == learner_id,

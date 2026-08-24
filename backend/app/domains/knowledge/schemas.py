@@ -62,6 +62,8 @@ class KnowledgeDocResponse(BaseModel):
     updated_at: datetime
     indexed_at: Optional[datetime] = None
     error_message: Optional[str] = None
+    origin_type: Optional[str] = None
+    origin_resource_id: Optional[int] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -73,6 +75,39 @@ class KnowledgeDocListResponse(BaseModel):
     page: int
     page_size: int
     total_pages: int
+
+
+class KnowledgePublicationRequestCreateResponse(BaseModel):
+    id: int
+    resource_id: int
+    resource_version: str
+    content_hash: str
+    status: str
+    submitted_at: datetime
+
+
+class KnowledgePublicationRequestResponse(BaseModel):
+    id: int
+    resource_id: int
+    resource_version: str
+    content_hash: str
+    status: str
+    snapshot: Dict[str, Any]
+    submitted_by: int
+    reviewed_by: Optional[int] = None
+    review_note: Optional[str] = None
+    knowledge_doc_id: Optional[int] = None
+    error_message: Optional[str] = None
+    submitted_at: datetime
+    reviewed_at: Optional[datetime] = None
+    published_at: Optional[datetime] = None
+    updated_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class KnowledgePublicationRejectRequest(BaseModel):
+    reason: str = Field(..., min_length=1, max_length=2000)
 
 
 # ===========================================
@@ -141,6 +176,8 @@ class KnowledgeSearchResult(BaseModel):
     slice_index: int
     keywords: List[str] = []
     highlighted_content: Optional[str] = None
+    origin_type: Optional[str] = None
+    origin_resource_id: Optional[int] = None
 
 
 class KnowledgeSearchResponse(BaseModel):

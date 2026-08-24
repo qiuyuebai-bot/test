@@ -3,6 +3,7 @@ import { useStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import type { KnowledgeDoc, KnowledgeSearchResult } from '@/types'
 import { configApi, domainToIndustry, knowledgeApi } from '@/api'
+import type { KnowledgePublicationRequest } from '@/api/core'
 import type { DomainOption } from '@/api/config'
 import Card from '@/components/Card'
 import Modal from '@/components/Modal'
@@ -395,6 +396,9 @@ export default function KnowledgeBase() {
   const [sliceSearchError, setSliceSearchError] = useState('')
   const [reindexingId, setReindexingId] = useState<number | null>(null)
   const [recentDocs, setRecentDocs] = useState<KnowledgeDoc[]>([])
+  const [publicationRequests, setPublicationRequests] = useState<KnowledgePublicationRequest[]>([])
+  const [publicationLoading, setPublicationLoading] = useState(false)
+  const [publicationActionId, setPublicationActionId] = useState<number | null>(null)
 
   const previewReqIdRef = useRef(0)
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -416,16 +420,30 @@ export default function KnowledgeBase() {
     }
   }, [])
 
+  const refreshPublicationRequests = useCallback(async () => {
+    if (!canManageKnowledge) return
+    setPublicationLoading(true)
+    try {
+      const result = await knowledgeApi.getPublicationRequests({ page: 1, pageSize: 50 })
+      setPublicationRequests(result.items)
+    } catch {
+      setPublicationRequests([])
+    } finally {
+      setPublicationLoading(false)
+    }
+  }, [canManageKnowledge])
+
   useEffect(() => {
     void Promise.all([
       fetchKnowledgeDocs({ page: 1, pageSize: DEFAULT_PAGE_SIZE }),
       fetchKnowledgeStats(),
       refreshRecentDocs(),
+      refreshPublicationRequests(),
     ])
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
     }
-  }, [fetchKnowledgeDocs, fetchKnowledgeStats, refreshRecentDocs])
+  }, [fetchKnowledgeDocs, fetchKnowledgeStats, refreshRecentDocs, refreshPublicationRequests])
 
   useEffect(() => {
     configApi.getOptions().then(opts => setDomainOptions(opts.domains)).catch(() => {})
@@ -596,6 +614,28 @@ export default function KnowledgeBase() {
     }
   }
 
+  const handlePublicationAction = async (request: KnowledgePublicationRequest, action: 'approve' | 'reject' | 'retry') => {
+    if (!canManageKnowledge) return
+    if (action === 'approve' && !window.confirm('确认批准该讲义并发布到领域知识库？')) return
+    let reason = ''
+    if (action === 'reject') {
+      reason = window.prompt('请输入驳回原因')?.trim() || ''
+      if (!reason) return
+    }
+    setPublicationActionId(request.id)
+    try {
+      if (action === 'approve') await knowledgeApi.approvePublicationRequest(request.id)
+      if (action === 'reject') await knowledgeApi.rejectPublicationRequest(request.id, reason)
+      if (action === 'retry') await knowledgeApi.retryPublicationRequest(request.id)
+      await refreshPublicationRequests()
+      toast.success(action === 'reject' ? '申请已驳回' : '操作已完成')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : '操作失败')
+    } finally {
+      setPublicationActionId(null)
+    }
+  }
+
   if (knowledgeLoading && knowledgeDocs.length === 0) return <PageSkeleton type="table" />
   if (knowledgeError) return <ErrorState type="default" onRetry={() => { void refreshDocs() }} />
 
@@ -666,6 +706,19 @@ export default function KnowledgeBase() {
           </div>
         </Card>
       </div>
+
+      {canManageKnowledge && (
+        <Card padding="md">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <div>
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-text-primary"><BookOpen className="h-4 w-4 text-primary" />讲义入库审核</h2>
+              <p className="mt-1 text-xs text-text-tertiary">审核通过后按所属领域全局共享，发布失败可在原申请上重试。</p>
+            </div>
+            <button type="button" onClick={() => void refreshPublicationRequests()} className="rounded-lg p-2 hover:bg-bg-secondary" title="刷新审核申请"><RefreshCw className={`h-4 w-4 text-text-tertiary ${publicationLoading ? 'animate-spin' : ''}`} /></button>
+          </div>
+          {publicationRequests.length === 0 ? <p className="py-5 text-center text-sm text-text-tertiary">暂无入库申请</p> : <div className="divide-y divide-border/50">{publicationRequests.map((request) => { const statusLabel = request.status === 'pending' ? '待审核' : request.status === 'publishing' ? '发布中' : request.status === 'published' ? '已入库' : request.status === 'rejected' ? '已驳回' : '发布失败'; const title = String(request.snapshot?.title || `资源 #${request.resourceId}`); return <div key={request.id} className="flex flex-wrap items-center justify-between gap-3 py-3"><div className="min-w-0"><p className="truncate text-sm font-medium text-text-primary">{title}</p><p className="mt-1 text-xs text-text-tertiary">资源 #{request.resourceId} · v{request.resourceVersion} · {new Date(request.submittedAt).toLocaleString('zh-CN')}</p>{request.reviewNote && <p className="mt-1 text-xs text-error">{request.reviewNote}</p>}</div><div className="flex items-center gap-2"><Badge variant={request.status === 'published' ? 'success' : request.status === 'rejected' || request.status === 'publish_failed' ? 'error' : 'warning'}>{statusLabel}</Badge>{request.status === 'pending' && <><Button variant="outline" size="sm" disabled={publicationActionId === request.id} onClick={() => void handlePublicationAction(request, 'reject')}>驳回</Button><Button variant="primary" size="sm" disabled={publicationActionId === request.id} onClick={() => void handlePublicationAction(request, 'approve')}>批准</Button></>}{request.status === 'publish_failed' && <Button variant="outline" size="sm" disabled={publicationActionId === request.id} onClick={() => void handlePublicationAction(request, 'retry')}><RefreshCw className="h-3.5 w-3.5" />重试</Button>}</div></div> })}</div>}
+        </Card>
+      )}
 
       <Card padding="md">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -862,6 +915,7 @@ export default function KnowledgeBase() {
                           <span className="text-xs font-medium text-text-primary truncate">{result.docTitle}</span>
                           <span className="text-[11px] text-text-tertiary shrink-0">{Math.round(result.similarity * 100)}%</span>
                         </div>
+                        {result.originType === 'generated_lecture' && <p className="mb-1 text-[11px] text-warning-dark">来源：审核生成讲义 · 资源 #{result.originResourceId}</p>}
                         <p className="text-xs text-text-secondary line-clamp-3">{result.highlightedContent || result.content}</p>
                       </div>
                     ))}

@@ -46,6 +46,7 @@ const defaults: State = {
   agentsLoading: false,
   fetchAgentStatuses: () => Promise.resolve(),
   fetchTasks: () => Promise.resolve(),
+  syncTaskTerminalState: () => {},
   startAgentTask: () => Promise.resolve({ taskId: 1 }),
   runFullPipeline: () => Promise.resolve({ taskId: 1 }),
   pollTaskStatus: () => () => {},

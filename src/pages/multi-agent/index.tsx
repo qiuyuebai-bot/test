@@ -18,6 +18,7 @@ import {
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
+import Input from '@/components/Input'
 import { PageSkeleton } from '@/components/Skeleton'
 import ErrorState from '@/components/ErrorState'
 import type { AgentStatus } from '@/types'
@@ -191,11 +192,25 @@ export default function MultiAgentVisualization() {
                 </div>
               </div>
 
+              {(data.selectedTaskType === 'generation' || data.selectedTaskType === 'full_flow') && (
+                <Input
+                  label="目标主题"
+                  value={data.targetTopic}
+                  onChange={(event) => data.setTargetTopic(event.target.value)}
+                  placeholder="如：反向传播与梯度优化"
+                  maxLength={200}
+                />
+              )}
+
               <Button
                 variant="primary"
                 className="w-full justify-center"
                 onClick={() => data.handleStartTask(addLog)}
-                disabled={data.isStarting || !data.selectedLearnerId}
+                disabled={
+                  data.isStarting
+                  || !data.selectedLearnerId
+                  || ((data.selectedTaskType === 'generation' || data.selectedTaskType === 'full_flow') && !data.targetTopic.trim())
+                }
               >
                 {data.isStarting ? (
                   <>

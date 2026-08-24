@@ -10,6 +10,7 @@ export const routeLoaders = {
   '/profile': () => import('../pages/LearnerProfile'),
   '/knowledge-base': () => import('../pages/KnowledgeBase'),
   '/resources': () => import('../pages/ResourceGeneration'),
+  '/resources/:resourceId/read': () => import('../pages/ResourceReader'),
   '/report': () => import('../pages/LearningReport'),
   '/guidance': () => import('../pages/AdaptiveGuidance'),
   '/monitoring': () => import('../pages/SystemTest'),

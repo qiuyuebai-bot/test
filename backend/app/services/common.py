@@ -469,6 +469,8 @@ class ResourceServiceHelper(BaseService):
             "source_slice_ids": cls.parse_json_field(resource.source_slice_ids, []),
             "source_doc_ids": cls.parse_json_field(resource.source_doc_ids, []),
             "status": resource.status,
+            "version": resource.version,
+            "is_latest": resource.is_latest,
             "view_count": resource.view_count or 0,
             "download_count": resource.download_count or 0,
             "created_at": resource.created_at.isoformat() if resource.created_at else None,

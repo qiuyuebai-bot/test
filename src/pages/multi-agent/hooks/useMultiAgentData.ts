@@ -18,12 +18,13 @@ export function useMultiAgentData() {
       learners: s.learners,
     }))
   )
-  const { fetchAgentStatuses, fetchTasks, fetchLearners, startAgentTask } = useStore(
+  const { fetchAgentStatuses, fetchTasks, fetchLearners, startAgentTask, syncTaskTerminalState } = useStore(
     useShallow((s) => ({
       fetchAgentStatuses: s.fetchAgentStatuses,
       fetchTasks: s.fetchTasks,
       fetchLearners: s.fetchLearners,
       startAgentTask: s.startAgentTask,
+      syncTaskTerminalState: s.syncTaskTerminalState,
     }))
   )
 
@@ -31,6 +32,7 @@ export function useMultiAgentData() {
   const [error, setError] = useState<string | null>(null)
   const [selectedLearnerId, setSelectedLearnerId] = useState<number | null>(null)
   const [selectedTaskType, setSelectedTaskType] = useState<string>('full_flow')
+  const [targetTopic, setTargetTopic] = useState('')
   const [isStarting, setIsStarting] = useState(false)
   const [selectedTask, setSelectedTask] = useState<AgentTask>()
   const [runningTaskId, setRunningTaskId] = useState<number | null>(null)
@@ -71,6 +73,11 @@ export function useMultiAgentData() {
         addLogRef.current('review', (data.description as string) || '', data.decision === 'approved' ? 'success' : 'info')
         break
       case 'task_failed':
+        syncTaskTerminalState(
+          Number(data.taskId ?? data.task_id),
+          'failed',
+          (data.error as string) || '任务失败',
+        )
         setSseTaskProgress({ stage: 'failed', progress: 0, description: (data.error as string) || '任务失败' })
         addLogRef.current('system', `任务失败: ${(data.error as string) || '未知错误'}`, 'error')
         setRunningTaskId(null)
@@ -79,14 +86,16 @@ export function useMultiAgentData() {
         fetchAgentStatuses()
         break
     }
-  }, [fetchTasks, fetchAgentStatuses])
+  }, [fetchTasks, fetchAgentStatuses, syncTaskTerminalState])
 
   const sse = useTaskSSE(sseTaskId, {
     onEvent: handleSSEEvent,
     onComplete: (result) => {
-      const data = result as { taskId?: number }
+      const data = result as { taskId?: number; task_id?: number }
+      const completedTaskId = Number(data?.taskId ?? data?.task_id ?? sseTaskId)
+      syncTaskTerminalState(completedTaskId, 'completed')
       setSseTaskProgress({ stage: 'complete', progress: 100, description: '任务完成' })
-      addLogRef.current('system', `任务 #${data?.taskId || sseTaskId} 完成`, 'success')
+      addLogRef.current('system', `任务 #${completedTaskId} 完成`, 'success')
       setRunningTaskId(null)
       setSseTaskId(null)
       fetchTasks()
@@ -152,12 +161,16 @@ export function useMultiAgentData() {
 
   const handleStartTask = useCallback(async (addLog: (agent: string, content: string, type?: string) => void) => {
     if (!selectedLearnerId || isStarting) return
+    const requiresTargetTopic = selectedTaskType === 'generation' || selectedTaskType === 'full_flow'
+    const normalizedTopic = targetTopic.trim()
+    if (requiresTargetTopic && !normalizedTopic) return
 
     setIsStarting(true)
     try {
       const result = await startAgentTask({
         learnerId: selectedLearnerId,
         taskType: selectedTaskType,
+        targetTopic: normalizedTopic || undefined,
       })
       addLog('system', `已启动任务 #${result.taskId}`, 'success')
       setSseTaskProgress({ stage: 'init', progress: 0, description: '任务初始化中...' })
@@ -165,12 +178,11 @@ export function useMultiAgentData() {
       await fetchAgentStatuses()
       connectToRunningTask(result.taskId)
     } catch {
-      setError('启动任务失败')
       addLog('system', '启动任务失败', 'error')
     } finally {
       setIsStarting(false)
     }
-  }, [selectedLearnerId, isStarting, selectedTaskType, startAgentTask, fetchTasks, fetchAgentStatuses, connectToRunningTask])
+  }, [selectedLearnerId, isStarting, selectedTaskType, targetTopic, startAgentTask, fetchTasks, fetchAgentStatuses, connectToRunningTask])
 
   const handleReset = useCallback((clearLogs: () => void) => {
     clearLogs()
@@ -190,6 +202,7 @@ export function useMultiAgentData() {
     error,
     selectedLearnerId,
     selectedTaskType,
+    targetTopic,
     isStarting,
     selectedTask,
     runningTaskId,
@@ -197,6 +210,7 @@ export function useMultiAgentData() {
     sse,
     setSelectedLearnerId,
     setSelectedTaskType,
+    setTargetTopic,
     setSelectedTask,
     setError,
     setLoading,
