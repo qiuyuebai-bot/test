@@ -21,6 +21,7 @@ from app.models import (
 )
 from app.utils.datetime import utcnow_naive
 from app.utils.metrics import MetricsUtil
+from app.utils.resource_content import normalize_source_keywords
 
 from .metric_registry import (
     METRIC_REGISTRY,
@@ -179,10 +180,15 @@ class MetricCalculator:
                 if not source_slice:
                     continue
                 denominator += 1
-                keywords = list(source_slice.keywords or [])
-                if not keywords and source_slice.title:
-                    keywords = [source_slice.title]
-                keywords = [str(item).strip().casefold() for item in keywords if str(item).strip()]
+                keywords = [
+                    item.casefold()
+                    for item in normalize_source_keywords(
+                        source_slice.keywords,
+                        title=source_slice.title,
+                        content=source_slice.content,
+                    )
+                    if item.strip()
+                ]
                 if any(keyword in content for keyword in keywords):
                     covered += 1
 

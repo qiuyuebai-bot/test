@@ -48,7 +48,13 @@ METRIC_REGISTRY: Dict[str, MetricDefinition] = {
         display_name="生成内容覆盖率",
         unit="%",
         formula="source slices referenced by ready resources and represented in resource content",
-        source=("learning_resources.source_slice_ids", "learning_resources.content", "knowledge_slices.keywords"),
+        source=(
+            "learning_resources.source_slice_ids",
+            "learning_resources.content",
+            "knowledge_slices.keywords",
+            "knowledge_slices.title",
+            "knowledge_slices.content",
+        ),
         minimum_sample_size=1,
     ),
     "blind_spot_resource_coverage": MetricDefinition(

@@ -27,7 +27,11 @@ from app.domains.knowledge.service import KnowledgeService
 from app.domains.learner.service import LearnerService
 from app.database import get_db_context
 from app.services.common import ResourceServiceHelper
-from app.utils.resource_content import normalize_resource_content
+from app.utils.resource_content import (
+    build_source_references,
+    calculate_source_coverage,
+    normalize_resource_content,
+)
 
 
 class AgentOrchestrator:
@@ -236,6 +240,10 @@ class AgentOrchestrator:
                 generation_result.get("content"),
             )
             generation_result["word_count"] = len(generation_result["content"])
+            generation_result["source_coverage"] = calculate_source_coverage(
+                generation_result["content"],
+                build_source_references(knowledge_results),
+            )
 
             # Every generation entry point must persist the same match score
             # contract.  The legacy resource service already calculates this

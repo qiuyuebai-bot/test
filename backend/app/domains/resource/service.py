@@ -17,8 +17,11 @@ from app.agents.generation_agent import GenerationAgent
 from app.domains.knowledge.service import KnowledgeService
 from app.services.common import BaseService, ResourceServiceHelper, MetricsServiceHelper
 from app.utils.resource_content import (
+    build_source_references,
+    calculate_source_coverage,
     normalize_resource_content,
     normalize_resource_topic,
+    normalize_source_slice_ids,
     record_resource_quality_event,
     validate_match_score,
     validate_resource_title,
@@ -251,6 +254,26 @@ class ResourceGenerationService(BaseService):
                 else {}
             ),
         }
+        source_references = build_source_references(resource_data.get("source_references"))
+        if not source_references:
+            source_references = build_source_references(resource_data.get("knowledge_results"))
+        source_slice_ids = [item["slice_id"] for item in source_references]
+        if not source_slice_ids:
+            source_slice_ids = normalize_source_slice_ids(resource_data.get("source_slice_ids"))
+        source_doc_ids = list({
+            item.get("doc_id")
+            for item in source_references
+            if item.get("doc_id") is not None
+        })
+        if not source_doc_ids:
+            source_doc_ids = normalize_source_slice_ids(resource_data.get("source_doc_ids"))
+        source_coverage = resource_data.get("source_coverage") or calculate_source_coverage(
+            content,
+            source_references,
+        )
+        content_json["source_references"] = source_references
+        content_json["source_coverage"] = source_coverage
+        coverage_passed = bool(source_coverage.get("passed", True))
         if match_score is None:
             content_json["match_score_status"] = "pending"
             record_resource_quality_event("match_score_pending", "missing")
@@ -266,21 +289,21 @@ class ResourceGenerationService(BaseService):
                 content=content,
                 content_json=content_json,
                 word_count=len(content),
-                source_slice_ids=resource_data.get("source_slice_ids", []),
-                source_doc_ids=resource_data.get("source_doc_ids", []),
+                source_slice_ids=source_slice_ids,
+                source_doc_ids=source_doc_ids,
                 generated_by_agent="generation_agent",
                 generation_method=resource_data.get("generation_method", "deterministic_fallback"),
-                is_validated=True,
-                validation_passed=True,
-                validation_score=resource_data.get("_meta", {}).get("score", 80),
+                is_validated=coverage_passed,
+                validation_passed=coverage_passed,
+                validation_score=resource_data.get("_meta", {}).get("score", 80 if coverage_passed else 0),
                 hallucination_detected=False,
-                status="ready",
-                review_status="approved",
+                status="ready" if coverage_passed else "failed",
+                review_status="approved" if coverage_passed else "pending",
                 match_score=match_score,
             )
             db.add(resource)
             db.flush()
-            if resource_type == "exercise":
+            if coverage_passed and resource_type == "exercise":
                 from app.services.tutoring_service import AdaptiveTutoringService
 
                 learner = db.query(LearnerProfile).filter(LearnerProfile.id == learner_id).first()

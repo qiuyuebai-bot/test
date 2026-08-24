@@ -13,8 +13,11 @@ from app.services.ai_content_service import AIContentService
 from app.utils.llm_response import bounded_list, bounded_text, parse_json_object
 from app.utils.llm import LLMUtil, LLMUnavailableError
 from app.utils.resource_content import (
+    build_source_references,
+    calculate_source_coverage,
     build_resource_title,
     normalize_resource_topic,
+    normalize_source_slice_ids,
     validate_resource_title,
 )
 from app.config import settings
@@ -192,6 +195,28 @@ class GenerationAgent(BaseAgent):
         else:
             raise ValueError(f"不支持的资源类型: {resource_type}")
         
+        source_references = build_source_references(knowledge_results)
+        source_slice_ids = [item["slice_id"] for item in source_references]
+        if not source_slice_ids:
+            source_slice_ids = normalize_source_slice_ids(resource_content.get("source_slice_ids"))
+        source_doc_ids = list({
+            item.get("doc_id")
+            for item in source_references
+            if item.get("doc_id") is not None
+        })
+        if not source_doc_ids:
+            source_doc_ids = normalize_source_slice_ids(resource_content.get("source_doc_ids"))
+        source_coverage = resource_content.get("source_coverage") or calculate_source_coverage(
+            resource_content.get("content"), source_references
+        )
+        if not source_coverage.get("passed", True):
+            logger.warning(
+                "[知识生成Agent] 来源覆盖校验未通过: resource_type={}, coverage={}%, missing={}",
+                resource_type,
+                source_coverage.get("coverage_rate"),
+                source_coverage.get("missing_sources"),
+            )
+
         generated_title = resource_content.get(
             "resource_title", self._generate_title(target_topic, resource_type, diagnosis_result)
         )
@@ -206,8 +231,10 @@ class GenerationAgent(BaseAgent):
             "content": resource_content["content"],
             "content_json": resource_content.get("content_json", {}),
             "word_count": len(resource_content["content"]),
-            "source_slice_ids": resource_content.get("source_slice_ids", []),
-            "source_doc_ids": resource_content.get("source_doc_ids", []),
+            "source_slice_ids": source_slice_ids,
+            "source_doc_ids": source_doc_ids,
+            "source_references": source_references,
+            "source_coverage": source_coverage,
             "generation_method": resource_content.get("generation_method", "deterministic_fallback"),
             "training_context": training_context,
         }

@@ -11,6 +11,7 @@ from app.utils.llm_response import (
     bounded_text,
     parse_json_object,
 )
+from app.utils.resource_content import build_source_references, calculate_source_coverage
 
 
 class LLMGenerator:
@@ -86,6 +87,7 @@ class LLMGenerator:
         difficulty_standard: str | None = None,
         multiple_choice_count: int | None = None,
         training_context: Dict[str, Any] | None = None,
+        _coverage_retry: bool = False,
     ) -> Dict[str, Any]:
         difficulty = cls._difficulty(diagnosis)
         question_count = max(1, min(10, question_count or 10))
@@ -98,6 +100,10 @@ class LLMGenerator:
                 "question_count": question_count,
                 "multiple_choice_count": max(0, min(question_count, multiple_choice_count if multiple_choice_count is not None else question_count // 3)),
                 "reference_knowledge": cls._reference_text(knowledge),
+                "source_coverage_requirements": cls._source_coverage_requirements(knowledge),
+                "coverage_retry_instruction": (
+                    cls._coverage_retry_instruction(knowledge) if _coverage_retry else "无"
+                ),
                 "variation_seed": variation_seed or "",
                 "variation_hint": cls._variation_hint("exercise", variation_seed),
                 "excluded_questions": "\n".join(
@@ -113,7 +119,24 @@ class LLMGenerator:
         if payload.get("_meta", {}).get("model") == "mock":
             raise LLMResponseError("LLM returned fallback mock response")
         questions = [cls._normalize_question(item) for item in bounded_list(payload.get("questions"), "questions", minimum=1, maximum=10)]
-        return cls._exercise_result(topic, questions, knowledge)
+        result = cls._exercise_result(topic, questions, knowledge)
+        coverage = calculate_source_coverage(result["content"], build_source_references(knowledge))
+        result["source_coverage"] = coverage
+        if not coverage["passed"] and not _coverage_retry:
+            return cls.generate_exercises(
+                diagnosis,
+                knowledge,
+                profile,
+                topic,
+                question_count=question_count,
+                variation_seed=variation_seed,
+                excluded_questions=excluded_questions,
+                difficulty_standard=difficulty_standard,
+                multiple_choice_count=multiple_choice_count,
+                training_context=training_context,
+                _coverage_retry=True,
+            )
+        return result
 
     @classmethod
     def _generate_resource(
@@ -125,6 +148,7 @@ class LLMGenerator:
         topic: str,
         variation_seed: str | int | None = None,
         training_context: Dict[str, Any] | None = None,
+        _coverage_retry: bool = False,
     ) -> Dict[str, Any]:
         difficulty = cls._difficulty(diagnosis)
         response, _ = AIContentService.call_with_prompt_template(
@@ -135,6 +159,10 @@ class LLMGenerator:
                 "difficulty_level": difficulty,
                 "resource_type": resource_type,
                 "reference_knowledge": cls._reference_text(knowledge),
+                "source_coverage_requirements": cls._source_coverage_requirements(knowledge),
+                "coverage_retry_instruction": (
+                    cls._coverage_retry_instruction(knowledge) if _coverage_retry else "无"
+                ),
                 "variation_seed": variation_seed or "",
                 "variation_hint": cls._variation_hint(resource_type, variation_seed),
                 "training_context": json.dumps(training_context or {}, ensure_ascii=False),
@@ -154,7 +182,7 @@ class LLMGenerator:
         if not isinstance(raw_topics, list) or len(raw_topics) == 0:
             raw_topics = [topic]
         topics = [bounded_text(item, "topic", maximum=100) for item in bounded_list(raw_topics, "topics", minimum=1, maximum=8)]
-        return {
+        result = {
             "content": content,
             "content_json": {
                 "resource_type": resource_type,
@@ -166,6 +194,22 @@ class LLMGenerator:
             "difficulty_level": actual_difficulty,
             **cls._provenance(knowledge),
         }
+        result["source_coverage"] = calculate_source_coverage(
+            content,
+            build_source_references(knowledge),
+        )
+        if not result["source_coverage"]["passed"] and not _coverage_retry:
+            return cls._generate_resource(
+                resource_type,
+                diagnosis,
+                knowledge,
+                profile,
+                topic,
+                variation_seed=variation_seed,
+                training_context=training_context,
+                _coverage_retry=True,
+            )
+        return result
 
     @classmethod
     def _normalize_question(cls, item: Any) -> Dict[str, Any]:
@@ -260,10 +304,17 @@ class LLMGenerator:
     @staticmethod
     def _reference_text(knowledge: List[Dict[str, Any]]) -> str:
         entries = []
-        for item in knowledge[:6]:
+        for item in knowledge or []:
             content = str(item.get("content", "")).strip()[:2500]
             if content:
-                entries.append(f"[{item.get('slice_id', 'unknown')}] {item.get('title', '知识片段')}: {content}")
+                keywords = item.get("keywords") or []
+                if isinstance(keywords, str):
+                    keywords = [keywords]
+                keyword_text = ", ".join(str(keyword).strip() for keyword in keywords if str(keyword).strip())
+                keyword_suffix = f"（关键词：{keyword_text}）" if keyword_text else ""
+                entries.append(
+                    f"[{item.get('slice_id', 'unknown')}] {item.get('title', '知识片段')}{keyword_suffix}: {content}"
+                )
         if entries:
             return "\n\n".join(entries)
         return (
@@ -325,7 +376,28 @@ class LLMGenerator:
 
     @staticmethod
     def _provenance(knowledge: List[Dict[str, Any]]) -> Dict[str, List[Any]]:
+        references = build_source_references(knowledge)
         return {
-            "source_slice_ids": [item["slice_id"] for item in knowledge if item.get("slice_id") is not None],
-            "source_doc_ids": list({item["doc_id"] for item in knowledge if item.get("doc_id") is not None}),
+            "source_slice_ids": [item["slice_id"] for item in references],
+            "source_doc_ids": list({item["doc_id"] for item in references if item.get("doc_id") is not None}),
+            "source_references": references,
         }
+
+    @staticmethod
+    def _source_coverage_requirements(knowledge: List[Dict[str, Any]]) -> str:
+        references = build_source_references(knowledge)
+        if not references:
+            return "没有可用的有效来源分片 ID，不要求伪造来源覆盖。"
+        lines = [f"本次必须覆盖全部 {len(references)} 个来源分片，每个分片至少自然使用一个列出的关键词："]
+        for reference in references:
+            keywords = "、".join(reference.get("keywords") or []) or "（该分片没有可用关键词）"
+            lines.append(f"- slice_id={reference['slice_id']}；关键词：{keywords}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _coverage_retry_instruction(knowledge: List[Dict[str, Any]]) -> str:
+        return (
+            "上一次草稿没有覆盖全部来源分片。请重写正文，逐个检查下方每个 slice_id，"
+            "确保每个分片至少有一个关键词以自然、准确的方式出现在正文中；不要只把关键词堆在列表里。\n"
+            + LLMGenerator._source_coverage_requirements(knowledge)
+        )

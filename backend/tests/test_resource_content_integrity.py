@@ -173,6 +173,39 @@ def test_task_repository_persists_valid_deepseek_markdown(
     assert resource.review_status == "approved"
 
 
+def test_task_repository_persists_all_source_slices_and_blocks_incomplete_coverage(
+    db_session,
+    sample_agent_task,
+    sample_learner_profile,
+    resource_persistence_context,
+):
+    result = TaskRepository().save_resource_and_complete(
+        task_id=sample_agent_task.id,
+        learner_id=sample_learner_profile.id,
+        generation_result={
+            "resource_type": "guide",
+            "resource_title": "来源覆盖指南",
+            "content": "# 来源覆盖指南\n\n正文包含 alpha，但没有第二个来源关键词。",
+            "content_json": {},
+            "source_references": [
+                {"slice_id": 10, "doc_id": 2, "title": "来源一", "keywords": ["alpha"]},
+                {"slice_id": 11, "doc_id": 2, "title": "来源二", "keywords": ["beta"]},
+            ],
+            "generation_method": "deepseek",
+        },
+        audit_result={"passed": True, "overall_score": 95},
+        debate_rounds=1,
+    )
+
+    resource = db_session.get(LearningResource, result["resource_id"])
+    assert resource.source_slice_ids == [10, 11]
+    assert resource.source_doc_ids == [2]
+    assert resource.status == "failed"
+    assert resource.validation_passed is False
+    assert resource.content_json["source_coverage"]["coverage_rate"] == 50.0
+    assert result["passed"] is False
+
+
 def test_task_repository_auto_publishes_new_validated_lecture(
     db_session,
     sample_agent_task,
@@ -401,6 +434,31 @@ def test_sync_resource_save_marks_validated_resource_approved(
     assert resource.status == "ready"
     assert resource.validation_passed is True
     assert resource.review_status == "approved"
+
+
+def test_sync_resource_save_preserves_complete_source_slice_snapshot(
+    db_session,
+    sample_learner_profile,
+    resource_persistence_context,
+):
+    resource = ResourceGenerationService._save_resource(
+        learner_id=sample_learner_profile.id,
+        resource_type="guide",
+        resource_data={
+            "resource_title": "来源快照指南",
+            "content": "# 来源快照指南\n\n正文包含 alpha 和 beta。",
+            "source_references": [
+                {"slice_id": 21, "doc_id": 4, "title": "来源一", "keywords": ["alpha"]},
+                {"slice_id": 22, "doc_id": 4, "title": "来源二", "keywords": ["beta"]},
+            ],
+        },
+        diagnosis_result={},
+        target_topic="test",
+    )
+
+    assert resource.source_slice_ids == [21, 22]
+    assert resource.source_doc_ids == [4]
+    assert resource.validation_passed is True
 
 
 def test_sync_resource_save_auto_publishes_new_lecture(

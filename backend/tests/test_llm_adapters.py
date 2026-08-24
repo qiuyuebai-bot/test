@@ -11,6 +11,7 @@ from app.services.llm_question_generator import LLMQuestionGenerator
 from app.utils import llm_response
 from app.utils.llm import LLMUtil
 from app.utils.llm_response import LLMResponseError, parse_json_object
+from app.utils.resource_content import build_source_references, calculate_source_coverage
 from app.config import settings
 
 
@@ -291,6 +292,76 @@ def test_llm_exercise_generation_uses_variation_and_no_cache(monkeypatch):
     assert captured["use_cache"] is False
     assert captured["variation_seed"] == "seed-42"
     assert captured["variation_hint"]
+
+
+def test_resource_generation_rewrites_once_when_source_keywords_are_missing(monkeypatch):
+    calls = []
+
+    def fake_call(cls, template_name, variables=None, temperature=None, model=None, use_cache=True, allow_mock=True):
+        calls.append(variables)
+        content = (
+            "这是一个不含来源关键词的初稿。 " * 30
+            if len(calls) == 1
+            else "本稿解释链式法则，并说明它如何连接各层梯度。 " * 30
+        )
+        return json.dumps({
+            "resource_title": "覆盖校验指南",
+            "content": content,
+            "difficulty_level": 3,
+            "topics": ["反向传播"],
+        }, ensure_ascii=False), {}
+
+    monkeypatch.setattr(LLMUtil, "call_with_prompt_template", classmethod(fake_call))
+    result = LLMGenerator.generate_guide(
+        {"recommended_difficulty": {"recommended_difficulty": 3}},
+        [{
+            "slice_id": 12,
+            "doc_id": 3,
+            "title": "梯度计算",
+            "keywords": ["链式法则", "梯度"],
+            "content": "链式法则用于梯度计算。",
+        }],
+        {},
+        "反向传播",
+        variation_seed="coverage-test",
+    )
+
+    assert len(calls) == 2
+    assert "slice_id=12" in calls[0]["source_coverage_requirements"]
+    assert "上一次草稿没有覆盖" in calls[1]["coverage_retry_instruction"]
+    assert result["source_coverage"]["passed"] is True
+    assert result["source_slice_ids"] == [12]
+
+
+def test_source_reference_snapshot_is_deduplicated_and_coverage_matches_metric():
+    references = build_source_references([
+        {"slice_id": 4, "doc_id": 2, "title": "链式法则", "keywords": ["链式法则"]},
+        {"slice_id": 4, "doc_id": 2, "title": "链式法则", "keywords": ["梯度"]},
+        {"slice_id": 5, "doc_id": 2, "title": "激活函数", "keywords": []},
+    ])
+
+    coverage = calculate_source_coverage("正文包含链式法则和激活函数。", references)
+
+    assert [item["slice_id"] for item in references] == [4, 5]
+    assert references[0]["keywords"] == ["链式法则", "梯度"]
+    assert coverage["covered_slice_count"] == 2
+    assert coverage["coverage_rate"] == 100.0
+
+
+def test_source_reference_snapshot_uses_legacy_doc_title_fallback():
+    references = build_source_references([
+        {
+            "slice_id": 8,
+            "doc_title": "反向传播算法基础",
+            "content": "反向传播通过链式法则计算梯度并更新参数。",
+            "keywords": [],
+        }
+    ])
+
+    coverage = calculate_source_coverage("正文覆盖反向传播算法和梯度。", references)
+
+    assert "反向传播算法" in references[0]["keywords"]
+    assert coverage["passed"] is True
 
 
 def test_generation_agent_passes_unique_variation_seed(monkeypatch):

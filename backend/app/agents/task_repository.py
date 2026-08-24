@@ -18,8 +18,11 @@ from app.database import get_db_context
 from app.models import AgentTask, DebateRecord, LearningResource, LearnerProfile
 from app.services.common import ResourceServiceHelper
 from app.utils.resource_content import (
+    build_source_references,
+    calculate_source_coverage,
     normalize_resource_content,
     record_resource_quality_event,
+    normalize_source_slice_ids,
     validate_match_score,
     validate_resource_title,
 )
@@ -314,6 +317,26 @@ class TaskRepository:
             content_json["training_context"] = generation_result["training_context"]
         if generation_result.get("match_score_metadata"):
             content_json["match_score_metadata"] = generation_result["match_score_metadata"]
+        source_references = build_source_references(generation_result.get("source_references"))
+        source_slice_ids = [item["slice_id"] for item in source_references]
+        if not source_slice_ids:
+            source_slice_ids = normalize_source_slice_ids(generation_result.get("source_slice_ids"))
+        source_doc_ids = list({
+            item.get("doc_id")
+            for item in source_references
+            if item.get("doc_id") is not None
+        })
+        if not source_doc_ids:
+            source_doc_ids = normalize_source_slice_ids(generation_result.get("source_doc_ids"))
+        source_coverage = generation_result.get("source_coverage") or calculate_source_coverage(
+            generation_result.get("content"),
+            source_references,
+        )
+        content_json["source_references"] = source_references
+        content_json["source_coverage"] = source_coverage
+        quality_passed = bool(audit_result.get("passed", False)) and bool(
+            source_coverage.get("passed", True)
+        )
 
         with get_db_context() as db:
             task = db.query(AgentTask).filter(AgentTask.id == task_id).first()
@@ -350,18 +373,18 @@ class TaskRepository:
                             content=generation_result.get("content", ""),
                             content_json=content_json,
                             word_count=generation_result.get("word_count", 0),
-                            source_slice_ids=generation_result.get("source_slice_ids", []),
-                            source_doc_ids=generation_result.get("source_doc_ids", []),
+                            source_slice_ids=source_slice_ids,
+                            source_doc_ids=source_doc_ids,
                             generated_by_agent="generation_agent",
                             generation_task_id=task_id,
                             generation_method=generation_result.get("generation_method", "deterministic_fallback"),
                             match_score=match_score,
-                            is_validated=audit_result.get("passed", False),
-                            validation_passed=audit_result.get("passed", False),
+                            is_validated=quality_passed,
+                            validation_passed=quality_passed,
                             validation_score=audit_result.get("overall_score", 0),
                             hallucination_detected=audit_result.get("hallucination_detected", False),
-                            status="ready" if audit_result.get("passed", False) else "failed",
-                            review_status="approved" if audit_result.get("passed", False) else "pending",
+                            status="ready" if quality_passed else "failed",
+                            review_status="approved" if quality_passed else "pending",
                         )
                         db.add(resource)
                         db.flush()
@@ -375,6 +398,25 @@ class TaskRepository:
                 # Backfill resources created by the old Agent path when the
                 # task is retried after the scoring fix is deployed.
                 resource.match_score = match_score
+            existing_source_slice_ids = normalize_source_slice_ids(resource.source_slice_ids)
+            existing_content_json = resource.content_json if isinstance(resource.content_json, dict) else {}
+            if source_slice_ids and (
+                existing_source_slice_ids != source_slice_ids
+                or not existing_content_json.get("source_references")
+            ):
+                resource.source_slice_ids = source_slice_ids
+                resource.source_doc_ids = source_doc_ids
+                resource.content_json = content_json
+            if quality_passed:
+                resource.is_validated = True
+                resource.validation_passed = True
+                resource.status = "ready"
+                resource.validation_score = audit_result.get("overall_score", resource.validation_score)
+            else:
+                resource.is_validated = False
+                resource.validation_passed = False
+                resource.status = "failed"
+                resource.review_status = "pending"
             if (
                 resource.review_status == "pending"
                 and resource.status == "ready"
@@ -426,7 +468,7 @@ class TaskRepository:
             "audit_result": audit_result,
             "debate_rounds": debate_rounds,
             "final_score": audit_result.get("overall_score", 0),
-            "passed": audit_result.get("passed", False),
+            "passed": quality_passed,
             "issued_question_count": issued_question_count,
         }
 
@@ -503,6 +545,7 @@ class TaskRepository:
             "reused_from_resource_id": reusable_resource.get("id"),
             "match_score": reusable_resource.get("match_score"),
         }
+        generation_result["content_json"] = dict(generation_result.get("content_json") or {})
         generation_result["resource_title"] = validate_resource_title(generation_result["resource_title"])
         generation_result["match_score"] = validate_match_score(generation_result["match_score"])
         if generation_result["match_score"] is None:
@@ -512,8 +555,32 @@ class TaskRepository:
             generation_result["content"]
         )
         generation_result["word_count"] = len(generation_result["content"])
+        source_references = build_source_references(
+            reusable_resource.get("source_references")
+            or (generation_result["content_json"] or {}).get("source_references")
+        )
+        source_slice_ids = [item["slice_id"] for item in source_references]
+        if not source_slice_ids:
+            source_slice_ids = normalize_source_slice_ids(reusable_resource.get("source_slice_ids"))
+        source_doc_ids = list({
+            item.get("doc_id")
+            for item in source_references
+            if item.get("doc_id") is not None
+        })
+        if not source_doc_ids:
+            source_doc_ids = normalize_source_slice_ids(reusable_resource.get("source_doc_ids"))
+        generation_result["source_references"] = source_references
+        generation_result["source_slice_ids"] = source_slice_ids
+        generation_result["source_doc_ids"] = source_doc_ids
+        generation_result["source_coverage"] = calculate_source_coverage(
+            generation_result["content"],
+            source_references,
+        )
+        generation_result["content_json"]["source_references"] = source_references
+        generation_result["content_json"]["source_coverage"] = generation_result["source_coverage"]
+        source_coverage_passed = bool(generation_result["source_coverage"].get("passed", True))
         audit_result = {
-            "passed": True,
+            "passed": source_coverage_passed,
             "overall_score": reusable_resource.get("validation_score", 0),
             "hallucination_detected": reusable_resource.get("hallucination_detected", False),
         }
@@ -536,12 +603,12 @@ class TaskRepository:
                 generated_by_agent="generation_agent",
                 generation_task_id=task_id,
                 generation_method=generation_result["generation_method"],
-                is_validated=True,
-                validation_passed=True,
+                is_validated=source_coverage_passed,
+                validation_passed=source_coverage_passed,
                 validation_score=audit_result["overall_score"],
                 hallucination_detected=audit_result["hallucination_detected"],
-                status="ready",
-                review_status="approved",
+                status="ready" if source_coverage_passed else "failed",
+                review_status="approved" if source_coverage_passed else "pending",
                 match_score=generation_result["match_score"],
             )
             db.add(resource)
@@ -575,7 +642,7 @@ class TaskRepository:
             "audit_result": audit_result,
             "debate_rounds": 0,
             "final_score": audit_result["overall_score"],
-            "passed": True,
+            "passed": source_coverage_passed,
             "reused_from_resource_id": reusable_resource.get("id"),
         }
 
