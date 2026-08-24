@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react'
 import { coreApi } from '@/api'
 import type { TutoringQuestion } from '@/api/core'
+import { useStore } from '@/store'
 import { guidanceReducer, initialGuidanceState } from './guidanceReducer'
 import {
   createSessionId,
@@ -63,6 +64,15 @@ export function useGuidanceSession(learnerId: number | null, trainingContext: Tr
   const [recommendationError, setRecommendationError] = useState<string | null>(null)
   const hydratedLearnerIdRef = useRef<number | null>(null)
   const historyLoadedRef = useRef<number | null>(null)
+
+  const refreshLearner = useCallback(async () => {
+    if (!learnerId) return
+    try {
+      await useStore.getState().fetchLearnerById(learnerId)
+    } catch {
+      // The answer was already committed; a later page load can refresh the profile.
+    }
+  }, [learnerId])
 
   const loadHistory = useCallback(async (force = false) => {
     if (!learnerId || (!force && historyLoadedRef.current === learnerId)) return
@@ -347,13 +357,14 @@ export function useGuidanceSession(learnerId: number | null, trainingContext: Tr
         nextDifficulty: dynamicDifficulty && completedCount < targetCount ? nextDifficulty : null,
       })
       void loadHistory(true)
+      void refreshLearner()
       if (dynamicDifficulty && completedCount < targetCount && !hasQueuedQuestion) {
         void prepareNextQuestion(nextDifficulty, state.sessionConfig?.topic || question.topic)
       }
     } catch (error) {
       dispatch({ type: 'submit_failed', error: toErrorMessage(error, '答案提交失败，请重试') })
     }
-  }, [learnerId, loadHistory, prepareNextQuestion, state])
+  }, [learnerId, loadHistory, prepareNextQuestion, refreshLearner, state])
 
   const submitBatch = useCallback(async () => {
     const config = state.sessionConfig
@@ -395,13 +406,14 @@ export function useGuidanceSession(learnerId: number | null, trainingContext: Tr
       window.localStorage.removeItem(sessionStorageKey(learnerId))
       window.localStorage.removeItem(exitStorageKey(learnerId))
       void loadHistory(true)
+      void refreshLearner()
     } catch (error) {
       dispatch({
         type: 'batch_submit_failed',
         error: toErrorMessage(error, '整卷提交失败，请重试'),
       })
     }
-  }, [learnerId, loadHistory, state])
+  }, [learnerId, loadHistory, refreshLearner, state])
 
   const goToQuestion = useCallback(
     (index: number) => {

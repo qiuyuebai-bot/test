@@ -133,9 +133,6 @@ export default function AdaptiveGuidance() {
         onRetry={() => {
           if (config) void session.startSession({ mode: 'batch', topic: config.topic, difficulty: config.difficulty, questionCount: config.questionCount })
         }}
-        onWeakDimension={(dimension) => {
-          if (config) void session.startSession({ mode: 'batch', topic: dimensionTopics[dimension] || dimension, difficulty: config.difficulty, questionCount: config.questionCount })
-        }}
       />
     )
   }

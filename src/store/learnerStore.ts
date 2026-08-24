@@ -82,7 +82,11 @@ export const createLearnerSlice: StateCreator<AppState, [], [], LearnerSlice> = 
     const reqId = ++_latestLearnerReqId
     const learner = await learnerApi.getById(id)
     if (reqId !== _latestLearnerReqId) return learner
-    set({ currentLearner: learner, learnerError: null })
+    set((state) => ({
+      currentLearner: learner,
+      learners: state.learners.map((item) => item.id === learner.id ? learner : item),
+      learnerError: null,
+    }))
     return learner
   },
 

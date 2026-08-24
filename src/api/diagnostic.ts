@@ -10,7 +10,6 @@ export interface DiagnosticQuestion {
   knowledgePoints: string[]
   generationMethod?: string
   assessmentMode: 'diagnostic' | 'practice' | string
-  abilityDimension?: string
   diagnosticSessionId?: string
   answered: boolean
 }
@@ -40,7 +39,6 @@ export interface DiagnosticAnswerResult {
   alreadyAnswered?: boolean
   isCorrect: boolean | null
   score: number | null
-  abilityDimension?: string
   sessionComplete?: boolean
   assessments?: Record<string, DiagnosticAssessment>
 }

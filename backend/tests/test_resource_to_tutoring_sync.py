@@ -106,6 +106,7 @@ def test_approved_exercise_is_published_for_the_matching_learner(
     issued = db_session.query(IssuedTutoringQuestion).order_by(IssuedTutoringQuestion.id).all()
     assert [question.user_id for question in issued] == [sample_user.id, sample_user.id]
     assert [question.answer_key for question in issued] == [["B"], ["A"]]
+    assert all(question.ability_dimension == "algorithm_design" for question in issued)
 
     public_questions = AdaptiveTutoringService.get_issued_questions(sample_learner_profile.id)
     assert [question["question"] for question in public_questions] == ["基础题", "进阶题"]

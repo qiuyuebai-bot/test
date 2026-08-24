@@ -204,7 +204,6 @@ class DiagnosticService:
             "already_answered": False,
             "is_correct": is_correct,
             "score": score,
-            "ability_dimension": dimension,
             "session_complete": session.status == "completed",
             "assessments": (session.results or {}).get("assessments", {}),
         }

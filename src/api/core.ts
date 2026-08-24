@@ -37,7 +37,6 @@ export interface TutoringQuestion {
   generationMethod?: string
   assessmentMode?: 'practice' | 'batch_practice'
   sessionId?: string
-  abilityDimension?: string
 }
 
 export interface GenerateTutoringQuestionsRequest {
@@ -83,12 +82,6 @@ export interface BatchSubmitResult {
   total: number
   correctCount: number
   score: number
-  dimensionSummary: Array<{
-    dimension: string
-    answeredCount: number
-    correctCount: number
-    score: number
-  }>
   questions: Array<{
     questionId: string
     isCorrect: boolean

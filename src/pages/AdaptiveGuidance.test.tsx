@@ -30,7 +30,6 @@ vi.mock('@/api', () => ({
       total: 2,
       correctCount: 2,
       score: 100,
-      dimensionSummary: [],
       questions: [],
     }),
     generateTutoringQuestions: vi.fn().mockResolvedValue({
@@ -54,6 +53,7 @@ vi.mock('@/hooks', () => ({
 
 const { resetMockStore, setMockStore } = await import('../test/mockStore')
 const { coreApi } = await import('@/api')
+const fetchLearnerById = vi.fn()
 
 beforeEach(() => {
   vi.clearAllMocks()
@@ -77,7 +77,6 @@ beforeEach(() => {
     total: 2,
     correctCount: 2,
     score: 100,
-    dimensionSummary: [],
     questions: [],
   })
   vi.mocked(coreApi.generateTutoringQuestions).mockResolvedValue({
@@ -92,8 +91,12 @@ beforeEach(() => {
     }],
     generationMethod: 'deepseek',
   })
+  fetchLearnerById.mockResolvedValue({ id: 1, realName: '测试学习者', displayName: 'L001' })
   resetMockStore()
-  setMockStore({ currentLearner: { id: 1, realName: '测试学习者', displayName: 'L001' } })
+  setMockStore({
+    currentLearner: { id: 1, realName: '测试学习者', displayName: 'L001' },
+    fetchLearnerById,
+  })
 })
 
 describe('AdaptiveGuidance page', () => {
@@ -119,6 +122,7 @@ describe('AdaptiveGuidance page', () => {
       timeSpentMs: 0,
       hintsUsed: 0,
     }))
+    await waitFor(() => expect(fetchLearnerById).toHaveBeenCalledWith(1))
     expect(coreApi.generateTutoringQuestions).not.toHaveBeenCalled()
   })
 

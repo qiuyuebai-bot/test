@@ -85,10 +85,13 @@ def test_batch_submission_is_idempotent_and_updates_profile_once(
     assert result["correctCount"] == 1
     assert result["score"] == 50.0
     assert len(result["questions"]) == 2
+    assert "dimensionSummary" not in result
     assert db_session.query(AnswerRecord).count() == 2
     assert db_session.query(BatchSubmission).count() == 1
+    stored_summary = db_session.query(BatchSubmission).one().result_summary
+    assert stored_summary["dimensionSummary"][0]["dimension"] == "algorithm_design"
     assert sample_learner_profile.algorithm_design == original_algorithm + 2
-    assert sample_learner_profile.theoretical_foundation == original_theory
+    assert sample_learner_profile.theoretical_foundation == original_theory - 1
 
     repeated = AdaptiveTutoringService.submit_batch(
         sample_user.id,

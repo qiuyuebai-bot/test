@@ -29,6 +29,9 @@ def test_diagnostic_session_scores_all_dimensions(db_session, sample_user, sampl
 
     assert payload["total_questions"] == 12
     assert len(payload["questions"]) == 12
+    assert all(question["topic"] == "能力诊断" for question in payload["questions"])
+    assert all("abilityDimension" not in question for question in payload["questions"])
+    assert all(question["knowledgePoints"] == [] for question in payload["questions"])
 
     questions = (
         db_session.query(IssuedTutoringQuestion)
@@ -210,3 +213,4 @@ def test_diagnostic_routes_create_resume_and_answer(
     )
     assert answer_response.status_code == 200
     assert answer_response.json()["data"]["success"] is True
+    assert "ability_dimension" not in answer_response.json()["data"]

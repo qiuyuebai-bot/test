@@ -41,8 +41,6 @@ const dimensions = [
   { key: 'engineeringPractice', label: '工程实践', description: '测试、调试、交付和维护项目' },
 ] as const
 
-const dimensionLabels = Object.fromEntries(dimensions.map((item) => [item.key, item.label]))
-
 type FormData = {
   realName: string
   educationLevel: string
@@ -296,7 +294,7 @@ export default function LearnerProfileWizard({ isOpen, onClose, learner, onSave 
         {step === 2 && currentQuestion && (
           <div className="mt-6">
             <div className="mb-4 flex items-center justify-between text-xs text-text-secondary">
-              <span>{dimensionLabels[currentQuestion.abilityDimension || ''] || '能力维度'}</span>
+              <span>能力诊断题</span>
               <span>每个维度 {session?.questionsPerDimension ?? questionsPerDimension} 题 · 可随时关闭后恢复</span>
             </div>
             <h3 className="text-base font-medium leading-relaxed text-text-primary">{currentQuestion.question}</h3>

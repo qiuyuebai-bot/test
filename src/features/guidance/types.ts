@@ -99,12 +99,6 @@ export interface BatchSubmitResult {
   total: number
   correctCount: number
   score: number
-  dimensionSummary: Array<{
-    dimension: string
-    answeredCount: number
-    correctCount: number
-    score: number
-  }>
   questions: BatchQuestionResult[]
 }
 

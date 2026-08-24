@@ -2,14 +2,13 @@ import type { TutoringQuestion } from '@/api/core'
 import Button from '@/components/Button'
 import Card from '@/components/Card'
 import type { BatchSubmitResult } from './types'
-import { ArrowLeft, CheckCircle2, RotateCcw, Target, XCircle } from 'lucide-react'
+import { ArrowLeft, CheckCircle2, RotateCcw, XCircle } from 'lucide-react'
 
 interface BatchGuidanceResultProps {
   result: BatchSubmitResult
   questions: TutoringQuestion[]
   onBack: () => void
   onRetry: () => void
-  onWeakDimension: (dimension: string) => void
 }
 
 function answerLabels(values: string[]): string {
@@ -21,9 +20,7 @@ export default function BatchGuidanceResult({
   questions,
   onBack,
   onRetry,
-  onWeakDimension,
 }: BatchGuidanceResultProps) {
-  const weakestDimension = [...result.dimensionSummary].sort((left, right) => left.score - right.score)[0]
   const questionById = new Map(questions.map((question) => [question.id, question]))
 
   return (
@@ -45,23 +42,6 @@ export default function BatchGuidanceResult({
           <div className="rounded-lg bg-error/5 p-3"><p className="text-xs text-text-tertiary">答错</p><p className="mt-1 text-lg font-semibold text-error">{result.total - result.correctCount}</p></div>
           <div className="rounded-lg bg-primary/5 p-3"><p className="text-xs text-text-tertiary">正确率</p><p className="mt-1 text-lg font-semibold text-primary">{result.total ? Math.round((result.correctCount / result.total) * 100) : 0}%</p></div>
         </div>
-      </Card>
-
-      <Card padding="md">
-        <div className="flex items-center gap-2">
-          <Target className="h-4 w-4 text-primary" />
-          <h3 className="text-sm font-semibold text-text-primary">能力维度汇总</h3>
-        </div>
-        {result.dimensionSummary.length > 0 ? (
-          <div className="mt-4 divide-y divide-border/60">
-            {result.dimensionSummary.map((item) => (
-              <div key={item.dimension} className="flex flex-wrap items-center justify-between gap-3 py-3 first:pt-0 last:pb-0">
-                <span className="text-sm text-text-primary">{item.dimension}</span>
-                <span className="text-xs text-text-tertiary">{item.correctCount}/{item.answeredCount} 正确，{Math.round(item.score)}%</span>
-              </div>
-            ))}
-          </div>
-        ) : <p className="mt-3 text-sm text-text-secondary">本轮题目暂无能力维度标记。</p>}
       </Card>
 
       <Card padding="md">
@@ -91,7 +71,6 @@ export default function BatchGuidanceResult({
       <div className="flex flex-wrap items-center gap-2">
         <Button variant="outline" onClick={onBack}><ArrowLeft className="h-4 w-4" />返回导学首页</Button>
         <Button variant="primary" onClick={onRetry}><RotateCcw className="h-4 w-4" />重新练习</Button>
-        {weakestDimension && <Button variant="ghost" onClick={() => onWeakDimension(weakestDimension.dimension)}>练习薄弱维度</Button>}
       </div>
     </div>
   )

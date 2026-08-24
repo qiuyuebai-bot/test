@@ -24,7 +24,6 @@ class DiagnosticQuestion(BaseModel):
     knowledge_points: List[str] = Field(default_factory=list)
     generation_method: Optional[str] = None
     assessment_mode: str = "diagnostic"
-    ability_dimension: Optional[str] = None
     diagnostic_session_id: Optional[str] = None
     answered: bool = False
 
@@ -38,4 +37,3 @@ class DiagnosticSessionResponse(BaseModel):
     questions_per_dimension: int
     questions: List[DiagnosticQuestion]
     assessments: Dict[str, Any] = Field(default_factory=dict)
-

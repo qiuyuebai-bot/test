@@ -105,8 +105,10 @@ class TestDynamicQuestionGeneration:
         assert questions[0]["generationMethod"] == "deterministic_fallback"
         assert "correctAnswer" not in questions[0]
         assert "answer_key" not in questions[0]
+        assert "abilityDimension" not in questions[0]
         issued = db_session.query(IssuedTutoringQuestion).one()
         assert issued.answer_key
+        assert issued.ability_dimension == "algorithm_design"
 
     def test_high_difficulty_fallback_uses_expert_rubric(
         self, db_session, sample_learner_profile, sample_user, monkeypatch
@@ -152,6 +154,7 @@ class TestDynamicQuestionGeneration:
         assert len(multiple) == 2
         assert all(len(question.answer_key) >= 2 for question in multiple)
         assert all("REST API" in question.topic for question in issued)
+        assert all(question.ability_dimension == "programming_ability" for question in issued)
 
 
 class TestRunAgentDecision:

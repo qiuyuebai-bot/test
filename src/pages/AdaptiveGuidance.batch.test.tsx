@@ -71,7 +71,6 @@ beforeEach(() => {
     total: 2,
     correctCount: 2,
     score: 100,
-    dimensionSummary: [],
     questions: [],
   })
   vi.mocked(coreApi.getBatchResult).mockRejectedValue(new Error('not found'))
@@ -106,9 +105,6 @@ describe('AdaptiveGuidance batch mode', () => {
       total: 2,
       correctCount: 1,
       score: 50,
-      dimensionSummary: [
-        { dimension: 'algorithm_design', answeredCount: 2, correctCount: 1, score: 50 },
-      ],
       questions: [
         {
           questionId: 'batch-1',
@@ -227,9 +223,6 @@ describe('AdaptiveGuidance batch mode', () => {
       total: 2,
       correctCount: 1,
       score: 50,
-      dimensionSummary: [
-        { dimension: 'algorithm_design', answeredCount: 2, correctCount: 1, score: 50 },
-      ],
       questions: [
         {
           questionId: 'recover-1',

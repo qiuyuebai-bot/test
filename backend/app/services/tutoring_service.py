@@ -37,6 +37,15 @@ class AdaptiveTutoringService(BaseService):
     """
 
     DECISION_THRESHOLD = ADAPTIVE_DECISION_THRESHOLD  # 正确率阈值
+    ABILITY_DIMENSION_KEYS = frozenset({
+        "theoretical_foundation",
+        "programming_ability",
+        "algorithm_design",
+        "system_architecture",
+        "data_analysis",
+        "engineering_practice",
+    })
+    DEFAULT_ABILITY_DIMENSION = "theoretical_foundation"
     TOPIC_ALIASES = {
         "bp算法": "反向传播算法",
         "bp 算法": "反向传播算法",
@@ -311,20 +320,29 @@ class AdaptiveTutoringService(BaseService):
 
     @staticmethod
     def _public_question(question: IssuedTutoringQuestion) -> Dict[str, Any]:
-        """Serialize a question without its server-only answer key."""
+        """Serialize a question without server-only answer and dimension metadata."""
+        is_diagnostic = question.assessment_mode == "diagnostic"
         return {
             "id": str(question.id),
             "type": question.question_type,
-            "topic": question.topic,
+            "topic": "能力诊断" if is_diagnostic else question.topic,
             "question": question.content,
             "options": question.options,
             "difficulty": question.difficulty,
-            "knowledgePoints": question.knowledge_points or [],
+            "knowledgePoints": [] if is_diagnostic else question.knowledge_points or [],
             "generationMethod": question.generation_method,
             "assessmentMode": question.assessment_mode or "practice",
             "sessionId": question.session_id,
-            "abilityDimension": question.ability_dimension,
             "diagnosticSessionId": question.diagnostic_session_id,
+        }
+
+    @staticmethod
+    def _public_batch_result(result: Dict[str, Any]) -> Dict[str, Any]:
+        """Remove server-only dimension aggregates from a batch result."""
+        return {
+            key: value
+            for key, value in result.items()
+            if key not in {"dimensionSummary", "dimension_summary"}
         }
 
     @classmethod
@@ -334,6 +352,7 @@ class AdaptiveTutoringService(BaseService):
             questions = db.query(IssuedTutoringQuestion).filter(
                 IssuedTutoringQuestion.learner_id == learner_id,
                 IssuedTutoringQuestion.status == "issued",
+                IssuedTutoringQuestion.assessment_mode != "diagnostic",
             ).order_by(
                 IssuedTutoringQuestion.created_at.asc(),
                 IssuedTutoringQuestion.id.asc(),
@@ -396,6 +415,7 @@ class AdaptiveTutoringService(BaseService):
                 source_resource_id=resource.id,
                 source_question_index=index,
                 generation_method=resource.generation_method or "resource_generation",
+                ability_dimension=cls._resolve_ability_dimension(normalized_topic),
             )
             db.add(issued)
         db.flush()
@@ -556,7 +576,7 @@ class AdaptiveTutoringService(BaseService):
             topic=normalized_topic,
             replace_pending=replace_pending,
             assessment_mode=assessment_mode,
-            ability_dimension=ability_dimension or cls._infer_ability_dimension(normalized_topic),
+            ability_dimension=cls._resolve_ability_dimension(normalized_topic, ability_dimension),
             diagnostic_session_id=diagnostic_session_id,
             session_id=session_id,
         )
@@ -616,7 +636,7 @@ class AdaptiveTutoringService(BaseService):
                     generation_method=question.get("generation_method", "deterministic_fallback"),
                     assessment_mode=assessment_mode,
                     session_id=session_id,
-                    ability_dimension=ability_dimension or cls._infer_ability_dimension(question_topic),
+                    ability_dimension=cls._resolve_ability_dimension(question_topic, ability_dimension),
                     diagnostic_session_id=diagnostic_session_id,
                 )
                 db.add(issued)
@@ -718,6 +738,12 @@ class AdaptiveTutoringService(BaseService):
                 pending_question = db.query(IssuedTutoringQuestion).filter(
                     IssuedTutoringQuestion.id == issued_question_id,
                 ).first()
+                ability_dimension = cls._resolve_ability_dimension(
+                    question_topic,
+                    pending_question.ability_dimension if pending_question else ability_dimension,
+                )
+                if pending_question:
+                    pending_question.ability_dimension = ability_dimension
 
                 answer_record = cls._save_answer_record(
                     user_id=user_id,
@@ -874,7 +900,10 @@ class AdaptiveTutoringService(BaseService):
                         "status_code": 409,
                         "error": "batch session already submitted with different answers",
                     }
-                return {"success": True, **dict(existing_submission.result_summary or {})}
+                return {
+                    "success": True,
+                    **cls._public_batch_result(dict(existing_submission.result_summary or {})),
+                }
 
             session_questions = db.query(IssuedTutoringQuestion).filter(
                 IssuedTutoringQuestion.user_id == user_id,
@@ -914,8 +943,11 @@ class AdaptiveTutoringService(BaseService):
                 user_answer = item["user_answer"]
                 is_correct = user_answer == expected_answer
                 score = 100.0 if is_correct else 0.0
-                if question.ability_dimension:
-                    dimension_scores.setdefault(question.ability_dimension, []).append(score)
+                question.ability_dimension = cls._resolve_ability_dimension(
+                    question.topic,
+                    question.ability_dimension,
+                )
+                dimension_scores.setdefault(question.ability_dimension, []).append(score)
                 db.add(AnswerRecord(
                     user_id=user_id,
                     learner_id=learner_id,
@@ -991,7 +1023,7 @@ class AdaptiveTutoringService(BaseService):
                 f"[batch practice] submitted: user_id={user_id}, learner_id={learner_id}, "
                 f"session_id={session_id}, question_count={total}"
             )
-            return {"success": True, **result_summary}
+            return {"success": True, **cls._public_batch_result(result_summary)}
 
     @classmethod
     def get_batch_result(
@@ -1008,7 +1040,10 @@ class AdaptiveTutoringService(BaseService):
             ).first()
             if not submission:
                 return None
-            return {"success": True, **dict(submission.result_summary or {})}
+            return {
+                "success": True,
+                **cls._public_batch_result(dict(submission.result_summary or {})),
+            }
 
     @classmethod
     def _update_learner_profile_batch(
@@ -1626,11 +1661,6 @@ class AdaptiveTutoringService(BaseService):
             return
         dimension = ability_dimension or cls._infer_ability_dimension(topic)
         if dimension not in topic_dimension_map.values():
-            for keyword, candidate in topic_dimension_map.items():
-                if keyword in topic:
-                    dimension = candidate
-                    break
-        if dimension not in topic_dimension_map.values():
             return
 
         assessments = dict(attached.ability_assessments or {})
@@ -1655,17 +1685,28 @@ class AdaptiveTutoringService(BaseService):
     def _infer_ability_dimension(cls, topic: str) -> Optional[str]:
         value = str(topic or "").casefold()
         aliases = {
-            "theoretical_foundation": ("理论", "theor", "foundation"),
-            "programming_ability": ("编程", "program", "python", "代码"),
-            "algorithm_design": ("算法", "algorithm"),
-            "system_architecture": ("架构", "系统", "architecture", "system"),
-            "data_analysis": ("数据", "分析", "data", "analysis"),
-            "engineering_practice": ("工程", "实践", "engineering", "practice"),
+            "theoretical_foundation": ("理论", "theor", "foundation", "概念", "原理"),
+            "programming_ability": ("编程", "program", "python", "代码", "code", "api", "前端", "后端"),
+            "algorithm_design": ("算法", "algorithm", "排序", "图论", "动态规划", "机器学习", "深度学习", "machine learning", "deep learning"),
+            "system_architecture": ("架构", "系统", "architecture", "system", "分布式", "微服务", "网络"),
+            "data_analysis": ("数据", "分析", "data", "analysis", "sql", "统计"),
+            "engineering_practice": ("工程", "实践", "engineering", "practice", "测试", "部署", "交付", "ci/cd"),
         }
         for dimension, keywords in aliases.items():
             if any(keyword.casefold() in value for keyword in keywords):
                 return dimension
         return None
+
+    @classmethod
+    def _resolve_ability_dimension(
+        cls,
+        topic: str,
+        ability_dimension: Optional[str] = None,
+    ) -> str:
+        """Return a valid internal dimension for every issued practice question."""
+        if ability_dimension in cls.ABILITY_DIMENSION_KEYS:
+            return ability_dimension
+        return cls._infer_ability_dimension(topic) or cls.DEFAULT_ABILITY_DIMENSION
     
     @classmethod
     def _extract_key_points(cls, topic: str) -> List[str]:
