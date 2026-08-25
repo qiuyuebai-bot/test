@@ -26,6 +26,10 @@ from app.models import (
     AnswerRecord,
     AnswerResultEnum,
 )
+from app.domains.knowledge.models import (
+    KnowledgeDoc,
+    KnowledgePublicationRequest,
+)
 
 
 class TestLearnerProfileCRUD:
@@ -140,6 +144,64 @@ class TestLearnerProfileCRUD:
         preserved_task = db_session.get(AgentTask, task_id)
         assert preserved_task is not None
         assert preserved_task.learner_id is None
+
+    def test_delete_learner_with_published_resource(
+        self,
+        db_session: Session,
+        sample_learner_profile: LearnerProfile,
+    ):
+        """资源已发布为知识文档时仍可删除画像：文档保留并断开溯源，发布申请删除。"""
+        user = User(
+            username="delete_publish_owner",
+            password_hash="hash",
+            role=UserRoleEnum.LEARNER,
+        )
+        db_session.add(user)
+        db_session.commit()
+
+        resource = LearningResource(
+            learner_id=sample_learner_profile.id,
+            title="已发布讲义",
+            resource_type="guide",
+            content="测试内容",
+        )
+        db_session.add(resource)
+        db_session.flush()
+
+        doc = KnowledgeDoc(
+            title="已发布文档",
+            industry="工业机器人",
+            file_name="a.md",
+            file_path="/tmp/a.md",
+            origin_type="lecture",
+            origin_resource_id=resource.id,
+        )
+        request = KnowledgePublicationRequest(
+            resource_id=resource.id,
+            resource_version="1.0",
+            content_hash="0" * 64,
+            snapshot={"title": "已发布讲义"},
+            status="published",
+            submitted_by=user.id,
+            knowledge_doc_id=None,
+        )
+        db_session.add_all([doc, request])
+        db_session.commit()
+        doc_id, resource_id = doc.id, resource.id
+
+        result = LearnerService.delete_learner(db_session, sample_learner_profile.id)
+
+        assert result is True
+        assert db_session.get(LearningResource, resource_id) is None
+        preserved_doc = db_session.get(KnowledgeDoc, doc_id)
+        assert preserved_doc is not None
+        assert preserved_doc.origin_resource_id is None
+        remaining_requests = (
+            db_session.query(KnowledgePublicationRequest)
+            .filter(KnowledgePublicationRequest.resource_id == resource_id)
+            .count()
+        )
+        assert remaining_requests == 0
 
 
 class TestLearnerAnalysis:

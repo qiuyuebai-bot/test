@@ -26,6 +26,10 @@ from app.models import (
     AnonymizedData,
     UserRoleEnum,
 )
+from app.domains.knowledge.models import (
+    KnowledgeDoc,
+    KnowledgePublicationRequest,
+)
 from app.domains.learner.schemas import (
     LearnerProfileCreate,
     LearnerProfileUpdate,
@@ -320,6 +324,25 @@ class LearnerService:
                 db.query(model).filter(model.learner_id == learner_id).delete(
                     synchronize_session=False
                 )
+
+            # Published knowledge docs are enterprise assets: keep them but
+            # detach the resource lineage before the resources are removed.
+            resource_ids = [
+                row.id
+                for row in db.query(LearningResource.id).filter(
+                    LearningResource.learner_id == learner_id
+                ).all()
+            ]
+            if resource_ids:
+                db.query(KnowledgeDoc).filter(
+                    KnowledgeDoc.origin_resource_id.in_(resource_ids)
+                ).update(
+                    {KnowledgeDoc.origin_resource_id: None},
+                    synchronize_session=False,
+                )
+                db.query(KnowledgePublicationRequest).filter(
+                    KnowledgePublicationRequest.resource_id.in_(resource_ids)
+                ).delete(synchronize_session=False)
 
             resources = db.query(LearningResource).filter(
                 LearningResource.learner_id == learner_id
