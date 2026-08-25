@@ -465,15 +465,12 @@ def task_events_stream(
     - 实时接收任务各阶段进度、辩论轮次、完成/失败事件
     - 连接关闭自动取消订阅
     """
-    user_id = current_user.user_id
-
     task = db.query(AgentTask).filter(AgentTask.id == task_id).first()
     if not task:
         raise HTTPException(status_code=404, detail="任务不存在")
 
-    if task.learner_id is not None:
-        if not LearnerService.check_data_permission(db, user_id, task.learner_id):
-            raise HTTPException(status_code=403, detail="无权限访问该任务")
+    if not _check_task_permission(db, current_user, task):
+        raise HTTPException(status_code=403, detail="无权限访问该任务")
 
     # 如果任务已完成或失败，先发送当前状态后关闭
     if task.status in ("completed", "failed"):
@@ -918,6 +915,12 @@ def get_task_list(
                 if not LearnerService.check_data_permission(db, current_user.user_id, learner_id):
                     return unauthorized("无权限查看该学习者任务")
             query = query.filter(AgentTask.learner_id == learner_id)
+        elif not current_user.is_admin:
+            # 非管理员默认仅可见有权访问的学习者的任务（不含无归属任务）
+            accessible_ids = LearnerService.get_accessible_learner_ids(
+                db, current_user.user_id
+            )
+            query = query.filter(AgentTask.learner_id.in_(accessible_ids))
         if status:
             query = query.filter(AgentTask.status == status)
         if task_type:
