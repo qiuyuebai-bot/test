@@ -48,6 +48,9 @@ class LLMUtil:
     _available: Optional[bool] = None
     _sync_client: Optional[httpx.Client] = None
     _async_client: Optional[httpx.AsyncClient] = None
+    # 客户端单例双重检查锁（与 knowledge/service.py 的 Chroma DCL 同模式）
+    _sync_client_lock: threading.Lock = threading.Lock()
+    _async_client_lock: threading.Lock = threading.Lock()
 
     # ===========================================
     # P3-3: Prompt 响应缓存（确定性调用专用）
@@ -92,7 +95,7 @@ class LLMUtil:
     @classmethod
     def _get_sync_client(cls, timeout: float = 120.0) -> httpx.Client:
         """
-        获取同步 httpx 客户端（单例，复用连接池）
+        获取同步 httpx 客户端（单例，复用连接池；双重检查锁防并发重复创建）
 
         Args:
             timeout: 请求超时时间（仅在首次创建时生效）
@@ -101,26 +104,28 @@ class LLMUtil:
             httpx.Client 实例
         """
         if cls._sync_client is None or cls._sync_client.is_closed:
-            cls._sync_client = httpx.Client(
-                timeout=timeout,
-                limits=httpx.Limits(
-                    max_connections=20,
-                    max_keepalive_connections=10,
-                    keepalive_expiry=30.0,
-                ),
-                headers=cls._default_headers(),
-                # 不使用系统代理环境变量（HTTP_PROXY/HTTPS_PROXY）：
-                # 本机配置了失效代理（127.0.0.1:7892 未运行），trust_env=True 会走代理导致
-                # WinError 10061 连接被拒；LLM API（DeepSeek）实测可直连，故绕过系统代理。
-                trust_env=False,
-            )
-            logger.debug("[LLM] 创建同步 httpx 客户端（连接池模式）")
+            with cls._sync_client_lock:
+                if cls._sync_client is None or cls._sync_client.is_closed:
+                    cls._sync_client = httpx.Client(
+                        timeout=timeout,
+                        limits=httpx.Limits(
+                            max_connections=20,
+                            max_keepalive_connections=10,
+                            keepalive_expiry=30.0,
+                        ),
+                        headers=cls._default_headers(),
+                        # 不使用系统代理环境变量（HTTP_PROXY/HTTPS_PROXY）：
+                        # 本机配置了失效代理（127.0.0.1:7892 未运行），trust_env=True 会走代理导致
+                        # WinError 10061 连接被拒；LLM API（DeepSeek）实测可直连，故绕过系统代理。
+                        trust_env=False,
+                    )
+                    logger.debug("[LLM] 创建同步 httpx 客户端（连接池模式）")
         return cls._sync_client
 
     @classmethod
     def _get_async_client(cls, timeout: float = 120.0) -> httpx.AsyncClient:
         """
-        获取异步 httpx 客户端（单例，复用连接池）
+        获取异步 httpx 客户端（单例，复用连接池；双重检查锁防并发重复创建）
 
         Args:
             timeout: 请求超时时间（仅在首次创建时生效）
@@ -129,17 +134,19 @@ class LLMUtil:
             httpx.AsyncClient 实例
         """
         if cls._async_client is None or cls._async_client.is_closed:
-            cls._async_client = httpx.AsyncClient(
-                timeout=timeout,
-                limits=httpx.Limits(
-                    max_connections=20,
-                    max_keepalive_connections=10,
-                    keepalive_expiry=30.0,
-                ),
-                headers=cls._default_headers(),
-                trust_env=False,  # 同同步客户端：绕过失效的系统代理
-            )
-            logger.debug("[LLM] 创建异步 httpx 客户端（连接池模式）")
+            with cls._async_client_lock:
+                if cls._async_client is None or cls._async_client.is_closed:
+                    cls._async_client = httpx.AsyncClient(
+                        timeout=timeout,
+                        limits=httpx.Limits(
+                            max_connections=20,
+                            max_keepalive_connections=10,
+                            keepalive_expiry=30.0,
+                        ),
+                        headers=cls._default_headers(),
+                        trust_env=False,  # 同同步客户端：绕过失效的系统代理
+                    )
+                    logger.debug("[LLM] 创建异步 httpx 客户端（连接池模式）")
         return cls._async_client
 
     @classmethod
@@ -152,24 +159,28 @@ class LLMUtil:
 
     @classmethod
     def close_clients(cls) -> None:
-        """关闭所有客户端连接（应用退出时调用）"""
-        if cls._sync_client is not None and not cls._sync_client.is_closed:
-            cls._sync_client.close()
-            cls._sync_client = None
-            logger.debug("[LLM] 同步 httpx 客户端已关闭")
-        if cls._async_client is not None and not cls._async_client.is_closed:
-            cls._async_client = None
+        """关闭所有客户端连接（应用退出时调用；加锁防止与并发创建竞态）"""
+        with cls._sync_client_lock:
+            if cls._sync_client is not None and not cls._sync_client.is_closed:
+                cls._sync_client.close()
+                cls._sync_client = None
+                logger.debug("[LLM] 同步 httpx 客户端已关闭")
+        with cls._async_client_lock:
+            if cls._async_client is not None and not cls._async_client.is_closed:
+                cls._async_client = None
 
     @classmethod
     async def aclose_clients(cls) -> None:
-        """异步关闭所有客户端连接（ASGI shutdown 时调用）"""
-        if cls._sync_client is not None and not cls._sync_client.is_closed:
-            cls._sync_client.close()
-            cls._sync_client = None
-        if cls._async_client is not None and not cls._async_client.is_closed:
-            await cls._async_client.aclose()
-            cls._async_client = None
-            logger.debug("[LLM] 异步 httpx 客户端已关闭")
+        """异步关闭所有客户端连接（ASGI shutdown 时调用；加锁防止与并发创建竞态）"""
+        with cls._sync_client_lock:
+            if cls._sync_client is not None and not cls._sync_client.is_closed:
+                cls._sync_client.close()
+                cls._sync_client = None
+        with cls._async_client_lock:
+            if cls._async_client is not None and not cls._async_client.is_closed:
+                await cls._async_client.aclose()
+                cls._async_client = None
+                logger.debug("[LLM] 异步 httpx 客户端已关闭")
 
     # ===========================================
     # 公共方法
