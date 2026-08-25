@@ -8,6 +8,7 @@ import re
 import time
 import random
 import threading
+import unicodedata
 from collections import OrderedDict
 from typing import Any, Callable, Dict, List, Optional, Type, TypeVar
 
@@ -19,7 +20,6 @@ from app.models import (
 )
 from app.utils.logger import LoggerUtil
 from app.utils.resource_content import build_resource_title, validate_resource_title
-from app.constants import MAX_DIFFICULTY
 
 T = TypeVar('T')
 
@@ -533,6 +533,38 @@ class ResourceServiceHelper(BaseService):
             line for line in (content or "").splitlines()
             if not re.search(r"(?:答案|正确答案|解析|answer|explanation)", line, re.IGNORECASE)
         )
+
+    @staticmethod
+    def _normalize_match_text(value: Any) -> str:
+        """Normalize display text for tolerant blind-area matching."""
+        text = unicodedata.normalize("NFKC", str(value or "")).lower()
+        return re.sub(r"[\W_]+", "", text, flags=re.UNICODE)
+
+    @classmethod
+    def _blind_area_is_covered(cls, blind_area: str, resource_content: str) -> bool:
+        target = cls._normalize_match_text(blind_area)
+        content = cls._normalize_match_text(resource_content)
+        if not target or not content:
+            return False
+        if target in content:
+            return True
+
+        # Resource wording often adds a descriptive suffix to the same concept.
+        # Accept the meaningful stem while keeping short labels exact-match only.
+        suffixes = ("问题", "能力", "原理", "方法", "实践", "基础", "概念", "机制", "现象")
+        if len(target) > 2:
+            stem = target
+            changed = True
+            while changed and len(stem) > 2:
+                changed = False
+                for suffix in suffixes:
+                    if stem.endswith(suffix) and len(stem) - len(suffix) >= 2:
+                        stem = stem[: -len(suffix)]
+                        changed = True
+                        break
+            if stem != target and stem in content:
+                return True
+        return False
     
     @classmethod
     def calculate_match_score(
@@ -569,14 +601,17 @@ class ResourceServiceHelper(BaseService):
         score += difficulty_score * 0.4
         
         # 2. 能力适配分数（权重30%）
-        avg_ability = sum(ability_scores.values()) / len(ability_scores) if ability_scores else 50
-        expected_diff = min(MAX_DIFFICULTY, max(1, round(avg_ability / 20)))
-        ability_diff = abs(expected_diff - resource_difficulty)
+        # The generator already follows the diagnosis recommendation. Reusing
+        # that same baseline avoids a second, conflicting difficulty model.
+        ability_diff = abs(recommended_difficulty - resource_difficulty)
         ability_score = max(0, 100 - ability_diff * 25)
         score += ability_score * 0.3
         
         # 3. 盲区覆盖分数（权重30%）
-        covered = sum(1 for b in blind_areas if b and b in resource_content)
+        covered = sum(
+            1 for b in blind_areas
+            if cls._blind_area_is_covered(b, resource_content)
+        )
         coverage_rate = covered / len(blind_areas) if blind_areas else 0.5
         coverage_score = coverage_rate * 100
         score += coverage_score * 0.3
