@@ -24,6 +24,13 @@ def test_knowledge_seed_covers_requested_learning_domains():
         and all(slice_item["content"].strip() for slice_item in item["slices"])
         for item in records
     )
+    industry_slice_counts = {}
+    industry_document_counts = {}
+    for item in records:
+        industry_slice_counts[item["industry"]] = industry_slice_counts.get(item["industry"], 0) + len(item["slices"])
+        industry_document_counts[item["industry"]] = industry_document_counts.get(item["industry"], 0) + 1
+    assert all(industry_document_counts.get(industry, 0) >= 5 for industry in supported_industries)
+    assert all(industry_slice_counts.get(industry, 0) >= 5 for industry in supported_industries)
 
     titles = " ".join(item["title"] for item in records)
     for topic in (
