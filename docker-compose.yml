@@ -56,6 +56,8 @@ services:
     volumes:
       - backend-data:/app/data
       - backend-logs:/app/logs
+      # Chroma ONNX 嵌入模型缓存：持久化避免每次重建镜像后重新下载 79MB 模型
+      - chroma-model-cache:/root/.cache/chroma
     depends_on:
       redis:
         condition: service_healthy
@@ -226,6 +228,8 @@ volumes:
   backend-data:
     driver: local
   backend-logs:
+    driver: local
+  chroma-model-cache:
     driver: local
 
 # ---- 网络 ----
