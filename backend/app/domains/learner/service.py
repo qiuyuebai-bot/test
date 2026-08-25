@@ -5,7 +5,7 @@
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 from sqlalchemy.orm import Session
-from sqlalchemy import or_
+from sqlalchemy import false, or_
 from loguru import logger
 
 from app.constants import BLIND_AREA_CRITICAL_THRESHOLD, BLIND_AREA_WARNING_THRESHOLD
@@ -682,55 +682,66 @@ class LearnerService:
         )
     
     @staticmethod
+    def _accessible_learner_query(db: Session, user: User):
+        """当前用户可访问的学习者画像 Query（角色边界唯一事实源）。
+
+        - ADMIN：全量
+        - ENTERPRISE：同企业（任一方 enterprise_name 缺失即拒绝，fail-closed）
+        - TEACHER：全量（部署策略：与教师看板/管理路由现行暴露面一致，集中声明）
+        - LEARNER：仅本人画像
+        """
+        query = db.query(LearnerProfile)
+        if user.role == UserRoleEnum.ADMIN:
+            return query
+        if user.role == UserRoleEnum.ENTERPRISE:
+            if not user.enterprise_name:
+                return query.filter(false())
+            return query.join(User, LearnerProfile.user_id == User.id).filter(
+                User.enterprise_name == user.enterprise_name,
+            )
+        if user.role == UserRoleEnum.TEACHER:
+            return query
+        return query.filter(LearnerProfile.user_id == user.id)
+
+    @staticmethod
+    def get_accessible_learner_ids(db: Session, user_id: int) -> List[int]:
+        """当前用户可访问的学习者画像 ID 列表（列表类接口的默认范围过滤用）。"""
+        user = db.query(User).filter(User.id == user_id).first()
+        if not user:
+            return []
+        rows = (
+            LearnerService._accessible_learner_query(db, user)
+            .with_entities(LearnerProfile.id)
+            .all()
+        )
+        return [row.id for row in rows]
+
+    @staticmethod
     def check_data_permission(
         db: Session,
         user_id: int,
         learner_id: int,
     ) -> bool:
         """
-        检查数据权限
-        
+        检查数据权限（角色边界见 _accessible_learner_query）
+
         Args:
             db: 数据库会话
             user_id: 当前用户ID
             learner_id: 要访问的学习者ID
-            
+
         Returns:
             是否有权限
         """
         user = db.query(User).filter(User.id == user_id).first()
         if not user:
             return False
-        
-        # 管理员权限：查看全部
-        if user.role == UserRoleEnum.ADMIN:
-            return True
-        
-        # 企业管理员：查看本企业
-        if user.role == UserRoleEnum.ENTERPRISE:
-            learner = db.query(LearnerProfile).filter(
-                LearnerProfile.id == learner_id
-            ).first()
-            if learner:
-                # 简化处理：企业管理员可查看所有
-                return True
-            return False
-
-        # Teacher resource access follows the same learner-list boundary used
-        # by teacher dashboards and management routes. The current deployment
-        # exposes all learner profiles in that list.
-        if user.role == UserRoleEnum.TEACHER:
-            return db.query(LearnerProfile.id).filter(
-                LearnerProfile.id == learner_id
-            ).first() is not None
-
-        # 普通学习者：查看自己
-        learner = db.query(LearnerProfile).filter(
-            LearnerProfile.id == learner_id,
-            LearnerProfile.user_id == user_id,
-        ).first()
-        
-        return learner is not None
+        return (
+            LearnerService._accessible_learner_query(db, user)
+            .filter(LearnerProfile.id == learner_id)
+            .first()
+            is not None
+        )
     
     @staticmethod
     def add_answer_record(
