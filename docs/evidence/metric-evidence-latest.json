@@ -1,7 +1,7 @@
 {
   "report_version": "evidence-report-v2",
-  "generated_at": "2026-08-25T06:27:16.372772+00:00",
-  "git_revision": "86b0f4a740bb13f04eccb4c9e72ec519221e9092",
+  "generated_at": "2026-08-25T07:32:02.241792+00:00",
+  "git_revision": "19faf4223ef7d1df11f0e41f023cc36624394923",
   "working_tree_dirty": false,
   "report_kind": "formal_acceptance",
   "acceptance_eligible": true,
@@ -67,7 +67,7 @@
         "debate_records.is_hallucination",
         "debate_records.resolution_status"
       ],
-      "calculated_at": "2026-08-25T06:27:15.474951",
+      "calculated_at": "2026-08-25T07:32:00.944050",
       "message": null,
       "metadata": {
         "total_checks": 169,
@@ -83,10 +83,10 @@
       "display_name": "资源匹配分",
       "scope": "global",
       "scope_id": null,
-      "value": 79.08,
+      "value": 86.87,
       "unit": "%",
       "status": "ready",
-      "numerator": 6958.65,
+      "numerator": 7644.5,
       "denominator": 88,
       "sample_count": 88,
       "minimum_sample_size": 1,
@@ -94,7 +94,7 @@
       "source": [
         "learning_resources.match_score"
       ],
-      "calculated_at": "2026-08-25T06:27:15.474951",
+      "calculated_at": "2026-08-25T07:32:00.944050",
       "message": null,
       "metadata": null
     },
@@ -115,7 +115,7 @@
         "answer_records.result",
         "answer_records.next_resource_id"
       ],
-      "calculated_at": "2026-08-25T06:27:15.474951",
+      "calculated_at": "2026-08-25T07:32:00.944050",
       "message": null,
       "metadata": null
     },
@@ -135,7 +135,7 @@
       "source": [
         "answer_records.result"
       ],
-      "calculated_at": "2026-08-25T06:27:15.474951",
+      "calculated_at": "2026-08-25T07:32:00.944050",
       "message": null,
       "metadata": null
     },
@@ -155,7 +155,7 @@
       "source": [
         "knowledge_slices.is_indexed"
       ],
-      "calculated_at": "2026-08-25T06:27:15.474951",
+      "calculated_at": "2026-08-25T07:32:00.944050",
       "message": null,
       "metadata": {
         "coverage_type": "index",
@@ -183,7 +183,7 @@
         "knowledge_slices.title",
         "knowledge_slices.content"
       ],
-      "calculated_at": "2026-08-25T06:27:15.474951",
+      "calculated_at": "2026-08-25T07:32:00.944050",
       "message": null,
       "metadata": {
         "coverage_type": "generated_content",
@@ -198,15 +198,15 @@
       "resource_match_score": {
         "metric_id": "resource_match_score",
         "display_name": "资源匹配分",
-        "value": 79.08,
+        "value": 86.87,
         "target": 85.0,
         "operator": ">=",
-        "numerator": 6958.65,
+        "numerator": 7644.5,
         "denominator": 88,
         "sample_count": 88,
         "minimum_sample_size": 10,
-        "status": "failed",
-        "reason": "指标值 79.08% 未达到目标 85.00%",
+        "status": "passed",
+        "reason": "指标值 86.87% 达到目标 85.00%",
         "metric_status": "ready"
       },
       "resource_match_effectiveness": {
@@ -251,10 +251,10 @@
         "display_name": "资源匹配分",
         "scope": "global",
         "scope_id": null,
-        "value": 79.08,
+        "value": 86.87,
         "unit": "%",
         "status": "ready",
-        "numerator": 6958.65,
+        "numerator": 7644.5,
         "denominator": 88,
         "sample_count": 88,
         "minimum_sample_size": 1,
@@ -262,7 +262,7 @@
         "source": [
           "learning_resources.match_score"
         ],
-        "calculated_at": "2026-08-25T06:27:15.474951",
+        "calculated_at": "2026-08-25T07:32:00.944050",
         "message": null,
         "metadata": {
           "source_filter": [
@@ -289,7 +289,7 @@
           "answer_records.result",
           "answer_records.next_resource_id"
         ],
-        "calculated_at": "2026-08-25T06:27:15.474951",
+        "calculated_at": "2026-08-25T07:32:00.944050",
         "message": null,
         "metadata": null
       },
@@ -297,21 +297,21 @@
       "resources_post_fix": 88,
       "post_fix_nonzero_scores": 88,
       "legacy_rows_excluded_from_post_fix_claim": 0,
-      "claim_status": "failed",
+      "claim_status": "insufficient_evidence",
       "minimum_post_fix_samples_for_competition_claim": 10,
       "claims": {
         "resource_match_score": {
           "metric_id": "resource_match_score",
           "display_name": "资源匹配分",
-          "value": 79.08,
+          "value": 86.87,
           "target": 85.0,
           "operator": ">=",
-          "numerator": 6958.65,
+          "numerator": 7644.5,
           "denominator": 88,
           "sample_count": 88,
           "minimum_sample_size": 10,
-          "status": "failed",
-          "reason": "指标值 79.08% 未达到目标 85.00%",
+          "status": "passed",
+          "reason": "指标值 86.87% 达到目标 85.00%",
           "metric_status": "ready"
         },
         "resource_match_effectiveness": {
@@ -347,7 +347,7 @@
         "source": [
           "knowledge_slices.is_indexed"
         ],
-        "calculated_at": "2026-08-25T06:27:15.474951",
+        "calculated_at": "2026-08-25T07:32:00.944050",
         "message": null,
         "metadata": {
           "coverage_type": "index",
@@ -375,7 +375,7 @@
           "knowledge_slices.title",
           "knowledge_slices.content"
         ],
-        "calculated_at": "2026-08-25T06:27:15.474951",
+        "calculated_at": "2026-08-25T07:32:00.944050",
         "message": null,
         "metadata": {
           "coverage_type": "generated_content",
