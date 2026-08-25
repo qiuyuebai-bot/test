@@ -1,10 +1,10 @@
 {
   "report_version": "evidence-report-v2",
-  "generated_at": "2026-08-25T06:08:21.793860+00:00",
-  "git_revision": "50951874b62587c281f107e8b44d5ee008aca519",
-  "working_tree_dirty": true,
-  "report_kind": "development_validation",
-  "acceptance_eligible": false,
+  "generated_at": "2026-08-25T06:27:16.372772+00:00",
+  "git_revision": "86b0f4a740bb13f04eccb4c9e72ec519221e9092",
+  "working_tree_dirty": false,
+  "report_kind": "formal_acceptance",
+  "acceptance_eligible": true,
   "model": {
     "provider": "configured_server_side_provider",
     "model_name": "redacted_in_report"
@@ -67,7 +67,7 @@
         "debate_records.is_hallucination",
         "debate_records.resolution_status"
       ],
-      "calculated_at": "2026-08-25T06:08:20.468636",
+      "calculated_at": "2026-08-25T06:27:15.474951",
       "message": null,
       "metadata": {
         "total_checks": 169,
@@ -94,7 +94,7 @@
       "source": [
         "learning_resources.match_score"
       ],
-      "calculated_at": "2026-08-25T06:08:20.468636",
+      "calculated_at": "2026-08-25T06:27:15.474951",
       "message": null,
       "metadata": null
     },
@@ -115,7 +115,7 @@
         "answer_records.result",
         "answer_records.next_resource_id"
       ],
-      "calculated_at": "2026-08-25T06:08:20.468636",
+      "calculated_at": "2026-08-25T06:27:15.474951",
       "message": null,
       "metadata": null
     },
@@ -135,7 +135,7 @@
       "source": [
         "answer_records.result"
       ],
-      "calculated_at": "2026-08-25T06:08:20.468636",
+      "calculated_at": "2026-08-25T06:27:15.474951",
       "message": null,
       "metadata": null
     },
@@ -155,7 +155,7 @@
       "source": [
         "knowledge_slices.is_indexed"
       ],
-      "calculated_at": "2026-08-25T06:08:20.468636",
+      "calculated_at": "2026-08-25T06:27:15.474951",
       "message": null,
       "metadata": {
         "coverage_type": "index",
@@ -183,7 +183,7 @@
         "knowledge_slices.title",
         "knowledge_slices.content"
       ],
-      "calculated_at": "2026-08-25T06:08:20.468636",
+      "calculated_at": "2026-08-25T06:27:15.474951",
       "message": null,
       "metadata": {
         "coverage_type": "generated_content",
@@ -262,7 +262,7 @@
         "source": [
           "learning_resources.match_score"
         ],
-        "calculated_at": "2026-08-25T06:08:20.468636",
+        "calculated_at": "2026-08-25T06:27:15.474951",
         "message": null,
         "metadata": {
           "source_filter": [
@@ -289,7 +289,7 @@
           "answer_records.result",
           "answer_records.next_resource_id"
         ],
-        "calculated_at": "2026-08-25T06:08:20.468636",
+        "calculated_at": "2026-08-25T06:27:15.474951",
         "message": null,
         "metadata": null
       },
@@ -347,7 +347,7 @@
         "source": [
           "knowledge_slices.is_indexed"
         ],
-        "calculated_at": "2026-08-25T06:08:20.468636",
+        "calculated_at": "2026-08-25T06:27:15.474951",
         "message": null,
         "metadata": {
           "coverage_type": "index",
@@ -375,7 +375,7 @@
           "knowledge_slices.title",
           "knowledge_slices.content"
         ],
-        "calculated_at": "2026-08-25T06:08:20.468636",
+        "calculated_at": "2026-08-25T06:27:15.474951",
         "message": null,
         "metadata": {
           "coverage_type": "generated_content",
