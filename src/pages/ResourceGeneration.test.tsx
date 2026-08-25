@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor } from '@testing-library/react'
+import { render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 
@@ -158,6 +158,60 @@ describe('ResourceGeneration context modes', () => {
       await userEvent.click(screen.getByRole('button', { name: new RegExp(label) }))
       await waitFor(() => expect(screen.getAllByText(title).length).toBeGreaterThan(0))
       expect(screen.queryByText('质量校验未通过')).not.toBeInTheDocument()
+    }
+  })
+
+  it('hides generated metadata and the detail summary for every resource type', async () => {
+    setMockStore({
+      resources: [
+        {
+          id: 21,
+          title: '实操指南',
+          resourceType: 'guide',
+          content: '# 指南正文',
+          contentSummary: '指南摘要',
+          generationMethod: 'deepseek',
+          generationTime: '2026-08-25T02:47:27Z',
+          versionNumber: 1,
+        },
+        {
+          id: 22,
+          title: '分阶测试题',
+          resourceType: 'exercise',
+          content: '# 测试正文',
+          contentSummary: '测试摘要',
+          generationMethod: 'deepseek',
+          generationTime: '2026-08-25T02:47:27Z',
+          versionNumber: 1,
+        },
+        {
+          id: 23,
+          title: '专属讲义',
+          resourceType: 'lecture',
+          content: '# 讲义正文',
+          contentSummary: '讲义摘要',
+          generationMethod: 'deepseek',
+          generationTime: '2026-08-25T02:47:27Z',
+          versionNumber: 1,
+        },
+      ],
+      resourcesTotal: 3,
+    })
+
+    const { default: Page } = await import('./ResourceGeneration')
+    render(
+      <MemoryRouter initialEntries={['/resources?mode=list&learnerId=6']}>
+        <Page />
+      </MemoryRouter>,
+    )
+
+    const preview = screen.getByTestId('resource-content-scroll')
+    for (const [label, summary] of [['实操指南', '指南摘要'], ['分阶测试题', '测试摘要'], ['专属讲义', '讲义摘要']]) {
+      await userEvent.click(screen.getByRole('button', { name: new RegExp(`^${label}\\s*1$`) }))
+      await waitFor(() => expect(within(preview).getByText(label)).toBeInTheDocument())
+      expect(within(preview).queryByText(summary)).not.toBeInTheDocument()
+      expect(within(preview).queryByText(/DeepSeek生成/)).not.toBeInTheDocument()
+      expect(within(preview).queryByText('内容摘要')).not.toBeInTheDocument()
     }
   })
 })
