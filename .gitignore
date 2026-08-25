@@ -112,6 +112,7 @@ install_*.txt
 pip_list*.txt
 test_*result*.txt
 test_report.xml
+test-results/
 server_start_log.txt
 vite-requests.log
 cache_status.log
