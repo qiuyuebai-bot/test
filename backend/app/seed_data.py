@@ -121,6 +121,7 @@ def init_knowledge_seed_data():
     created_files = []
     try:
         created_docs = 0
+        updated_docs = 0
         created_slices = 0
         doc_dir = Path(settings.KNOWLEDGE_DOC_DIR)
         doc_dir.mkdir(parents=True, exist_ok=True)
@@ -136,46 +137,73 @@ def init_knowledge_seed_data():
                 KnowledgeDoc.file_name == file_name,
             ).first()
             if existing is not None:
-                continue
-
-            content = "\n\n".join(
-                f"## {slice_item.get('title', '')}\n{slice_item.get('content', '')}"
-                for slice_item in slices
-            )
-            file_path = doc_dir / file_name
-            if not file_path.exists():
-                file_path.write_text(
-                    f"# {item['title']}\n\n{content}\n",
-                    encoding="utf-8",
+                if existing.origin_type != "seed":
+                    continue
+                existing_slices = db.query(KnowledgeSlice).filter(
+                    KnowledgeSlice.doc_id == existing.id,
+                ).all()
+                existing_titles = {slice_item.title for slice_item in existing_slices}
+                existing_hashes = {slice_item.content_hash for slice_item in existing_slices}
+                pending_slices = [
+                    slice_item for slice_item in slices
+                    if slice_item.get("title") not in existing_titles
+                    and hashlib.sha256(
+                        str(slice_item.get("content") or "").strip().encode("utf-8")
+                    ).hexdigest() not in existing_hashes
+                ]
+                if not pending_slices:
+                    continue
+                doc = existing
+                slice_start = max(
+                    (slice_item.slice_index for slice_item in existing_slices),
+                    default=-1,
+                ) + 1
+                doc.slice_count = len(existing_slices) + len(pending_slices)
+                doc.indexed_slice_count = sum(
+                    1 for slice_item in existing_slices if slice_item.is_indexed
                 )
-                created_files.append(file_path)
+                updated_docs += 1
+            else:
+                content = "\n\n".join(
+                    f"## {slice_item.get('title', '')}\n{slice_item.get('content', '')}"
+                    for slice_item in slices
+                )
+                file_path = doc_dir / file_name
+                if not file_path.exists():
+                    file_path.write_text(
+                        f"# {item['title']}\n\n{content}\n",
+                        encoding="utf-8",
+                    )
+                    created_files.append(file_path)
 
-            doc = KnowledgeDoc(
-                title=item["title"],
-                industry=item["industry"],
-                category=item.get("category"),
-                file_name=file_name,
-                file_path=str(file_path),
-                file_size=file_path.stat().st_size,
-                file_type="md",
-                content_preview=content[:500],
-                total_pages=1,
-                word_count=len(content),
-                slice_count=len(slices),
-                indexed_slice_count=0,
-                status="ready",
-                process_progress=100,
-                source=item.get("source"),
-                origin_type="seed",
-                version=str(payload.get("_meta", {}).get("version", "1.0")),
-                author=item.get("author"),
-                tags=item.get("tags") or [],
-                is_enabled=True,
-            )
-            db.add(doc)
-            db.flush()
+                doc = KnowledgeDoc(
+                    title=item["title"],
+                    industry=item["industry"],
+                    category=item.get("category"),
+                    file_name=file_name,
+                    file_path=str(file_path),
+                    file_size=file_path.stat().st_size,
+                    file_type="md",
+                    content_preview=content[:500],
+                    total_pages=1,
+                    word_count=len(content),
+                    slice_count=len(slices),
+                    indexed_slice_count=0,
+                    status="ready",
+                    process_progress=100,
+                    source=item.get("source"),
+                    origin_type="seed",
+                    version=str(payload.get("_meta", {}).get("version", "1.0")),
+                    author=item.get("author"),
+                    tags=item.get("tags") or [],
+                    is_enabled=True,
+                )
+                db.add(doc)
+                db.flush()
+                pending_slices = slices
+                slice_start = 0
 
-            for index, slice_item in enumerate(slices):
+            for index, slice_item in enumerate(pending_slices, start=slice_start):
                 slice_content = str(slice_item.get("content") or "").strip()
                 if not slice_content:
                     continue
@@ -198,8 +226,9 @@ def init_knowledge_seed_data():
 
         db.commit()
         logger.info(
-            "知识库种子数据初始化完成: 文档新增 {}，切片新增 {}（数据库关键词检索可用）",
+            "知识库种子数据初始化完成: 文档新增 {}，文档补齐 {}，切片新增 {}（数据库关键词检索可用）",
             created_docs,
+            updated_docs,
             created_slices,
         )
     except Exception as exc:
