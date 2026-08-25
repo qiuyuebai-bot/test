@@ -467,6 +467,62 @@ class TestUpdateLearnerProfile:
         assert sample_learner_profile.theoretical_foundation == original_theory
 
 
+class TestNextQuestionDifficultyPersistence:
+    """落库的 next_question_difficulty 必须与 process_answer 响应口径一致（Fix A）
+
+    历史缺陷：落库只处理 advance(+1)，simplify 答错后难度持平，自适应闭环断裂。
+    """
+
+    @staticmethod
+    def _save(db_session, sample_user, sample_learner_profile, next_action, difficulty=3, is_correct=None):
+        if is_correct is None:
+            is_correct = next_action == "advance"
+        return AdaptiveTutoringService._save_answer_record(
+            user_id=sample_user.id,
+            learner_id=sample_learner_profile.id,
+            question_id=1,
+            issued_question_id=None,
+            question_type="single_choice",
+            question_topic="反向传播算法",
+            question_difficulty=difficulty,
+            question_content="测试问题",
+            user_answer=["B"],
+            correct_answer=["A"],
+            score=100.0 if is_correct else 0.0,
+            time_spent_ms=1000,
+            hints_used=0,
+            is_correct=is_correct,
+            agent_decision={"next_action": next_action, "reason": "", "confidence": 0.8},
+            next_action=next_action,
+            generated_content={},
+            session_id="test_session",
+            sequence_index=1,
+            db=db_session,
+        )
+
+    def test_simplify_downgrades_difficulty(self, db_session, sample_user, sample_learner_profile):
+        """答错且决策 simplify → 下一题难度必须降 1"""
+        record = self._save(db_session, sample_user, sample_learner_profile, "simplify", difficulty=3)
+        assert record.next_question_difficulty == 2
+
+    def test_simplify_at_floor_stays_1(self, db_session, sample_user, sample_learner_profile):
+        record = self._save(db_session, sample_user, sample_learner_profile, "simplify", difficulty=1)
+        assert record.next_question_difficulty == 1
+
+    def test_advance_increments(self, db_session, sample_user, sample_learner_profile):
+        record = self._save(db_session, sample_user, sample_learner_profile, "advance", difficulty=3)
+        assert record.next_question_difficulty == 4
+
+    def test_advance_at_cap_stays_5(self, db_session, sample_user, sample_learner_profile):
+        record = self._save(db_session, sample_user, sample_learner_profile, "advance", difficulty=5)
+        assert record.next_question_difficulty == 5
+
+    def test_consolidate_holds_difficulty(self, db_session, sample_user, sample_learner_profile):
+        """答对但有盲区 → consolidate 巩固，难度持平"""
+        record = self._save(db_session, sample_user, sample_learner_profile, "consolidate", difficulty=3)
+        assert record.next_question_difficulty == 3
+
+
 class TestGetInteractionHistory:
     """get_interaction_history 分页查询"""
 

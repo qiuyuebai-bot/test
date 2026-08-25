@@ -253,7 +253,7 @@ def current_user_fixture(sample_user: User) -> CurrentUser:
 
 @pytest.fixture
 def sample_learner_profile(db_session: Session, sample_user: User) -> LearnerProfile:
-    """创建测试学习者画像"""
+    """创建测试学习者画像（画像A：硕士/算法工程师/人工智能）"""
     profile = LearnerProfile(
         user_id=sample_user.id,
         real_name="测试学习者",
@@ -281,6 +281,104 @@ def sample_learner_profile(db_session: Session, sample_user: User) -> LearnerPro
         learning_phase="growth",
         total_questions_answered=50,
         total_correct_rate=0.78,
+    )
+    db_session.add(profile)
+    db_session.commit()
+    db_session.refresh(profile)
+    return profile
+
+
+@pytest.fixture
+def sample_learner_profile_production_engineer(db_session: Session) -> LearnerProfile:
+    """创建产线调试工程师画像（画像B：本科/机械自动化/5年经验/智能制造/动觉型）"""
+    import uuid
+    unique_suffix = uuid.uuid4().hex[:8]
+    user = User(
+        username=f"prod_engineer_{unique_suffix}",
+        password_hash=hash_password("test_password"),
+        email=f"prod_{unique_suffix}@example.com",
+        role=UserRoleEnum.LEARNER,
+        is_active=True,
+        is_verified=True,
+    )
+    db_session.add(user)
+    db_session.flush()
+    profile = LearnerProfile(
+        user_id=user.id,
+        real_name="产线调试工程师",
+        display_name="ProductionEngineer001",
+        education_level=EducationLevelEnum.BACHELOR.value,
+        major="机械设计制造及其自动化",
+        school="测试理工大学",
+        graduation_year=2019,
+        current_position="产线调试工程师",
+        years_of_experience=5,
+        learning_style=LearningStyleEnum.KINESTHETIC.value,
+        preferred_difficulty=4,
+        daily_study_time=45,
+        theoretical_foundation=72.0,
+        programming_ability=78.0,
+        algorithm_design=70.0,
+        system_architecture=76.0,
+        data_analysis=74.0,
+        engineering_practice=82.0,
+        knowledge_blind_areas=["工业机器人离线编程"],
+        knowledge_strengths=["设备调试", "机械装调"],
+        learning_goal="掌握工业机器人产线调试与集成",
+        target_industry="智能制造",
+        target_position="高级产线集成工程师",
+        learning_phase="advanced",
+        total_questions_answered=80,
+        total_correct_rate=0.82,
+    )
+    db_session.add(profile)
+    db_session.commit()
+    db_session.refresh(profile)
+    return profile
+
+
+@pytest.fixture
+def sample_learner_profile_maintenance_technician(db_session: Session) -> LearnerProfile:
+    """创建设备维护技术员画像（画像C：大专/电气自动化/2年经验/工业互联网/基础薄弱）"""
+    import uuid
+    unique_suffix = uuid.uuid4().hex[:8]
+    user = User(
+        username=f"maint_tech_{unique_suffix}",
+        password_hash=hash_password("test_password"),
+        email=f"maint_{unique_suffix}@example.com",
+        role=UserRoleEnum.LEARNER,
+        is_active=True,
+        is_verified=True,
+    )
+    db_session.add(user)
+    db_session.flush()
+    profile = LearnerProfile(
+        user_id=user.id,
+        real_name="设备维护技术员",
+        display_name="MaintenanceTech001",
+        education_level=EducationLevelEnum.COLLEGE.value,
+        major="电气自动化技术",
+        school="测试职业技术学院",
+        graduation_year=2023,
+        current_position="设备维护技术员",
+        years_of_experience=2,
+        learning_style=LearningStyleEnum.READING.value,
+        preferred_difficulty=2,
+        daily_study_time=30,
+        theoretical_foundation=45.0,
+        programming_ability=48.0,
+        algorithm_design=42.0,
+        system_architecture=44.0,
+        data_analysis=46.0,
+        engineering_practice=52.0,
+        knowledge_blind_areas=["PLC通信协议", "工业机器人安全操作", "变频器参数整定"],
+        knowledge_strengths=["电气接线"],
+        learning_goal="胜任自动化设备维护岗位",
+        target_industry="工业互联网",
+        target_position="自动化设备维护工程师",
+        learning_phase="foundation",
+        total_questions_answered=20,
+        total_correct_rate=0.55,
     )
     db_session.add(profile)
     db_session.commit()

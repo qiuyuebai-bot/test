@@ -8,6 +8,7 @@ import json
 from datetime import datetime, timedelta
 from typing import Any, Dict, Iterable, Optional
 
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -36,6 +37,22 @@ class MetricCalculator:
     """Calculate raw metric facts without deciding how they should be displayed."""
 
     COMPLETED_ANSWER_RESULTS = {"correct", "wrong", "partial"}
+
+    # 诊断会话（能力摸底）不反映学习效果，学习效果指标口径排除之
+    DIAGNOSTIC_SESSION_PREFIX = "diag_"
+
+    @classmethod
+    def _practice_answer_query(cls, db: Session, scope: str, scope_id: int | None):
+        query = db.query(AnswerRecord).filter(
+            or_(
+                AnswerRecord.session_id.is_(None),
+                ~AnswerRecord.session_id.like(f"{cls.DIAGNOSTIC_SESSION_PREFIX}%"),
+            )
+        )
+        learner_id = cls._scope_learner_id(scope, scope_id)
+        if learner_id is not None:
+            query = query.filter(AnswerRecord.learner_id == learner_id)
+        return query
 
     @staticmethod
     def _enum_value(value: Any) -> Any:
@@ -78,12 +95,9 @@ class MetricCalculator:
     def resource_match_effectiveness(
         cls, db: Session, scope: str, scope_id: int | None
     ) -> Dict[str, Any]:
-        query = db.query(AnswerRecord).filter(
+        query = cls._practice_answer_query(db, scope, scope_id).filter(
             AnswerRecord.next_resource_id.isnot(None),
         )
-        learner_id = cls._scope_learner_id(scope, scope_id)
-        if learner_id is not None:
-            query = query.filter(AnswerRecord.learner_id == learner_id)
 
         completed = []
         for record in query.all():
@@ -287,10 +301,7 @@ class MetricCalculator:
     def answer_accuracy(
         cls, db: Session, scope: str, scope_id: int | None
     ) -> Dict[str, Any]:
-        query = db.query(AnswerRecord)
-        learner_id = cls._scope_learner_id(scope, scope_id)
-        if learner_id is not None:
-            query = query.filter(AnswerRecord.learner_id == learner_id)
+        query = cls._practice_answer_query(db, scope, scope_id)
 
         completed = []
         for record in query.all():

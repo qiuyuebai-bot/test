@@ -1608,8 +1608,12 @@ class AdaptiveTutoringService(BaseService):
             decision_confidence=agent_decision.get("confidence", 0),
             next_action=next_action,
             next_resource_id=next_resource_id,
-            next_question_difficulty=(
-                question_difficulty + 1 if next_action == "advance" else question_difficulty
+            next_question_difficulty=max(
+                1,
+                min(
+                    MAX_DIFFICULTY,
+                    question_difficulty + (1 if next_action == "advance" else -1 if next_action == "simplify" else 0),
+                ),
             ),
             feedback_given=True,
             feedback_content=generated_content.get("simple_explanation", "") or
