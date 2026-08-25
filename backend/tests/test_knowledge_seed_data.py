@@ -15,7 +15,7 @@ def test_knowledge_seed_covers_requested_learning_domains():
     assert all(item["industry"] in supported_industries for item in records)
     assert sum(len(item["slices"]) for item in records) == payload["_meta"]["expected_slices"]
     assert all(
-        len(item["slices"]) >= 3
+        len(item["slices"]) >= 5
         and all(slice_item["content"].strip() for slice_item in item["slices"])
         for item in records
     )
