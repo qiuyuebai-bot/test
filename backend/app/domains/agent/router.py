@@ -273,7 +273,18 @@ def get_all_agent_status(
     """
     try:
         statuses = orchestrator.get_all_agents_status()
-        statistics = _calculate_agent_statistics(db.query(AgentTask).all())
+        if current_user.is_admin:
+            tasks = db.query(AgentTask).all()
+        else:
+            accessible_ids = LearnerService.get_accessible_learner_ids(
+                db, current_user.user_id
+            )
+            tasks = (
+                db.query(AgentTask)
+                .filter(AgentTask.learner_id.in_(accessible_ids))
+                .all()
+            )
+        statistics = _calculate_agent_statistics(tasks)
         for status_item in statuses:
             status_item.update(statistics.get(status_item["agent_type"], {}))
         
@@ -303,9 +314,18 @@ def get_agent_status(
         status = orchestrator.get_agent_status(agent_type)
         if not status:
             return not_found(message=f"未找到Agent: {agent_type}")
-        status.update(
-            _calculate_agent_statistics(db.query(AgentTask).all()).get(agent_type, {})
-        )
+        if current_user.is_admin:
+            tasks = db.query(AgentTask).all()
+        else:
+            accessible_ids = LearnerService.get_accessible_learner_ids(
+                db, current_user.user_id
+            )
+            tasks = (
+                db.query(AgentTask)
+                .filter(AgentTask.learner_id.in_(accessible_ids))
+                .all()
+            )
+        status.update(_calculate_agent_statistics(tasks).get(agent_type, {}))
         
         return success(data=status)
     except Exception as e:

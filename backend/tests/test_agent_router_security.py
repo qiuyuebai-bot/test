@@ -200,3 +200,61 @@ def test_sse_stream_rejects_other_learners_task(client, db_session):
     )
 
     assert response.status_code == 403
+
+
+# ========== Task 6: 聚合统计范围 ==========
+
+def _diagnosis_entry(body):
+    for agent in body["data"]["agents"]:
+        if agent.get("agent_type") == "diagnosis":
+            return agent
+    return None
+
+
+def test_agent_status_statistics_scoped_for_non_admin(client, db_session):
+    user_a = _seed_user(db_session, UserRoleEnum.LEARNER)
+    user_b = _seed_user(db_session, UserRoleEnum.LEARNER)
+    learner_a = _seed_learner(db_session, user_a)
+    learner_b = _seed_learner(db_session, user_b)
+    _seed_task(db_session, learner_a.id, "A的诊断")
+    _seed_task(db_session, learner_b.id, "B的诊断")
+
+    response = client.get("/api/v1/agent/status", headers=_auth_headers(user_a))
+
+    assert response.status_code == 200
+    entry = _diagnosis_entry(response.json())
+    # 旧代码：统计全量（2）→ 失败
+    assert entry["total_tasks_handled"] == 1
+
+
+def test_agent_status_statistics_full_for_admin(client, db_session):
+    admin = _seed_user(db_session, UserRoleEnum.ADMIN)
+    user_a = _seed_user(db_session, UserRoleEnum.LEARNER)
+    user_b = _seed_user(db_session, UserRoleEnum.LEARNER)
+    learner_a = _seed_learner(db_session, user_a)
+    learner_b = _seed_learner(db_session, user_b)
+    _seed_task(db_session, learner_a.id, "A的诊断")
+    _seed_task(db_session, learner_b.id, "B的诊断")
+
+    response = client.get("/api/v1/agent/status", headers=_auth_headers(admin))
+
+    assert response.status_code == 200
+    entry = _diagnosis_entry(response.json())
+    assert entry["total_tasks_handled"] == 2
+
+
+def test_single_agent_status_scoped_for_non_admin(client, db_session):
+    user_a = _seed_user(db_session, UserRoleEnum.LEARNER)
+    user_b = _seed_user(db_session, UserRoleEnum.LEARNER)
+    learner_a = _seed_learner(db_session, user_a)
+    learner_b = _seed_learner(db_session, user_b)
+    _seed_task(db_session, learner_a.id, "A的诊断")
+    _seed_task(db_session, learner_b.id, "B的诊断")
+
+    response = client.get(
+        "/api/v1/agent/status/diagnosis",
+        headers=_auth_headers(user_a),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["data"]["total_tasks_handled"] == 1
