@@ -38,7 +38,9 @@ class BaseAgent(ABC):
         self.current_task_id: Optional[int] = None
         self.last_error: Optional[str] = None
         self.execution_log = []
-        self._lock = threading.Lock()
+        self._lock = threading.RLock()
+        # 活跃任务集合：Agent 实例被多个任务并发复用时，状态机归属"任一任务执行中"
+        self._active_tasks: set = set()
     
     @abstractmethod
     def execute(self, input_data: Dict[str, Any], context: Dict[str, Any] = None) -> Dict[str, Any]:
@@ -67,6 +69,7 @@ class BaseAgent(ABC):
             执行结果字典
         """
         with self._lock:
+            self._active_tasks.add(task_id)
             self.status = AgentStatus.RUNNING
             self.current_task_id = task_id
             self.last_error = None
@@ -94,9 +97,6 @@ class BaseAgent(ABC):
                 "duration_ms": duration_ms,
                 "success": True,
             }
-            
-            with self._lock:
-                self.status = AgentStatus.IDLE
 
             log_entry = {
                 "agent_type": self.agent_type,
@@ -114,7 +114,6 @@ class BaseAgent(ABC):
             
         except Exception as e:
             with self._lock:
-                self.status = AgentStatus.ERROR
                 self.last_error = str(e)
 
             duration_ms = int((time.time() - start_time) * 1000)
@@ -144,71 +143,75 @@ class BaseAgent(ABC):
             }
         finally:
             with self._lock:
-                self.status = AgentStatus.IDLE
-                self.current_task_id = None
+                self._active_tasks.discard(task_id)
+                if not self._active_tasks:
+                    self.status = AgentStatus.IDLE
+                    self.current_task_id = None
 
     def validate(self, data: Dict[str, Any]) -> Dict[str, Any]:
         """
         校验输出数据质量
-        
+
+        纯函数化：不再改写共享状态，避免与并发 run() 的状态机互相覆盖
+
         Args:
             data: 待校验的数据
-            
+
         Returns:
             校验结果
         """
-        self.status = AgentStatus.VALIDATING
-        
         result = {
             "passed": True,
             "issues": [],
             "score": 100,
         }
-        
+
         # 基础校验
         if not data or not isinstance(data, dict):
             result["passed"] = False
             result["issues"].append("输出数据为空或格式错误")
             result["score"] = 0
-        
-        self.status = AgentStatus.IDLE
-        
+
         return result
-    
+
     def get_status(self) -> Dict[str, Any]:
         """
-        获取Agent状态信息
-        
+        获取Agent状态信息（锁内一致快照）
+
         Returns:
             状态字典
         """
-        return {
-            "agent_type": self.agent_type,
-            "agent_name": self.agent_name,
-            "status": self.status,
-            "current_task_id": self.current_task_id,
-            "last_error": self.last_error,
-        }
-    
+        with self._lock:
+            return {
+                "agent_type": self.agent_type,
+                "agent_name": self.agent_name,
+                "status": self.status,
+                "current_task_id": self.current_task_id,
+                "last_error": self.last_error,
+            }
+
     def _add_log(self, log_entry: Dict[str, Any]) -> None:
         """
         添加执行日志
-        
+
         Args:
             log_entry: 日志条目
         """
-        self.execution_log.append(log_entry)
-        # 最多保留100条日志
-        if len(self.execution_log) > 100:
-            self.execution_log = self.execution_log[-100:]
-    
+        with self._lock:
+            self.execution_log.append(log_entry)
+            # 最多保留100条日志
+            if len(self.execution_log) > 100:
+                self.execution_log = self.execution_log[-100:]
+
     def reset(self) -> None:
         """
         重置Agent状态
         """
-        self.status = AgentStatus.IDLE
-        self.current_task_id = None
-        self.last_error = None
+        with self._lock:
+            self.status = AgentStatus.IDLE
+            self.current_task_id = None
+            self.last_error = None
+            self._active_tasks.clear()
     
     def __repr__(self) -> str:
         return f"<{self.__class__.__name__}(type={self.agent_type}, status={self.status})>"

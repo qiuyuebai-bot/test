@@ -6,7 +6,7 @@
 import re
 from typing import Dict, Any, List
 from loguru import logger
-from app.agents.base import BaseAgent, AgentStatus
+from app.agents.base import BaseAgent
 from app.utils.hallucination import HallucinationUtil
 from app.utils.industry_rules import IndustrialRoboticsRules
 from app.agents.llm_debater import LLMDebater
@@ -183,8 +183,6 @@ class JudgeAgent(BaseAgent):
         Returns:
             辩论结果
         """
-        self.status = AgentStatus.VALIDATING
-        
         previous_debates = previous_debates or []
         current_round = len(previous_debates) + 1
         
@@ -239,9 +237,7 @@ class JudgeAgent(BaseAgent):
         if current_round >= max_rounds:
             debate_result["debate_ended"] = True
             debate_result["reason"] = "达到最大辩论轮次"
-        
-        self.status = AgentStatus.IDLE
-        
+
         return debate_result
 
     @staticmethod
