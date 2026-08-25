@@ -11,7 +11,7 @@ import hashlib
 from typing import List, Dict, Any, Optional, Tuple
 from datetime import datetime
 from pathlib import Path
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 from sqlalchemy import func as sa_func, or_
 from loguru import logger
 
@@ -152,7 +152,9 @@ class KnowledgeService:
         doc_id: Optional[int] = None,
         existing_ids: Optional[set[int]] = None,
     ) -> List[Dict[str, Any]]:
-        sql_query = db.query(KnowledgeSlice).join(KnowledgeDoc).filter(
+        sql_query = db.query(KnowledgeSlice).options(
+            joinedload(KnowledgeSlice.doc)
+        ).join(KnowledgeDoc).filter(
             KnowledgeDoc.is_enabled == True,
             KnowledgeDoc.status == "ready",
         )
@@ -170,13 +172,30 @@ class KnowledgeService:
             or_(
                 KnowledgeSlice.content.like(f"%{_escape_like(term)}%", escape="\\"),
                 KnowledgeSlice.title.like(f"%{_escape_like(term)}%", escape="\\"),
+                KnowledgeDoc.title.like(f"%{_escape_like(term)}%", escape="\\"),
+                KnowledgeDoc.category.like(f"%{_escape_like(term)}%", escape="\\"),
+                KnowledgeDoc.tags.like(f"%{_escape_like(term)}%", escape="\\"),
             )
             for term in terms
         ]))
         candidates = sql_query.limit(max(k * 5, 20)).all()
         scored = []
         for item in candidates:
-            score = _keyword_match_score(query, item.content, item.title, item.keywords)
+            doc = item.doc
+            searchable_title = " ".join(
+                value for value in (
+                    item.title,
+                    doc.title if doc else None,
+                    doc.category if doc else None,
+                ) if value
+            )
+            searchable_keywords = list(item.keywords or []) + list(doc.tags or []) if doc else item.keywords
+            score = _keyword_match_score(
+                query,
+                item.content,
+                searchable_title,
+                searchable_keywords,
+            )
             if score >= min_similarity:
                 scored.append((score, item))
         scored.sort(key=lambda pair: (-pair[0], pair[1].id))

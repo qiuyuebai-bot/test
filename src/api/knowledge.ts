@@ -24,6 +24,11 @@ const industryToDomain: Record<string, string> = {
   '人工智能训练': 'artificial_intelligence',
   '人工智能': 'artificial_intelligence',
   '数据分析': 'data_analysis',
+  '网络安全': 'cyber_security',
+  '电气工程及其自动化': 'electrical_automation',
+  '基础数学': 'mathematics',
+  '计算机科学与技术': 'computer_science',
+  '大学物理': 'physics',
   '通用': 'general',
 }
 

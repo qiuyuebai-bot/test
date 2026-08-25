@@ -1,10 +1,13 @@
 """
 种子数据初始化
-默认管理员 + 学习者画像
+默认管理员、学习者画像和领域知识库示例
 
-CLI 用法：python -m app.seed_data [--admin-only] [--learners]
+CLI 用法：python -m app.seed_data [--admin-only] [--learners] [--knowledge]
 """
+import hashlib
 import sys
+from pathlib import Path
+
 from loguru import logger
 
 from app.config import settings
@@ -104,10 +107,118 @@ def init_metrics_seed_data():
         db.close()
 
 
+def init_knowledge_seed_data():
+    """初始化默认知识库文档和数据库切片。
+
+    默认种子使用数据库关键词检索即可工作，不在启动阶段强制下载向量模型。
+    管理员后续可通过知识库页面重新索引，启用向量检索。
+    """
+    from app.domains.knowledge.models import KnowledgeDoc, KnowledgeSlice
+    from app.utils.seed_loader import load_seed_payload
+
+    payload = load_seed_payload("knowledge.json")
+    db = SessionLocal()
+    created_files = []
+    try:
+        created_docs = 0
+        created_slices = 0
+        doc_dir = Path(settings.KNOWLEDGE_DOC_DIR)
+        doc_dir.mkdir(parents=True, exist_ok=True)
+
+        for item in payload.get("records", []):
+            file_name = item.get("file_name")
+            slices = item.get("slices") or []
+            if not file_name or not item.get("title") or not item.get("industry") or not slices:
+                logger.warning("跳过字段不完整的知识库种子记录: {}", item.get("code"))
+                continue
+
+            existing = db.query(KnowledgeDoc).filter(
+                KnowledgeDoc.file_name == file_name,
+            ).first()
+            if existing is not None:
+                continue
+
+            content = "\n\n".join(
+                f"## {slice_item.get('title', '')}\n{slice_item.get('content', '')}"
+                for slice_item in slices
+            )
+            file_path = doc_dir / file_name
+            if not file_path.exists():
+                file_path.write_text(
+                    f"# {item['title']}\n\n{content}\n",
+                    encoding="utf-8",
+                )
+                created_files.append(file_path)
+
+            doc = KnowledgeDoc(
+                title=item["title"],
+                industry=item["industry"],
+                category=item.get("category"),
+                file_name=file_name,
+                file_path=str(file_path),
+                file_size=file_path.stat().st_size,
+                file_type="md",
+                content_preview=content[:500],
+                total_pages=1,
+                word_count=len(content),
+                slice_count=len(slices),
+                indexed_slice_count=0,
+                status="ready",
+                process_progress=100,
+                source=item.get("source"),
+                origin_type="seed",
+                version=str(payload.get("_meta", {}).get("version", "1.0")),
+                author=item.get("author"),
+                tags=item.get("tags") or [],
+                is_enabled=True,
+            )
+            db.add(doc)
+            db.flush()
+
+            for index, slice_item in enumerate(slices):
+                slice_content = str(slice_item.get("content") or "").strip()
+                if not slice_content:
+                    continue
+                db.add(KnowledgeSlice(
+                    doc_id=doc.id,
+                    slice_index=index,
+                    slice_type="paragraph",
+                    content=slice_content,
+                    content_hash=hashlib.sha256(slice_content.encode("utf-8")).hexdigest(),
+                    word_count=len(slice_content),
+                    title=slice_item.get("title"),
+                    is_indexed=False,
+                    slice_metadata={"seed": True, "source_code": item.get("code")},
+                    keywords=slice_item.get("keywords") or [],
+                    quality_score=1.0,
+                    relevance_score=1.0,
+                ))
+                created_slices += 1
+            created_docs += 1
+
+        db.commit()
+        logger.info(
+            "知识库种子数据初始化完成: 文档新增 {}，切片新增 {}（数据库关键词检索可用）",
+            created_docs,
+            created_slices,
+        )
+    except Exception as exc:
+        logger.warning(f"初始化知识库种子数据失败: {exc}")
+        db.rollback()
+        for file_path in created_files:
+            try:
+                file_path.unlink(missing_ok=True)
+            except OSError:
+                logger.warning(f"清理未提交的知识文档失败: {file_path}")
+    finally:
+        db.close()
+
+
 def seed_all():
-    """初始化全部种子数据（管理员 + 学习者）"""
+    """初始化全部种子数据（管理员 + 学习者 + 知识库）"""
     init_default_admin()
     init_learner_seed_data()
+    init_knowledge_seed_data()
     init_metrics_seed_data()
 
 
@@ -118,6 +229,7 @@ if __name__ == "__main__":
         print("  (无参数)   初始化全部种子数据")
         print("  --admin-only  仅初始化默认管理员")
         print("  --learners    仅初始化学习者画像数据")
+        print("  --knowledge   仅初始化默认知识库")
         print("  --metrics     根据当前事实生成标准指标快照")
         sys.exit(0)
 
@@ -125,6 +237,8 @@ if __name__ == "__main__":
         init_default_admin()
     elif "--learners" in args:
         init_learner_seed_data()
+    elif "--knowledge" in args:
+        init_knowledge_seed_data()
     elif "--metrics" in args:
         init_metrics_seed_data()
     else:

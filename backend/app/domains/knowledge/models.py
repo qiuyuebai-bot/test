@@ -16,6 +16,11 @@ class IndustryEnum(enum.Enum):
     SOFTWARE_DEV = "软件开发"
     AI_TRAINING = "人工智能训练"
     DATA_ANALYSIS = "数据分析"
+    CYBER_SECURITY = "网络安全"
+    ELECTRICAL_AUTOMATION = "电气工程及其自动化"
+    MATHEMATICS = "基础数学"
+    COMPUTER_SCIENCE = "计算机科学与技术"
+    PHYSICS = "大学物理"
     GENERAL = "通用"
 
 

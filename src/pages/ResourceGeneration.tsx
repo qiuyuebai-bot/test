@@ -90,7 +90,7 @@ const generationSteps = [
   { id: 6, stage: 'complete', name: '输出成品', agent: '系统', icon: Sparkles },
 ]
 
-const industryLabels = ['智能制造', '工业互联网', '软件开发', '人工智能训练', '数据分析', '通用']
+const industryLabels = ['智能制造', '工业互联网', '软件开发', '人工智能训练', '数据分析', '网络安全', '电气工程及其自动化', '基础数学', '计算机科学与技术', '大学物理', '通用']
 
 const stageToStepIndex: Record<string, number> = {
   init: 0,

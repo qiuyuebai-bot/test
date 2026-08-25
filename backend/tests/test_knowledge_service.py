@@ -163,6 +163,17 @@ class TestKnowledgeSearch:
         
         assert isinstance(results, list)
 
+    def test_keyword_fallback_matches_document_title(
+        self, db_session: Session, sample_knowledge_doc: KnowledgeDoc, sample_knowledge_slices: list
+    ):
+        results = KnowledgeService.search(
+            db_session,
+            KnowledgeSearchRequest(query="深度学习基础教程", top_k=5, search_type="keyword"),
+        )
+
+        assert results
+        assert results[0]["doc_title"] == sample_knowledge_doc.title
+
     def test_search_empty_result(self, db_session: Session):
         """测试无结果检索"""
         request = KnowledgeSearchRequest(

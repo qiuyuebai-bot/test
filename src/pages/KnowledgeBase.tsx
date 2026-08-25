@@ -40,6 +40,11 @@ const FALLBACK_DOMAIN_LABELS: Record<string, string> = {
   software_development: '软件开发',
   artificial_intelligence: '人工智能',
   data_analysis: '数据分析',
+  cyber_security: '网络安全',
+  electrical_automation: '电气工程及其自动化',
+  mathematics: '基础数学',
+  computer_science: '计算机科学与技术',
+  physics: '大学物理',
   general: '通用',
 }
 
@@ -211,7 +216,7 @@ function UploadModal({ isOpen, onClose, onSuccess }: { isOpen: boolean; onClose:
   const [form, setForm] = useState({ title: '', industry: '人工智能训练', category: '', source: '', author: '', content: '' })
   const [uploading, setUploading] = useState(false)
 
-  const industryOptions = ['智能制造', '工业互联网', '软件开发', '人工智能训练', '数据分析', '通用']
+  const industryOptions = ['智能制造', '工业互联网', '软件开发', '人工智能训练', '数据分析', '网络安全', '电气工程及其自动化', '基础数学', '计算机科学与技术', '大学物理', '通用']
 
   useEffect(() => { if (!isOpen) setForm({ title: '', industry: '人工智能训练', category: '', source: '', author: '', content: '' }) }, [isOpen])
 

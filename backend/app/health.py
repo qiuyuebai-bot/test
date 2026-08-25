@@ -155,8 +155,14 @@ def health_readiness(request: Request):
                 knowledge_counts["ready_docs"] > 0
                 and (vector_count == 0 or knowledge_counts["declared_slices"] != knowledge_counts["db_slices"])
             ):
-                chroma_status = "degraded"
-                note = "存在已就绪文档但没有可检索切片，请执行重新索引"
+                # Default seed documents intentionally support database keyword
+                # fallback so first startup does not download an embedding model.
+                if knowledge_counts["db_slices"] > 0 and knowledge_counts["db_indexed_slices"] == 0:
+                    chroma_status = "fallback"
+                    note = "当前使用数据库关键词检索；管理员可在知识库页面重新索引以启用向量检索"
+                else:
+                    chroma_status = "degraded"
+                    note = "存在已就绪文档但没有可检索切片，请执行重新索引"
             checks["chroma"] = {
                 "status": chroma_status,
                 "vector_count": vector_count,

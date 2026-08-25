@@ -1203,12 +1203,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "allOf": [
-                  {
-                    "$ref": "#/components/schemas/AnonymizeRequest"
-                  }
-                ],
-                "title": "Anonymize Request"
+                "$ref": "#/components/schemas/AnonymizeRequest"
               }
             }
           }
@@ -1387,6 +1382,302 @@
             "schema": {
               "type": "integer",
               "title": "Learner Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/knowledge/publication-requests": {
+      "get": {
+        "tags": [
+          "知识库"
+        ],
+        "summary": "获取讲义入库审核申请",
+        "operationId": "list_publication_requests_api_v1_knowledge_publication_requests_get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1,
+              "title": "Page"
+            }
+          },
+          {
+            "name": "page_size",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Page Size"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Status"
+            }
+          },
+          {
+            "name": "industry",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Industry"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/knowledge/publication-requests/{request_id}": {
+      "get": {
+        "tags": [
+          "知识库"
+        ],
+        "summary": "获取讲义入库申请详情",
+        "operationId": "get_publication_request_api_v1_knowledge_publication_requests__request_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/knowledge/publication-requests/{request_id}/approve": {
+      "post": {
+        "tags": [
+          "知识库"
+        ],
+        "summary": "批准讲义入库申请",
+        "operationId": "approve_publication_request_api_v1_knowledge_publication_requests__request_id__approve_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/knowledge/publication-requests/{request_id}/reject": {
+      "post": {
+        "tags": [
+          "知识库"
+        ],
+        "summary": "驳回讲义入库申请",
+        "operationId": "reject_publication_request_api_v1_knowledge_publication_requests__request_id__reject_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Request Id"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/KnowledgePublicationRejectRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {}
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/knowledge/publication-requests/{request_id}/retry": {
+      "post": {
+        "tags": [
+          "知识库"
+        ],
+        "summary": "重试讲义入库发布",
+        "operationId": "retry_publication_request_api_v1_knowledge_publication_requests__request_id__retry_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "request_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Request Id"
             }
           }
         ],
@@ -2864,6 +3155,7 @@
           "content": {
             "application/json": {
               "schema": {
+                "additionalProperties": true,
                 "type": "object",
                 "title": "Request"
               }
@@ -3010,7 +3302,7 @@
           "个性化资源生成"
         ],
         "summary": "获取资源列表",
-        "description": "获取资源列表（支持分页、筛选）\n\n- 支持按学习者、类型、难度、状态筛选\n- 返回资源匹配度等关键指标",
+        "description": "获取资源列表（支持分页、筛选）\n\n- 支持按学习者、主题、类型、难度、状态筛选\n- 返回资源匹配度等关键指标",
         "operationId": "get_resource_list_api_v1_resources_get",
         "security": [
           {
@@ -3056,6 +3348,24 @@
               "title": "Resource Type"
             },
             "description": "资源类型"
+          },
+          {
+            "name": "topic",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "description": "知识主题",
+              "title": "Topic"
+            },
+            "description": "知识主题"
           },
           {
             "name": "difficulty_level",
@@ -3153,6 +3463,106 @@
         "summary": "获取资源详情",
         "description": "获取资源详情（含完整内容）\n\n- 返回资源完整信息，包括内容、匹配度、来源切片等",
         "operationId": "get_resource_detail_api_v1_resources__resource_id__get",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "resource_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Resource Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/resources/{resource_id}/knowledge-publication-requests": {
+      "post": {
+        "tags": [
+          "个性化资源生成"
+        ],
+        "summary": "申请讲义加入领域知识库",
+        "operationId": "create_knowledge_publication_request_api_v1_resources__resource_id__knowledge_publication_requests_post",
+        "security": [
+          {
+            "HTTPBearer": []
+          },
+          {
+            "OAuth2PasswordBearer": []
+          }
+        ],
+        "parameters": [
+          {
+            "name": "resource_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "title": "Resource Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BaseResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/resources/{resource_id}/knowledge-publication-request": {
+      "get": {
+        "tags": [
+          "个性化资源生成"
+        ],
+        "summary": "查询讲义入库申请",
+        "operationId": "get_knowledge_publication_request_api_v1_resources__resource_id__knowledge_publication_request_get",
         "security": [
           {
             "HTTPBearer": []
@@ -8152,6 +8562,32 @@
             ],
             "title": "Last Error",
             "description": "最后错误信息"
+          },
+          "total_tasks_handled": {
+            "type": "integer",
+            "title": "Total Tasks Handled",
+            "default": 0
+          },
+          "success_count": {
+            "type": "integer",
+            "title": "Success Count",
+            "default": 0
+          },
+          "failure_count": {
+            "type": "integer",
+            "title": "Failure Count",
+            "default": 0
+          },
+          "avg_latency_ms": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avg Latency Ms"
           }
         },
         "type": "object",
@@ -8314,10 +8750,12 @@
             "title": "Anonymized Fields"
           },
           "before": {
+            "additionalProperties": true,
             "type": "object",
             "title": "Before"
           },
           "after": {
+            "additionalProperties": true,
             "type": "object",
             "title": "After"
           },
@@ -8443,6 +8881,7 @@
         "properties": {
           "scores": {
             "items": {
+              "additionalProperties": true,
               "type": "object"
             },
             "type": "array",
@@ -9037,6 +9476,7 @@
           "data": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -9474,6 +9914,7 @@
             "description": "规则类型: overall_score/competency_level/all_mandatory_met"
           },
           "rule_config": {
+            "additionalProperties": true,
             "type": "object",
             "title": "Rule Config",
             "description": "规则配置"
@@ -9663,6 +10104,7 @@
           "level_descriptions": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -9719,6 +10161,7 @@
           "level_descriptions": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -9880,6 +10323,7 @@
           "input_data": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -10105,6 +10549,7 @@
           "training_context": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -10157,6 +10602,7 @@
           "training_context": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -10326,6 +10772,21 @@
         "type": "object",
         "title": "KnowledgeDocUpdate",
         "description": "更新文档请求"
+      },
+      "KnowledgePublicationRejectRequest": {
+        "properties": {
+          "reason": {
+            "type": "string",
+            "maxLength": 2000,
+            "minLength": 1,
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "reason"
+        ],
+        "title": "KnowledgePublicationRejectRequest"
       },
       "KnowledgeSearchRequest": {
         "properties": {
@@ -11992,6 +12453,7 @@
             "title": "End Date"
           },
           "config": {
+            "additionalProperties": true,
             "type": "object",
             "title": "Config",
             "description": "项目级配置"
@@ -12103,6 +12565,7 @@
           "config": {
             "anyOf": [
               {
+                "additionalProperties": true,
                 "type": "object"
               },
               {
@@ -12254,6 +12717,13 @@
           "type": {
             "type": "string",
             "title": "Error Type"
+          },
+          "input": {
+            "title": "Input"
+          },
+          "ctx": {
+            "type": "object",
+            "title": "Context"
           }
         },
         "type": "object",
