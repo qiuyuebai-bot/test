@@ -1,0 +1,222 @@
+{
+  "evidence_type": "learning-gain-curve",
+  "generated_at": "2026-08-25T23:02:21",
+  "config": {
+    "rounds": 3,
+    "test_questions": 6,
+    "learn_questions": 8,
+    "fixed_test_difficulty": 3,
+    "seed": 20260901,
+    "learner_ids": [
+      4,
+      5
+    ],
+    "method": "每轮 pre-test(固定难度) → 推荐 → 自适应学习(真实 process_answer 闭环) → post-test(同固定难度)；作答概率 p=clamp(0.5+(ability-d×20)/100, 0.05, 0.95)，ability 每题实时读取画像（画像由真实判分闭环更新：答对+2/答错-1）",
+    "metric_scope_note": "pre/post 测试 session_id 以 diag_ 前缀按现有口径排除出 answer_accuracy/resource_match_effectiveness；学习阶段 session 计入练习口径"
+  },
+  "learners": [
+    {
+      "learner_id": 4,
+      "label": "陈晓",
+      "topic": "算法设计",
+      "rounds": [
+        {
+          "round": 1,
+          "recommendation": {
+            "primary_topic": "算法设计",
+            "source": "blind_spot",
+            "recommended_difficulty": 3
+          },
+          "ability_start": 65.0,
+          "ability_after_learn": 81.0,
+          "pre": {
+            "correct": 3,
+            "total": 6,
+            "accuracy": 50.0
+          },
+          "learn": {
+            "correct": 7,
+            "total": 8,
+            "accuracy": 87.5,
+            "with_resource_recommendation": 10
+          },
+          "post": {
+            "correct": 3,
+            "total": 6,
+            "accuracy": 50.0
+          },
+          "within_round_gain_pp": 0.0
+        },
+        {
+          "round": 2,
+          "recommendation": {
+            "primary_topic": "算法设计",
+            "source": "blind_spot",
+            "recommended_difficulty": 3
+          },
+          "ability_start": 84.0,
+          "ability_after_learn": 97.0,
+          "pre": {
+            "correct": 4,
+            "total": 6,
+            "accuracy": 66.67
+          },
+          "learn": {
+            "correct": 5,
+            "total": 8,
+            "accuracy": 62.5,
+            "with_resource_recommendation": 8
+          },
+          "post": {
+            "correct": 6,
+            "total": 6,
+            "accuracy": 100.0
+          },
+          "within_round_gain_pp": 33.33
+        },
+        {
+          "round": 3,
+          "recommendation": {
+            "primary_topic": "算法设计",
+            "source": "blind_spot",
+            "recommended_difficulty": 3
+          },
+          "ability_start": 100.0,
+          "ability_after_learn": 100.0,
+          "pre": {
+            "correct": 6,
+            "total": 6,
+            "accuracy": 100.0
+          },
+          "learn": {
+            "correct": 7,
+            "total": 8,
+            "accuracy": 87.5,
+            "with_resource_recommendation": 8
+          },
+          "post": {
+            "correct": 5,
+            "total": 6,
+            "accuracy": 83.33
+          },
+          "within_round_gain_pp": -16.67
+        }
+      ],
+      "summary": {
+        "pre_round1_accuracy": 50.0,
+        "post_roundN_accuracy": 83.33,
+        "cross_round_gain_pp": 33.33,
+        "mean_within_round_gain_pp": 5.55
+      }
+    },
+    {
+      "learner_id": 5,
+      "label": "赵静",
+      "topic": "理论基础",
+      "rounds": [
+        {
+          "round": 1,
+          "recommendation": {
+            "primary_topic": "理论基础",
+            "source": "blind_spot",
+            "recommended_difficulty": 3
+          },
+          "ability_start": 35.0,
+          "ability_after_learn": 45.0,
+          "pre": {
+            "correct": 3,
+            "total": 6,
+            "accuracy": 50.0
+          },
+          "learn": {
+            "correct": 5,
+            "total": 8,
+            "accuracy": 62.5,
+            "with_resource_recommendation": 8
+          },
+          "post": {
+            "correct": 3,
+            "total": 6,
+            "accuracy": 50.0
+          },
+          "within_round_gain_pp": 0.0
+        },
+        {
+          "round": 2,
+          "recommendation": {
+            "primary_topic": "理论基础",
+            "source": "blind_spot",
+            "recommended_difficulty": 3
+          },
+          "ability_start": 48.0,
+          "ability_after_learn": 46.0,
+          "pre": {
+            "correct": 0,
+            "total": 6,
+            "accuracy": 0.0
+          },
+          "learn": {
+            "correct": 4,
+            "total": 8,
+            "accuracy": 50.0,
+            "with_resource_recommendation": 8
+          },
+          "post": {
+            "correct": 1,
+            "total": 6,
+            "accuracy": 16.67
+          },
+          "within_round_gain_pp": 16.67
+        },
+        {
+          "round": 3,
+          "recommendation": {
+            "primary_topic": "理论基础",
+            "source": "blind_spot",
+            "recommended_difficulty": 3
+          },
+          "ability_start": 43.0,
+          "ability_after_learn": 59.0,
+          "pre": {
+            "correct": 3,
+            "total": 6,
+            "accuracy": 50.0
+          },
+          "learn": {
+            "correct": 7,
+            "total": 8,
+            "accuracy": 87.5,
+            "with_resource_recommendation": 8
+          },
+          "post": {
+            "correct": 1,
+            "total": 6,
+            "accuracy": 16.67
+          },
+          "within_round_gain_pp": -33.33
+        }
+      ],
+      "summary": {
+        "pre_round1_accuracy": 50.0,
+        "post_roundN_accuracy": 16.67,
+        "cross_round_gain_pp": -33.33,
+        "mean_within_round_gain_pp": -5.55
+      }
+    }
+  ],
+  "existing_adaptive_sessions": {
+    "description": "既有真实练习会话按题序前半 vs 后半的正确率（自适应闭环的组内增益证据）",
+    "min_questions_per_session": 4,
+    "session_count": 9,
+    "early_half": {
+      "correct": 17,
+      "total": 31,
+      "accuracy": 54.84
+    },
+    "late_half": {
+      "correct": 22,
+      "total": 34,
+      "accuracy": 64.71
+    }
+  }
+}
