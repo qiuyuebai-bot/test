@@ -134,8 +134,9 @@ interface RoundSummary {
 
 export default function LearningReport() {
   const navigate = useNavigate()
-  const { currentLearner, learners, fetchLearners, learnersLoading, learnerError } = useStore(
+  const { user, currentLearner, learners, fetchLearners, learnersLoading, learnerError } = useStore(
     useShallow((s) => ({
+      user: s.user,
       currentLearner: s.currentLearner,
       learners: s.learners,
       fetchLearners: s.fetchLearners,
@@ -460,7 +461,7 @@ export default function LearningReport() {
           <div className="text-sm text-text-secondary">
             证据覆盖率：{(hallucinationReport.evidenceCoverage * 100).toFixed(0)}%
           </div>
-          {hallucinationReport.credibility === 'noEvidence' && (
+          {user?.role === 'admin' && hallucinationReport.credibility === 'noEvidence' && (
             <button
               type="button"
               onClick={() => navigate('/knowledge-base')}

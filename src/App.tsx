@@ -93,7 +93,14 @@ function App() {
               }
             />
             <Route path="profile" element={<LearnerProfile />} />
-            <Route path="knowledge-base" element={<KnowledgeBase />} />
+            <Route
+              path="knowledge-base"
+              element={
+                <ProtectedRoute roles={['admin']}>
+                  <KnowledgeBase />
+                </ProtectedRoute>
+              }
+            />
             <Route path="resources" element={<ResourceGeneration />} />
             <Route path="resources/:resourceId/read" element={<ResourceReader />} />
             <Route path="report" element={<LearningReport />} />

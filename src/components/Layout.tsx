@@ -47,7 +47,6 @@ const navigationGroups: NavigationGroup[] = [
     name: '学习准备',
     items: [
       { name: '学习者画像', href: '/profile', icon: UserCircle },
-      { name: '领域知识库', href: '/knowledge-base', icon: Database },
     ],
   },
   {
@@ -64,6 +63,7 @@ const navigationGroups: NavigationGroup[] = [
     adminOnly: true,
     items: [
       { name: '运维总览', href: '/ops', icon: ShieldCheck },
+      { name: '领域知识库', href: '/knowledge-base', icon: Database },
       { name: '多智能体', href: '/multi-agent', icon: Network },
       { name: '量化指标', href: '/metrics', icon: TrendingUp },
       { name: '运行监控', href: '/monitoring', icon: FlaskConical },

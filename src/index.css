@@ -668,6 +668,38 @@ body {
   padding: 0.25rem 0;
 }
 
+.resource-reader-content .resource-markdown {
+  font-size: var(--reader-font-size);
+}
+
+.resource-reader-content .resource-markdown h1 {
+  font-size: 1.47em;
+  scroll-margin-top: 6rem;
+}
+
+.resource-reader-content .resource-markdown h2 {
+  font-size: 1.2em;
+  scroll-margin-top: 6rem;
+}
+
+.resource-reader-content .resource-markdown h3 {
+  font-size: 1.07em;
+  scroll-margin-top: 6rem;
+}
+
+.resource-reader-content .resource-markdown h4 {
+  font-size: 1em;
+  scroll-margin-top: 6rem;
+}
+
+.resource-reader-content .resource-markdown pre code {
+  font-size: 0.87em;
+}
+
+.resource-reader-content .resource-markdown table {
+  font-size: 0.93em;
+}
+
 @media print {
   .resource-markdown {
     max-width: none;

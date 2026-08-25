@@ -315,6 +315,15 @@ describe('LearningReport page', () => {
     expect(screen.getByRole('button', { name: '上传相关资料' })).toBeInTheDocument()
   })
 
+  it('hides the knowledge upload action for non-admin users', async () => {
+    setMockStore({ user: { id: 2, username: 'learner', role: 'learner' } })
+    const { default: Page } = await import('./LearningReport')
+    renderWithRouter(<Page />)
+
+    expect(await screen.findByText('暂无证据')).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '上传相关资料' })).not.toBeInTheDocument()
+  })
+
   it('summarizes adaptive answers by round accuracy instead of 100-point scores', async () => {
     apiMocks.getInteractionHistory.mockResolvedValue({
       learnerId: 1,

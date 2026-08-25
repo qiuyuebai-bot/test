@@ -19,7 +19,6 @@ import {
   Play,
   CheckCircle2,
   AlertCircle,
-  Lightbulb,
   User,
   Target,
   Brain,
@@ -494,25 +493,7 @@ export default function ResourceGeneration() {
             <h3 className="text-base font-semibold text-text-primary mb-1">
               {selectedResource.title}
             </h3>
-            <p className="text-xs text-text-tertiary">
-              v{selectedResource.versionNumber} ·{' '}
-              {selectedResource.generationMethod === 'deepseek' ||
-              selectedResource.generationMethod === 'llm'
-                ? '🤖 DeepSeek生成'
-                : '📋 规则生成'}{' '}
-              · {new Date(selectedResource.generationTime).toLocaleString('zh-CN')}
-            </p>
           </div>
-        </div>
-
-        <div className="p-4 rounded-lg bg-primary/5 border border-primary/10">
-          <div className="flex items-center gap-2 mb-2">
-            <Lightbulb className="w-4 h-4 text-primary" />
-            <span className="text-sm font-medium text-text-primary">内容摘要</span>
-          </div>
-          <p className="text-sm text-text-secondary leading-relaxed">
-            {selectedResource.contentSummary || '暂无摘要信息'}
-          </p>
         </div>
 
         {normalizedContent.content ? (

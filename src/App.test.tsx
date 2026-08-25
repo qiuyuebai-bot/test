@@ -44,6 +44,7 @@ describe('hidden legacy routes', () => {
 
   it.each([
     '/ops',
+    '/knowledge-base',
     '/multi-agent',
     '/metrics',
     '/monitoring',

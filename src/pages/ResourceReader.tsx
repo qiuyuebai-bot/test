@@ -1,11 +1,10 @@
-import { lazy, Suspense, useCallback, useEffect, useMemo, useState } from 'react'
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
   Check,
   Copy,
   Download,
-  List,
   Loader2,
   PlayCircle,
   Printer,
@@ -39,10 +38,15 @@ function slugifyHeading(text: string, index: number): string {
   return `reader-${slug || 'section'}-${index}`
 }
 
+function isAnswerLine(line: string): boolean {
+  const plainLine = line.replace(/[*_`]/g, '').replace(/^>\s?/, '').trim()
+  return /^(?:[-+]|\d+[.)])?\s*(?:答案|正确答案|答案解析|解析|answer|explanation)\s*[:：]/i.test(plainLine)
+}
+
 function hideAnswerLines(content: string): string {
   return content
     .split('\n')
-    .filter((line) => !/(^|\s)(答案|正确答案|答案解析|解析|answer|explanation)\s*[:：]/i.test(line))
+    .filter((line) => !isAnswerLine(line))
     .join('\n')
 }
 
@@ -55,7 +59,6 @@ export default function ResourceReader() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [size, setSize] = useState<ReaderSize>('medium')
-  const [showToc, setShowToc] = useState(true)
   const [showAnswers, setShowAnswers] = useState(user?.role !== 'learner')
   const [submitting, setSubmitting] = useState(false)
   const id = Number(resourceId)
@@ -97,6 +100,7 @@ export default function ResourceReader() {
 
   const content = useMemo(() => normalizeResourceContent(resource?.content).content || '', [resource?.content])
   const displayContent = resource?.resourceType === 'exercise' && !showAnswers ? hideAnswerLines(content) : content
+  const hasAnswers = resource?.resourceType === 'exercise' && content.split('\n').some(isAnswerLine)
   const headings = useMemo(() => {
     let headingIndex = 0
     return displayContent.split('\n').flatMap((line) => {
@@ -134,7 +138,11 @@ export default function ResourceReader() {
       ? '质量校验完成且符合条件后，系统会自动加入所属领域知识库。'
       : '已通过质量校验，系统正在自动加入所属领域知识库。'
     : null
-  const textSize = size === 'small' ? 'text-[15px]' : size === 'large' ? 'text-[19px]' : 'text-[17px]'
+  const readerFontSize = size === 'small' ? '15px' : size === 'large' ? '19px' : '17px'
+
+  const scrollToHeading = (headingId: string) => {
+    document.getElementById(headingId)?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
 
   const copy = async () => {
     try { await navigator.clipboard.writeText(displayContent); toast.success('正文已复制') } catch { toast.error('复制失败') }
@@ -168,14 +176,13 @@ export default function ResourceReader() {
 
   return (
     <div className="min-h-[calc(100vh-5rem)] bg-bg-primary print:bg-white">
-      <div className="sticky top-0 z-20 border-b border-border bg-bg-primary/95 backdrop-blur print:hidden">
+      <div data-testid="resource-reader-toolbar" className="sticky -top-16 z-20 border-b border-border bg-bg-primary pt-16 print:hidden">
         <div className="mx-auto flex max-w-[1440px] flex-wrap items-center gap-2 px-4 py-3 lg:px-8">
           <Button variant="ghost" size="sm" onClick={() => navigate(-1)} aria-label="返回"><ArrowLeft className="h-4 w-4" />返回</Button>
           <div className="min-w-0 flex-1"><p className="truncate text-sm font-semibold text-text-primary">{resource.title}</p><p className="text-xs text-text-tertiary">{resource.resourceType === 'guide' ? '实操指南' : resource.resourceType === 'exercise' ? '分阶测试题' : '专属讲义'} · v{resource.versionNumber ?? resource.version ?? 1}</p></div>
           {publicationInfo && <Badge variant={publicationInfo.variant}>{publicationInfo.label}</Badge>}
           <div className="flex items-center gap-1 border-l border-border pl-2">
-            <Button variant="ghost" size="sm" onClick={() => setShowToc((value) => !value)} aria-label="目录"><List className="h-4 w-4" />目录</Button>
-            <label className="flex items-center gap-1 text-xs text-text-secondary" title="字号"><SlidersHorizontal className="h-4 w-4" /><select value={size} onChange={(event) => setSize(event.target.value as ReaderSize)} className="bg-transparent"><option value="small">小</option><option value="medium">中</option><option value="large">大</option></select></label>
+            <label className="flex items-center gap-1 text-xs text-text-secondary" title="字号"><SlidersHorizontal className="h-4 w-4" /><select aria-label="字号" value={size} onChange={(event) => setSize(event.target.value as ReaderSize)} className="bg-transparent"><option value="small">小</option><option value="medium">中</option><option value="large">大</option></select></label>
             <Button variant="ghost" size="sm" onClick={() => window.print()} aria-label="打印"><Printer className="h-4 w-4" /></Button>
             <Button variant="ghost" size="sm" onClick={() => void copy()} aria-label="复制"><Copy className="h-4 w-4" /></Button>
             <Button variant="ghost" size="sm" onClick={() => void exportResource()} aria-label="导出"><Download className="h-4 w-4" /></Button>
@@ -183,12 +190,12 @@ export default function ResourceReader() {
         </div>
       </div>
       <div className="mx-auto grid max-w-[1440px] grid-cols-1 gap-8 px-4 py-8 lg:grid-cols-[240px_minmax(0,820px)] lg:px-8">
-        {showToc && <aside className="print:hidden lg:sticky lg:top-24 lg:h-fit"><div className="border-b border-border pb-3 text-xs font-semibold uppercase tracking-wider text-text-tertiary">目录</div><nav className="mt-3 space-y-1">{headings.length ? headings.map((heading) => <a key={heading.id} href={`#${heading.id}`} className="block border-l-2 border-transparent py-1.5 pl-3 text-sm text-text-secondary hover:border-primary hover:text-primary" style={{ paddingLeft: `${(heading.level - 1) * 12 + 12}px` }}>{heading.title}</a>) : <p className="text-sm text-text-tertiary">暂无章节</p>}</nav></aside>}
+        <aside className="print:hidden lg:sticky lg:top-24 lg:h-fit"><div className="border-b border-border pb-3 text-xs font-semibold uppercase tracking-wider text-text-tertiary">目录</div><nav aria-label="资源目录" className="mt-3 space-y-1">{headings.length ? headings.map((heading) => <button key={heading.id} type="button" onClick={() => scrollToHeading(heading.id)} className="block w-full border-l-2 border-transparent py-1.5 pl-3 text-left text-sm text-text-secondary hover:border-primary hover:text-primary" style={{ paddingLeft: `${(heading.level - 1) * 12 + 12}px` }}>{heading.title}</button>) : <p className="text-sm text-text-tertiary">暂无章节</p>}</nav></aside>
         <main className="min-w-0">
           <header className="mb-8 border-b border-border pb-6"><div className="mb-3 flex flex-wrap items-center gap-2"><Badge variant="default">{resource.resourceType === 'guide' ? '实操指南' : resource.resourceType === 'exercise' ? '分阶测试题' : '专属讲义'}</Badge>{resource.knowledgeTopic && <span className="text-sm text-text-tertiary">{resource.knowledgeTopic}</span>}</div><h1 className="text-3xl font-semibold leading-tight text-text-primary">{resource.title}</h1>{resource.contentSummary && <p className="mt-4 text-base leading-7 text-text-secondary">{resource.contentSummary}</p>}</header>
-          {resource.resourceType === 'exercise' && canSeeAnswers && <div className="mb-6 flex items-center justify-between border border-primary/20 bg-primary/5 px-4 py-3 print:hidden"><span className="text-sm text-text-secondary">教师/管理员答案视图</span><Button variant="outline" size="sm" onClick={() => setShowAnswers((value) => !value)}>{showAnswers ? '隐藏答案' : '查看答案'}</Button></div>}
+          {resource.resourceType === 'exercise' && canSeeAnswers && <div className="mb-6 flex items-center justify-between border border-primary/20 bg-primary/5 px-4 py-3 print:hidden"><span className="text-sm text-text-secondary">教师/管理员答案视图</span><Button variant="outline" size="sm" onClick={() => setShowAnswers((value) => !value)} disabled={!hasAnswers}>{hasAnswers ? (showAnswers ? '隐藏答案' : '查看答案') : '暂无答案'}</Button></div>}
           {resource.resourceType === 'exercise' && !canSeeAnswers && <div className="mb-6 flex items-center justify-between border border-border bg-bg-secondary px-4 py-3 print:hidden"><span className="text-sm text-text-secondary">完成阅读后进入练习流程作答</span><Button variant="primary" size="sm" onClick={() => navigate(`/guidance?resourceId=${id}&topic=${encodeURIComponent(resource.knowledgeTopic || '')}`)}><PlayCircle className="h-4 w-4" />开始练习</Button></div>}
-          <article className={`resource-reader-content ${textSize} leading-8 text-text-primary`}>
+          <article data-testid="resource-reader-content" className="resource-reader-content leading-8 text-text-primary" style={{ '--reader-font-size': readerFontSize } as CSSProperties}>
             <Suspense fallback={<p className="text-sm text-text-tertiary">正在加载正文...</p>}><MarkdownContent content={displayContent} headingIdPrefix="reader" /></Suspense>
           </article>
           {canApplyPublication && <div className="mt-12 border-t border-border pt-6 print:hidden"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-medium text-text-primary">将历史专属讲义加入领域知识库</p><p className="mt-1 text-sm text-text-secondary">仅历史资源需要提交人工入库申请；新生成且达标的讲义会自动入库。</p></div><Button variant="primary" onClick={() => void applyPublication()} disabled={submitting}><Send className="h-4 w-4" />{submitting ? '提交中...' : '提交人工入库申请'}</Button></div></div>}
@@ -196,7 +203,7 @@ export default function ResourceReader() {
           {publicationBlockedReason && <div className="mt-12 border-t border-border pt-6 print:hidden"><p className="text-sm text-text-secondary">{publicationBlockedReason}</p></div>}
           {publication?.status === 'rejected' && <div className="mt-12 border-t border-error/20 pt-6 print:hidden"><p className="text-sm text-error">驳回原因：{publication.reviewNote || '未填写'}</p></div>}
           {publication?.status === 'publish_failed' && <div className="mt-12 border-t border-error/20 pt-6 print:hidden"><p className="text-sm text-error">自动入库失败：{publication.errorMessage || '请联系管理员重试'}</p></div>}
-          {publication?.status === 'published' && publication.knowledgeDocId && <div className="mt-12 border-t border-success/20 pt-6 print:hidden"><Link to="/knowledge-base" className="inline-flex items-center gap-2 text-sm text-success hover:underline"><Check className="h-4 w-4" />查看知识库文档</Link></div>}
+          {user?.role === 'admin' && publication?.status === 'published' && publication.knowledgeDocId && <div className="mt-12 border-t border-success/20 pt-6 print:hidden"><Link to="/knowledge-base" className="inline-flex items-center gap-2 text-sm text-success hover:underline"><Check className="h-4 w-4" />查看知识库文档</Link></div>}
         </main>
       </div>
     </div>
