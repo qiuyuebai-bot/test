@@ -95,18 +95,39 @@ class MetricCalculator:
     def resource_match_effectiveness(
         cls, db: Session, scope: str, scope_id: int | None
     ) -> Dict[str, Any]:
-        query = cls._practice_answer_query(db, scope, scope_id).filter(
-            AnswerRecord.next_resource_id.isnot(None),
-        )
+        """推荐资源关联的"下一次答题"正确率。
 
-        completed = []
-        for record in query.all():
-            result = cls._enum_value(record.result)
-            if result in cls.COMPLETED_ANSWER_RESULTS:
-                completed.append(result)
+        触发集 = 练习口径（排除诊断会话）且带 next_resource_id 的答题记录；
+        对每条触发记录，取同一学习者按 id 顺序的下一条答题记录（可以是练习
+        下一题，也可以是随后再测/摸底的首题），统计该记录的判分结果。
+        """
+        learner_id = cls._scope_learner_id(scope, scope_id)
+        rows_query = db.query(
+            AnswerRecord.id,
+            AnswerRecord.learner_id,
+            AnswerRecord.result,
+            AnswerRecord.session_id,
+            AnswerRecord.next_resource_id,
+        ).order_by(AnswerRecord.learner_id, AnswerRecord.id)
+        if learner_id is not None:
+            rows_query = rows_query.filter(AnswerRecord.learner_id == learner_id)
+        rows = rows_query.all()
 
-        denominator = len(completed)
-        numerator = sum(result == "correct" for result in completed)
+        numerator = denominator = 0
+        total = len(rows)
+        for index, row in enumerate(rows):
+            if row.next_resource_id is None:
+                continue
+            if row.session_id and str(row.session_id).startswith(cls.DIAGNOSTIC_SESSION_PREFIX):
+                continue
+            if index + 1 >= total or rows[index + 1].learner_id != row.learner_id:
+                continue
+            next_result = cls._enum_value(rows[index + 1].result)
+            if next_result in cls.COMPLETED_ANSWER_RESULTS:
+                denominator += 1
+                if next_result == "correct":
+                    numerator += 1
+
         return {
             "numerator": numerator,
             "denominator": denominator,

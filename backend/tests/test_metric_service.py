@@ -91,16 +91,69 @@ def test_answer_accuracy_counts_practice_records_only(db_session, sample_user, s
     assert result["status"] == "no_data"
 
 
-def test_resource_match_effectiveness_excludes_diagnostic_sessions(db_session, sample_user, sample_learner_profile):
-    """诊断记录带资源推荐也不计入；练习记录 ≥3 条（注册表最小样本量）"""
+def test_resource_match_effectiveness_measures_next_answer(db_session, sample_user, sample_learner_profile):
+    """口径：带资源推荐的练习题触发，统计其"下一次答题"的判分结果。
+
+    - 触发集排除诊断会话（diag_pre 不触发，其后续记录不计入）
+    - 下一次答题可以是练习下一题，也可以是随后再测的首题（diag_gain_post）
+    - 触发后无下一次答题（最后一条）不计入分母
+    """
     _add_answer_record(
         db_session, sample_user.id, sample_learner_profile.id,
-        result="wrong", session_id="diag_abc", next_resource_id=101,
+        result="wrong", session_id="diag_pre", next_resource_id=101,      # 诊断触发：不计
+    )
+    _add_answer_record(
+        db_session, sample_user.id, sample_learner_profile.id,
+        result="wrong", session_id="session_p0", next_resource_id=102,    # 触发1
+    )
+    _add_answer_record(
+        db_session, sample_user.id, sample_learner_profile.id,
+        result="correct", session_id="session_p1",                        # 触发1的下一次→对
+    )
+    _add_answer_record(
+        db_session, sample_user.id, sample_learner_profile.id,
+        result="wrong", session_id="session_p2", next_resource_id=103,    # 触发2
+    )
+    _add_answer_record(
+        db_session, sample_user.id, sample_learner_profile.id,
+        result="wrong", session_id="diag_gain_post",                      # 触发2的下一次（再测首题）→错
+    )
+    _add_answer_record(
+        db_session, sample_user.id, sample_learner_profile.id,
+        result="wrong", session_id="session_p4", next_resource_id=105,    # 触发4
+    )
+    _add_answer_record(
+        db_session, sample_user.id, sample_learner_profile.id,
+        result="correct", session_id="session_p5",                        # 触发4的下一次→对
+    )
+    _add_answer_record(
+        db_session, sample_user.id, sample_learner_profile.id,
+        result="correct", session_id="session_p3", next_resource_id=104,  # 触发3：排在最后，无下一次，不计
+    )
+
+    result = _by_id(
+        MetricService.calculate_metrics(db_session, scope="global", metric_ids=["resource_match_effectiveness"])
+    )["resource_match_effectiveness"]
+
+    assert result["value"] == 66.67
+    assert result["numerator"] == 2
+    assert result["denominator"] == 3
+
+
+def test_resource_match_effectiveness_diagnostic_trigger_excluded(db_session, sample_user, sample_learner_profile):
+    """诊断会话记录即使带资源推荐也不构成触发；其后的练习记录结果不因此计入。"""
+    _add_answer_record(
+        db_session, sample_user.id, sample_learner_profile.id,
+        result="wrong", session_id="diag_abc", next_resource_id=201,      # 诊断触发：不计
     )
     for i in range(3):
         _add_answer_record(
             db_session, sample_user.id, sample_learner_profile.id,
-            result="correct", session_id=f"session_practice_{i}", next_resource_id=102 + i,
+            result="wrong", session_id=f"session_rec_{i}", next_resource_id=202 + i,  # 触发
+        )
+        _add_answer_record(
+            db_session, sample_user.id, sample_learner_profile.id,
+            result="correct", session_id=f"session_follow_{i}",           # 每次触发的下一次→对
         )
 
     result = _by_id(

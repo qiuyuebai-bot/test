@@ -101,6 +101,7 @@ class LLMGenerator:
                 "multiple_choice_count": max(0, min(question_count, multiple_choice_count if multiple_choice_count is not None else question_count // 3)),
                 "reference_knowledge": cls._reference_text(knowledge),
                 "source_coverage_requirements": cls._source_coverage_requirements(knowledge),
+                "blind_area_requirements": cls._blind_area_requirements(diagnosis),
                 "coverage_retry_instruction": (
                     cls._coverage_retry_instruction(knowledge) if _coverage_retry else "无"
                 ),
@@ -160,6 +161,7 @@ class LLMGenerator:
                 "resource_type": resource_type,
                 "reference_knowledge": cls._reference_text(knowledge),
                 "source_coverage_requirements": cls._source_coverage_requirements(knowledge),
+                "blind_area_requirements": cls._blind_area_requirements(diagnosis),
                 "coverage_retry_instruction": (
                     cls._coverage_retry_instruction(knowledge) if _coverage_retry else "无"
                 ),
@@ -373,6 +375,19 @@ class LLMGenerator:
             },
             ensure_ascii=False,
         )
+
+    @staticmethod
+    def _blind_area_requirements(diagnosis: Dict[str, Any]) -> str:
+        names = [
+            str(item.get("name", "")).strip()
+            for item in diagnosis.get("knowledge_blind_areas", [])[:4]
+            if item.get("name")
+        ]
+        if not names:
+            return "无（本次无明确盲区标签，按目标知识点组织内容）"
+        lines = [f"正文必须明确讲解以下学习者知识盲区，共 {len(names)} 项："]
+        lines.extend(f"- {name}" for name in names)
+        return "\n".join(lines)
 
     @staticmethod
     def _provenance(knowledge: List[Dict[str, Any]]) -> Dict[str, List[Any]]:

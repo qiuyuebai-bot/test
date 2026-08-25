@@ -419,3 +419,63 @@ def test_generation_agent_passes_unique_variation_seed(monkeypatch):
 
     assert all(captured[name] and captured[name][0] for name in captured)
     assert len({captured["guide"][0], captured["exercise"][0], captured["lecture"][0]}) == 3
+
+
+def test_resource_generation_prompt_injects_blind_area_labels(monkeypatch):
+    """资源生成 prompt 必须显式注入画像盲区标签，要求正文原词覆盖。"""
+    monkeypatch.setattr(LLMUtil, "is_available", classmethod(lambda cls: True))
+    captured = {}
+
+    def fake_call(cls, template_name, variables=None, temperature=None,
+                  model=None, use_cache=True, allow_mock=True, **kwargs):
+        captured["template"] = template_name
+        captured["variables"] = variables or {}
+        return (
+            json.dumps({
+                "resource_title": "神经网络讲义",
+                "content": "模型蒸馏与梯度消失的完整讲解。" + "正文内容，" * 60,
+                "difficulty_level": 3,
+                "topics": ["模型蒸馏"],
+            }, ensure_ascii=False),
+            {},
+        )
+
+    monkeypatch.setattr(LLMUtil, "call_with_prompt_template", classmethod(fake_call))
+
+    LLMGenerator.generate_lecture(
+        {
+            "recommended_difficulty": {"recommended_difficulty": 3},
+            "knowledge_blind_areas": [{"name": "模型蒸馏"}, {"name": "梯度消失"}],
+        },
+        [{"slice_id": 1, "doc_id": 1, "title": "基础", "content": "蒸馏与梯度知识。"}],
+        {},
+        "神经网络",
+    )
+
+    assert captured["template"] == "resource_generation"
+    requirements = captured["variables"].get("blind_area_requirements", "")
+    assert "模型蒸馏" in requirements
+    assert "梯度消失" in requirements
+
+
+def test_resource_generation_template_renders_blind_area_section():
+    """resource_generation 模板包含知识盲区覆盖要求段落且可渲染。"""
+    from app.prompts import PromptManager
+
+    rendered = PromptManager.render(
+        "resource_generation",
+        learner_summary="{}",
+        knowledge_topic="神经网络",
+        resource_type="lecture",
+        difficulty_level=3,
+        training_context="{}",
+        variation_hint="",
+        variation_seed="",
+        reference_knowledge="无",
+        source_coverage_requirements="无",
+        coverage_retry_instruction="无",
+        blind_area_requirements="正文必须明确讲解：模型蒸馏、梯度消失",
+    )
+
+    assert "知识盲区覆盖要求" in rendered.user_prompt
+    assert "模型蒸馏" in rendered.user_prompt

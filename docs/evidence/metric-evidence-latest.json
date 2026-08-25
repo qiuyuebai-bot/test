@@ -1,7 +1,7 @@
 {
   "report_version": "evidence-report-v2",
-  "generated_at": "2026-08-25T15:04:09.887873+00:00",
-  "git_revision": "2a033d790077aa63feef46793fa19714db0af423",
+  "generated_at": "2026-08-25T17:03:16.444846+00:00",
+  "git_revision": "7ed1cb1461aabb1294771aaf49ab39c5d87fa585",
   "working_tree_dirty": true,
   "report_kind": "development_validation",
   "acceptance_eligible": false,
@@ -10,9 +10,9 @@
     "model_name": "redacted_in_report"
   },
   "knowledge_base": {
-    "version": "9f6f95a6f125481f",
-    "slice_count": 284,
-    "indexed_slice_count": 284
+    "version": "bb352e4e131ef42c",
+    "slice_count": 466,
+    "indexed_slice_count": 466
   },
   "formal_evidence_policy": {
     "minimum_sample_size": 10,
@@ -67,7 +67,7 @@
         "debate_records.is_hallucination",
         "debate_records.resolution_status"
       ],
-      "calculated_at": "2026-08-25T15:04:09.031095",
+      "calculated_at": "2026-08-25T17:03:13.843727",
       "message": null,
       "metadata": {
         "total_checks": 175,
@@ -83,18 +83,18 @@
       "display_name": "资源匹配分",
       "scope": "global",
       "scope_id": null,
-      "value": 86.33,
+      "value": 90.0,
       "unit": "%",
       "status": "ready",
-      "numerator": 7769.5,
-      "denominator": 90,
-      "sample_count": 90,
+      "numerator": 10710.0,
+      "denominator": 119,
+      "sample_count": 119,
       "minimum_sample_size": 1,
       "formula": "average generation-time match score across generated resources",
       "source": [
         "learning_resources.match_score"
       ],
-      "calculated_at": "2026-08-25T15:04:09.031095",
+      "calculated_at": "2026-08-25T17:03:13.843727",
       "message": null,
       "metadata": null
     },
@@ -103,19 +103,19 @@
       "display_name": "资源匹配效果",
       "scope": "global",
       "scope_id": null,
-      "value": 53.03,
+      "value": 80.77,
       "unit": "%",
       "status": "ready",
-      "numerator": 70,
-      "denominator": 132,
-      "sample_count": 132,
+      "numerator": 21,
+      "denominator": 26,
+      "sample_count": 26,
       "minimum_sample_size": 3,
-      "formula": "correct answers after a resource recommendation / completed practice answers linked to a resource (diagnostic sessions excluded)",
+      "formula": "correct answers on the learner's next answer record following a resource recommendation / practice answers with a resource recommendation that have a subsequent answer (diagnostic sessions excluded from the trigger set)",
       "source": [
         "answer_records.result",
         "answer_records.next_resource_id"
       ],
-      "calculated_at": "2026-08-25T15:04:09.031095",
+      "calculated_at": "2026-08-25T17:03:13.843727",
       "message": null,
       "metadata": null
     },
@@ -124,18 +124,18 @@
       "display_name": "答题正确率",
       "scope": "global",
       "scope_id": null,
-      "value": 50.0,
+      "value": 76.92,
       "unit": "%",
       "status": "ready",
-      "numerator": 72,
-      "denominator": 144,
-      "sample_count": 144,
+      "numerator": 20,
+      "denominator": 26,
+      "sample_count": 26,
       "minimum_sample_size": 1,
       "formula": "correct answers / completed practice answers (diagnostic sessions excluded)",
       "source": [
         "answer_records.result"
       ],
-      "calculated_at": "2026-08-25T15:04:09.031095",
+      "calculated_at": "2026-08-25T17:03:13.843727",
       "message": null,
       "metadata": null
     },
@@ -147,15 +147,15 @@
       "value": 100.0,
       "unit": "%",
       "status": "ready",
-      "numerator": 284,
-      "denominator": 284,
-      "sample_count": 284,
+      "numerator": 466,
+      "denominator": 466,
+      "sample_count": 466,
       "minimum_sample_size": 1,
       "formula": "indexed knowledge slices / total knowledge slices",
       "source": [
         "knowledge_slices.is_indexed"
       ],
-      "calculated_at": "2026-08-25T15:04:09.031095",
+      "calculated_at": "2026-08-25T17:03:13.843727",
       "message": null,
       "metadata": {
         "coverage_type": "index",
@@ -168,12 +168,12 @@
       "display_name": "生成内容覆盖率",
       "scope": "global",
       "scope_id": null,
-      "value": 100.0,
+      "value": 76.27,
       "unit": "%",
       "status": "ready",
-      "numerator": 210,
-      "denominator": 210,
-      "sample_count": 48,
+      "numerator": 331,
+      "denominator": 434,
+      "sample_count": 76,
       "minimum_sample_size": 1,
       "formula": "source slices referenced by ready resources and represented in resource content",
       "source": [
@@ -183,12 +183,12 @@
         "knowledge_slices.title",
         "knowledge_slices.content"
       ],
-      "calculated_at": "2026-08-25T15:04:09.031095",
+      "calculated_at": "2026-08-25T17:03:13.843727",
       "message": null,
       "metadata": {
         "coverage_type": "generated_content",
-        "resources_evaluated": 48,
-        "source_slice_count": 101,
+        "resources_evaluated": 76,
+        "source_slice_count": 98,
         "definition": "source slices referenced by ready resources and represented in resource content"
       }
     }
@@ -198,43 +198,43 @@
       "resource_match_score": {
         "metric_id": "resource_match_score",
         "display_name": "资源匹配分",
-        "value": 86.33,
+        "value": 87.08,
         "target": 85.0,
         "operator": ">=",
-        "numerator": 7769.5,
-        "denominator": 90,
-        "sample_count": 90,
+        "numerator": 3135.0,
+        "denominator": 36,
+        "sample_count": 36,
         "minimum_sample_size": 10,
         "status": "passed",
-        "reason": "指标值 86.33% 达到目标 85.00%",
+        "reason": "指标值 87.08% 达到目标 85.00%",
         "metric_status": "ready"
       },
       "resource_match_effectiveness": {
         "metric_id": "resource_match_effectiveness",
         "display_name": "资源匹配效果",
-        "value": 53.03,
+        "value": 80.77,
         "target": 85.0,
         "operator": ">=",
-        "numerator": 70,
-        "denominator": 132,
-        "sample_count": 132,
+        "numerator": 21,
+        "denominator": 26,
+        "sample_count": 26,
         "minimum_sample_size": 10,
         "status": "failed",
-        "reason": "指标值 53.03% 未达到目标 85.00%",
+        "reason": "指标值 80.77% 未达到目标 85.00%",
         "metric_status": "ready"
       },
       "answer_accuracy": {
         "metric_id": "answer_accuracy",
         "display_name": "答题正确率",
-        "value": 50.0,
+        "value": 76.92,
         "target": 85.0,
         "operator": ">=",
-        "numerator": 72,
-        "denominator": 144,
-        "sample_count": 144,
+        "numerator": 20,
+        "denominator": 26,
+        "sample_count": 26,
         "minimum_sample_size": 10,
         "status": "failed",
-        "reason": "指标值 50.00% 未达到目标 85.00%",
+        "reason": "指标值 76.92% 未达到目标 85.00%",
         "metric_status": "ready"
       }
     },
@@ -251,25 +251,25 @@
         "display_name": "资源匹配分",
         "scope": "global",
         "scope_id": null,
-        "value": 86.33,
+        "value": 87.08,
         "unit": "%",
         "status": "ready",
-        "numerator": 7769.5,
-        "denominator": 90,
-        "sample_count": 90,
+        "numerator": 3135.0,
+        "denominator": 36,
+        "sample_count": 36,
         "minimum_sample_size": 1,
         "formula": "average generation-time match score across generated resources",
         "source": [
           "learning_resources.match_score"
         ],
-        "calculated_at": "2026-08-25T15:04:09.031095",
+        "calculated_at": "2026-08-25T17:03:13.843727",
         "message": null,
         "metadata": {
           "source_filter": [
             "agent_generation_pipeline",
             "backfill_match_scores"
           ],
-          "resources_evaluated": 90
+          "resources_evaluated": 36
         }
       },
       "resource_match_effectiveness": {
@@ -277,25 +277,25 @@
         "display_name": "资源匹配效果",
         "scope": "global",
         "scope_id": null,
-        "value": 53.03,
+        "value": 80.77,
         "unit": "%",
         "status": "ready",
-        "numerator": 70,
-        "denominator": 132,
-        "sample_count": 132,
+        "numerator": 21,
+        "denominator": 26,
+        "sample_count": 26,
         "minimum_sample_size": 3,
-        "formula": "correct answers after a resource recommendation / completed practice answers linked to a resource (diagnostic sessions excluded)",
+        "formula": "correct answers on the learner's next answer record following a resource recommendation / practice answers with a resource recommendation that have a subsequent answer (diagnostic sessions excluded from the trigger set)",
         "source": [
           "answer_records.result",
           "answer_records.next_resource_id"
         ],
-        "calculated_at": "2026-08-25T15:04:09.031095",
+        "calculated_at": "2026-08-25T17:03:13.843727",
         "message": null,
         "metadata": null
       },
-      "resources_total": 90,
-      "resources_post_fix": 90,
-      "post_fix_nonzero_scores": 90,
+      "resources_total": 119,
+      "resources_post_fix": 36,
+      "post_fix_nonzero_scores": 36,
       "legacy_rows_excluded_from_post_fix_claim": 0,
       "claim_status": "failed",
       "minimum_post_fix_samples_for_competition_claim": 10,
@@ -303,29 +303,29 @@
         "resource_match_score": {
           "metric_id": "resource_match_score",
           "display_name": "资源匹配分",
-          "value": 86.33,
+          "value": 87.08,
           "target": 85.0,
           "operator": ">=",
-          "numerator": 7769.5,
-          "denominator": 90,
-          "sample_count": 90,
+          "numerator": 3135.0,
+          "denominator": 36,
+          "sample_count": 36,
           "minimum_sample_size": 10,
           "status": "passed",
-          "reason": "指标值 86.33% 达到目标 85.00%",
+          "reason": "指标值 87.08% 达到目标 85.00%",
           "metric_status": "ready"
         },
         "resource_match_effectiveness": {
           "metric_id": "resource_match_effectiveness",
           "display_name": "资源匹配效果",
-          "value": 53.03,
+          "value": 80.77,
           "target": 85.0,
           "operator": ">=",
-          "numerator": 70,
-          "denominator": 132,
-          "sample_count": 132,
+          "numerator": 21,
+          "denominator": 26,
+          "sample_count": 26,
           "minimum_sample_size": 10,
           "status": "failed",
-          "reason": "指标值 53.03% 未达到目标 85.00%",
+          "reason": "指标值 80.77% 未达到目标 85.00%",
           "metric_status": "ready"
         }
       }
@@ -339,15 +339,15 @@
         "value": 100.0,
         "unit": "%",
         "status": "ready",
-        "numerator": 284,
-        "denominator": 284,
-        "sample_count": 284,
+        "numerator": 466,
+        "denominator": 466,
+        "sample_count": 466,
         "minimum_sample_size": 1,
         "formula": "indexed knowledge slices / total knowledge slices",
         "source": [
           "knowledge_slices.is_indexed"
         ],
-        "calculated_at": "2026-08-25T15:04:09.031095",
+        "calculated_at": "2026-08-25T17:03:13.843727",
         "message": null,
         "metadata": {
           "coverage_type": "index",
@@ -360,12 +360,12 @@
         "display_name": "生成内容覆盖率",
         "scope": "global",
         "scope_id": null,
-        "value": 100.0,
+        "value": 76.27,
         "unit": "%",
         "status": "ready",
-        "numerator": 210,
-        "denominator": 210,
-        "sample_count": 48,
+        "numerator": 331,
+        "denominator": 434,
+        "sample_count": 76,
         "minimum_sample_size": 1,
         "formula": "source slices referenced by ready resources and represented in resource content",
         "source": [
@@ -375,12 +375,12 @@
           "knowledge_slices.title",
           "knowledge_slices.content"
         ],
-        "calculated_at": "2026-08-25T15:04:09.031095",
+        "calculated_at": "2026-08-25T17:03:13.843727",
         "message": null,
         "metadata": {
           "coverage_type": "generated_content",
-          "resources_evaluated": 48,
-          "source_slice_count": 101,
+          "resources_evaluated": 76,
+          "source_slice_count": 98,
           "definition": "source slices referenced by ready resources and represented in resource content"
         }
       },

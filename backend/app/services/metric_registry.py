@@ -31,7 +31,7 @@ METRIC_REGISTRY: Dict[str, MetricDefinition] = {
         metric_id="resource_match_effectiveness",
         display_name="\u8d44\u6e90\u5339\u914d\u6548\u679c",
         unit="%",
-        formula="correct answers after a resource recommendation / completed practice answers linked to a resource (diagnostic sessions excluded)",
+        formula="correct answers on the learner's next answer record following a resource recommendation / practice answers with a resource recommendation that have a subsequent answer (diagnostic sessions excluded from the trigger set)",
         source=("answer_records.result", "answer_records.next_resource_id"),
         minimum_sample_size=3,
     ),
