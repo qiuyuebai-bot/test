@@ -22,6 +22,7 @@ export interface KnowledgeSliceState {
 
 let _latestSlicesReqId = 0
 let _latestDocsReqId = 0
+let _latestStatsReqId = 0
 
 export const createKnowledgeSlice: StateCreator<AppState, [], [], KnowledgeSliceState> = (set) => ({
   knowledgeDocs: [],
@@ -63,11 +64,14 @@ export const createKnowledgeSlice: StateCreator<AppState, [], [], KnowledgeSlice
   },
 
   fetchKnowledgeStats: async () => {
+    const reqId = ++_latestStatsReqId
     set({ knowledgeStatsLoading: true })
     try {
       const stats = await knowledgeApi.getStats()
+      if (reqId !== _latestStatsReqId) return
       set({ knowledgeStats: stats, knowledgeStatsLoading: false })
     } catch {
+      if (reqId !== _latestStatsReqId) return
       set({ knowledgeStatsLoading: false })
     }
   },

@@ -27,6 +27,8 @@ export interface ResourceSlice {
   }) => Promise<LearningResource>
 }
 
+let _latestResourcesReqId = 0
+
 export const createResourceSlice: StateCreator<AppState, [], [], ResourceSlice> = (set, get) => ({
   resources: [],
   resourcesTotal: 0,
@@ -34,6 +36,7 @@ export const createResourceSlice: StateCreator<AppState, [], [], ResourceSlice> 
   resourceLoading: false,
 
   fetchResources: async (params) => {
+    const reqId = ++_latestResourcesReqId
     set({ resourcesLoading: true, resourceLoading: true })
     try {
       const result = await coreApi.getResourceList({
@@ -41,6 +44,7 @@ export const createResourceSlice: StateCreator<AppState, [], [], ResourceSlice> 
         pageSize: 50,
         ...params,
       })
+      if (reqId !== _latestResourcesReqId) return
       const mappedItems = result.items.map((item: LearningResource) => ({
         ...item,
         resourceType: item.resourceType as LearningResource['resourceType'],
@@ -75,6 +79,7 @@ export const createResourceSlice: StateCreator<AppState, [], [], ResourceSlice> 
         resourceLoading: false,
       })
     } catch (err) {
+      if (reqId !== _latestResourcesReqId) return
       reportError(err, { tags: { area: 'resource', action: 'fetch_list' } })
       set({ resourcesLoading: false, resourceLoading: false })
     }

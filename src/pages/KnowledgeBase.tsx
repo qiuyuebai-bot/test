@@ -1,10 +1,12 @@
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import type { KnowledgeDoc, KnowledgeSearchResult } from '@/types'
 import { configApi, domainToIndustry, knowledgeApi } from '@/api'
 import type { KnowledgePublicationRequest } from '@/api/core'
 import type { DomainOption } from '@/api/config'
+import { debounce } from '@/lib/utils'
+import type { DebouncedFunction } from '@/lib/utils'
 import Card from '@/components/Card'
 import Modal from '@/components/Modal'
 import Badge from '@/components/Badge'
@@ -406,7 +408,16 @@ export default function KnowledgeBase() {
   const [publicationActionId, setPublicationActionId] = useState<number | null>(null)
 
   const previewReqIdRef = useRef(0)
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => {
+      mountedRef.current = false
+      searchDebouncedRef.current?.cancel()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   const selectedIndustry = selectedDomain === 'all' ? undefined : domainToIndustry(selectedDomain)
   const getListParams = (page: number) => ({
@@ -419,8 +430,10 @@ export default function KnowledgeBase() {
   const refreshRecentDocs = useCallback(async () => {
     try {
       const result = await knowledgeApi.getList({ page: 1, pageSize: 2 })
+      if (!mountedRef.current) return
       setRecentDocs(result.items)
     } catch {
+      if (!mountedRef.current) return
       setRecentDocs([])
     }
   }, [])
@@ -430,11 +443,13 @@ export default function KnowledgeBase() {
     setPublicationLoading(true)
     try {
       const result = await knowledgeApi.getPublicationRequests({ page: 1, pageSize: 50 })
+      if (!mountedRef.current) return
       setPublicationRequests(result.items)
     } catch {
+      if (!mountedRef.current) return
       setPublicationRequests([])
     } finally {
-      setPublicationLoading(false)
+      if (mountedRef.current) setPublicationLoading(false)
     }
   }, [canManageKnowledge])
 
@@ -445,19 +460,18 @@ export default function KnowledgeBase() {
       refreshRecentDocs(),
       refreshPublicationRequests(),
     ])
-    return () => {
-      if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
-    }
   }, [fetchKnowledgeDocs, fetchKnowledgeStats, refreshRecentDocs, refreshPublicationRequests])
 
   useEffect(() => {
-    configApi.getOptions().then(opts => setDomainOptions(opts.domains)).catch(() => {})
+    configApi.getOptions().then(opts => {
+      if (mountedRef.current) setDomainOptions(opts.domains)
+    }).catch(() => {})
   }, [])
 
-  const domainToLabel: Record<string, string> = {
+  const domainToLabel: Record<string, string> = useMemo(() => ({
     ...FALLBACK_DOMAIN_LABELS,
     ...Object.fromEntries(domainOptions.map(d => [d.value, d.label])),
-  }
+  }), [domainOptions])
 
   const handleSliceSearch = async () => {
     const query = sliceSearchQuery.trim()
@@ -479,22 +493,29 @@ export default function KnowledgeBase() {
     }
   }
 
-  const handleSearchChange = (value: string) => {
-    setSearchQuery(value)
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
-    searchTimerRef.current = setTimeout(() => {
-      void fetchKnowledgeDocs({
+  const searchParamsRef = useRef({ pageSize, selectedIndustry, fetchDocs: fetchKnowledgeDocs })
+  searchParamsRef.current = { pageSize, selectedIndustry, fetchDocs: fetchKnowledgeDocs }
+  const searchDebouncedRef = useRef<DebouncedFunction<(value: string) => void> | null>(null)
+  if (!searchDebouncedRef.current) {
+    searchDebouncedRef.current = debounce((value: string) => {
+      const { pageSize: size, selectedIndustry: industry, fetchDocs } = searchParamsRef.current
+      void fetchDocs({
         page: 1,
-        pageSize: pageSize || DEFAULT_PAGE_SIZE,
+        pageSize: size || DEFAULT_PAGE_SIZE,
         keyword: value.trim() || undefined,
-        industry: selectedIndustry,
+        industry,
       })
     }, 300)
   }
 
+  const handleSearchChange = (value: string) => {
+    setSearchQuery(value)
+    searchDebouncedRef.current?.(value)
+  }
+
   const handleDomainChange = (domain: string) => {
     setSelectedDomain(domain)
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    searchDebouncedRef.current?.cancel()
     void fetchKnowledgeDocs({
       page: 1,
       pageSize: pageSize || DEFAULT_PAGE_SIZE,

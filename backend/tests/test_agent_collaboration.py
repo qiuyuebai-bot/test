@@ -38,6 +38,40 @@ def test_judge_marks_deterministic_review_as_human_review(monkeypatch):
     assert result["generation_counterargument"]["response"]
 
 
+def test_deterministic_rebuttal_lists_rule_scores_issues_and_slice_ids(monkeypatch):
+    monkeypatch.setattr(LLMUtil, "_available", False)
+    reference = [{
+        "slice_id": 101,
+        "title": "TCP 校准",
+        "content": "TCP 校准需要使用校准工具，重复定位精度 0.02 mm。",
+    }]
+
+    result = JudgeAgent().debate_with_generation(
+        "TCP 校准说明：重复定位精度 0.02 mm。",
+        reference,
+        max_rounds=1,
+    )
+
+    rebuttal = result["judge_rebuttal"]
+    assert "确定性规则复核" in rebuttal
+    assert "幻觉检测=" in rebuttal
+    assert "参考切片 101" in rebuttal
+    base = result["judge_standpoint"]["score"] / 100
+    coverage = result["judge_standpoint"].get("evidence_coverage")
+    assert coverage is None or result["confidence"] <= base
+
+
+def test_deterministic_confidence_capped_without_reference(monkeypatch):
+    monkeypatch.setattr(LLMUtil, "_available", False)
+
+    result = JudgeAgent().debate_with_generation(
+        "机器人坐标系说明", [], max_rounds=1
+    )
+
+    assert result["confidence"] <= 0.4
+    assert "无可用参考切片" in result["judge_rebuttal"]
+
+
 def test_llm_debate_uses_separate_generation_and_judge_turns(monkeypatch):
     monkeypatch.setattr(LLMUtil, "_available", True)
 

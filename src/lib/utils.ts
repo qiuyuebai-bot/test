@@ -2,6 +2,32 @@ export function toCamelCase(str: string): string {
   return str.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase())
 }
 
+export interface DebouncedFunction<T extends (...args: never[]) => void> {
+  (...args: Parameters<T>): void
+  cancel: () => void
+}
+
+export function debounce<T extends (...args: never[]) => void>(
+  fn: T,
+  delayMs: number,
+): DebouncedFunction<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null
+  const debounced = ((...args: Parameters<T>) => {
+    if (timer) clearTimeout(timer)
+    timer = setTimeout(() => {
+      timer = null
+      fn(...args)
+    }, delayMs)
+  }) as DebouncedFunction<T>
+  debounced.cancel = () => {
+    if (timer) {
+      clearTimeout(timer)
+      timer = null
+    }
+  }
+  return debounced
+}
+
 export function toSnakeCase(str: string): string {
   return str.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`)
 }

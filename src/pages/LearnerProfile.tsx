@@ -11,6 +11,8 @@ import Badge from '@/components/Badge'
 import Button from '@/components/Button'
 import { SCORE_EXCELLENT_THRESHOLD, SCORE_GOOD_THRESHOLD } from '@/lib/constants'
 import { CHART_COLORS } from '@/lib/chartTheme'
+import { debounce } from '@/lib/utils'
+import type { DebouncedFunction } from '@/lib/utils'
 import {
   RadarChart,
   PolarGrid,
@@ -416,7 +418,6 @@ export default function LearnerProfilePage() {
   const [editingLearner, setEditingLearner] = useState<LearnerProfile | undefined>()
   const [error, setError] = useState<string | null>(null)
   const [currentPage, setCurrentPage] = useState(1)
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isAdmin = user?.role === 'admin'
   const canEditLearners = isAdmin || user?.role === 'learner'
 
@@ -426,13 +427,25 @@ export default function LearnerProfilePage() {
     fetchLearners({ page: 1, pageSize: 20 })
   }, [fetchLearners])
 
+  const searchParamsRef = useRef({ pageSize: pagination.pageSize, fetchLearners })
+  searchParamsRef.current = { pageSize: pagination.pageSize, fetchLearners }
+  const searchDebouncedRef = useRef<DebouncedFunction<(value: string) => void> | null>(null)
+  if (!searchDebouncedRef.current) {
+    searchDebouncedRef.current = debounce((value: string) => {
+      const { pageSize, fetchLearners: fetch } = searchParamsRef.current
+      void fetch({
+        page: 1,
+        pageSize,
+        keyword: value || undefined,
+      })
+    }, 300)
+  }
+
   useEffect(() => {
     return () => {
-      if (searchTimerRef.current) {
-        clearTimeout(searchTimerRef.current)
-        searchTimerRef.current = null
-      }
+      searchDebouncedRef.current?.cancel()
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {
@@ -451,16 +464,7 @@ export default function LearnerProfilePage() {
   const handleSearch = (value: string) => {
     setSearchQuery(value)
     setCurrentPage(1)
-    if (searchTimerRef.current) {
-      clearTimeout(searchTimerRef.current)
-    }
-    searchTimerRef.current = setTimeout(() => {
-      fetchLearners({
-        page: 1,
-        pageSize: pagination.pageSize,
-        keyword: value || undefined,
-      })
-    }, 300)
+    searchDebouncedRef.current?.(value)
   }
 
   const handleEdit = (learner: LearnerProfile) => {

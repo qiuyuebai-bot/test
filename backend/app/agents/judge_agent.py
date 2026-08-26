@@ -223,8 +223,16 @@ class JudgeAgent(BaseAgent):
             "final_decision": llm_round.get("final_decision") if llm_round else audit_result["debate_record"]["judge_view"]["decision"],
             "corrections": corrections,
             "conflict_points": [i for i in merged_issues if i["severity"] in ("high", "medium")],
-            "confidence": llm_round.get("confidence") if llm_round else audit_result.get("overall_score", 0) / 100,
-            "judge_rebuttal": llm_round.get("judge_rebuttal", "") if llm_round else "裁判已依据规则和参考资料完成独立复核。",
+            "confidence": (
+                llm_round.get("confidence")
+                if llm_round
+                else self._deterministic_confidence(audit_result, reference_knowledge)
+            ),
+            "judge_rebuttal": (
+                llm_round.get("judge_rebuttal", "")
+                if llm_round
+                else self._deterministic_rebuttal(audit_result, reference_knowledge, current_round)
+            ),
             "debate_method": "llm_dual_agent" if llm_round and generation_response.get("available") else "deterministic_review",
             "agent_response_status": generation_response.get("status", "unavailable"),
             "generation_stance": generation_response.get("stance", "unavailable"),
@@ -239,6 +247,55 @@ class JudgeAgent(BaseAgent):
             debate_result["reason"] = "达到最大辩论轮次"
 
         return debate_result
+
+    @staticmethod
+    def _deterministic_rebuttal(
+        audit_result: Dict[str, Any],
+        reference_knowledge: List[Dict],
+        round_num: int,
+    ) -> str:
+        """LLM 不可用时的可解释复核结论：列明规则维度得分、问题与证据出处。"""
+        judge_view = audit_result["debate_record"]["judge_view"]
+        issues = judge_view.get("issues", [])
+        slice_ids = [str(k.get("slice_id")) for k in reference_knowledge if k.get("slice_id")]
+
+        lines = [
+            f"【确定性规则复核 第{round_num}轮】外部 LLM 不可用，以下结论由规则审核器给出，建议人工复核：",
+            (
+                f"1. 规则维度得分：幻觉检测={audit_result.get('hallucination_score', 0)}、"
+                f"事实一致性={audit_result.get('consistency_score', 100)}、"
+                f"行业规范={audit_result.get('standard_score', 100)}，"
+                f"综合={judge_view.get('score', 0)}。"
+            ),
+            f"2. 判定：{judge_view.get('decision', 'unknown')}；检出问题 {len(issues)} 项。",
+        ]
+        for issue in issues[:5]:
+            description = str(issue.get("description", ""))[:80]
+            lines.append(f"   - [{issue.get('severity', 'medium')}] {issue.get('type', 'unknown')}: {description}")
+        if len(issues) > 5:
+            lines.append(f"   - 其余 {len(issues) - 5} 项见 issues 明细。")
+        if slice_ids:
+            lines.append(f"3. 证据依据：参考切片 {', '.join(slice_ids)}。")
+        else:
+            lines.append("3. 证据依据：无可用参考切片，本结论缺乏证据支撑（置信度已下调）。")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _deterministic_confidence(
+        audit_result: Dict[str, Any],
+        reference_knowledge: List[Dict],
+    ) -> float:
+        """规则复核置信度 = 综合得分 × 证据覆盖度加权。
+
+        无参考切片时封顶 0.4（事实一致性无法校验）；
+        有参考切片时按 evidence_coverage（有据论断占比）在 0.6~1.0 之间加权，
+        覆盖度越低，规则结论的可信度越如实下调。
+        """
+        base = max(0.0, min(1.0, audit_result.get("overall_score", 0) / 100))
+        if not any(k.get("content") for k in reference_knowledge):
+            return round(min(base, 0.4), 3)
+        evidence_coverage = max(0.0, min(1.0, float(audit_result.get("evidence_coverage", 0.0))))
+        return round(base * (0.6 + 0.4 * evidence_coverage), 3)
 
     @staticmethod
     def _unavailable_generation_response(round_num: int) -> Dict[str, Any]:

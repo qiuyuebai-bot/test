@@ -65,14 +65,18 @@ SELECT id, title, knowledge_topic, match_score FROM learning_resources
 
 ## 4. 标注流程
 
-| 步骤 | 内容 | 产出 |
-|------|------|------|
-| 1. 导出标注包 | 按 §1 抽样，导出 CSV（资源 ID、标题、生成内容、参考切片全文、系统 match_score 隐藏列） | 标注包 + 空白标注表 |
-| 2. 评审员培训 | 30 分钟讲解 rubric 与 3 个校准样例（每类标签 1 个） | 评审员理解一致性确认 |
-| 3. 独立标注 | 1~2 名行业人员**独立**逐条打标，不互相讨论、不看系统分数 | 标注表（含标签 + 备注） |
-| 4. 仲裁 | 两人标签不一致的条目由第三人或讨论仲裁，保留仲裁记录 | 最终标签 |
-| 5. 回填 fixture | 按 §5 格式填入 JSON，`reviewer_id` 记真实编号（如工号/姓名缩写+序号），`reviewed_at` 记实际日期 | fixture 更新 |
-| 6. 校验 | 脚本校验 `required_fields` 完整、`expert_label` 在 `allowed_labels` 内 | 校验通过 |
+| 步骤 | 内容 | 产出 | 工具 |
+|------|------|------|------|
+| 1. 导出标注包 | 按 §1 分档抽样，导出 HTML 标注包（左列生成内容 / 右列参考切片原文并排，match_score 隐藏盲标）+ 空白标注 CSV | `docs/evidence/annotation-package.html`、`annotation-sheet.csv` | `python -m scripts.export_annotation_package --per-tier 5` |
+| 2. 评审员培训 | 30 分钟讲解 rubric 与 3 个校准样例（每类标签 1 个） | 评审员理解一致性确认 | — |
+| 3. 独立标注 | 1~2 名行业人员**独立**逐条打标，不互相讨论、不看系统分数 | 标注表（含标签 + 备注） | HTML 包 + CSV 表 |
+| 4. 仲裁 | 两人标签不一致的条目由第三人或讨论仲裁，保留仲裁记录 | 最终标签 | — |
+| 5. 回填 fixture | 按 §5 格式填入 JSON，`reviewer_id` 记真实编号（如工号/姓名缩写+序号），`reviewed_at` 记实际日期 | fixture 更新 | 手工编辑 fixture |
+| 6. 校验 | 脚本校验 `required_fields` 完整、`expert_label` 在 `allowed_labels` 内、资源与切片可回查 | 校验通过（退出码 0） | `python -m scripts.validate_expert_annotations` |
+| 7. 交叉验证 | 自动计算 §6 两项指标并回写本文档 | §6 填报完成 | `python -m scripts.validate_expert_annotations --update-rubric` |
+
+> 脚本均在 `backend/` 目录下执行；校验失败（含 fixture 为空）以非零退出码结束，
+> CI/证据流水线可据此拦截"未标注即宣称 ready"。
 
 **评审员要求**：工业机器人/自动化相关岗位在职人员，≥2 年现场经验（调试、维护、集成或培训岗均可）。
 

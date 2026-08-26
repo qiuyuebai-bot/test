@@ -22,6 +22,7 @@ export interface LearnerSlice {
 }
 
 let _latestLearnerReqId = 0
+let _latestLearnersReqId = 0
 
 export const createLearnerSlice: StateCreator<AppState, [], [], LearnerSlice> = (set, get) => ({
   learners: [],
@@ -33,6 +34,7 @@ export const createLearnerSlice: StateCreator<AppState, [], [], LearnerSlice> = 
   pagination: { page: 1, pageSize: 20, total: 0, totalPages: 0 },
 
   fetchLearners: async (params) => {
+    const reqId = ++_latestLearnersReqId
     set({ learnersLoading: true, learnerLoading: true, learnerError: null })
     try {
       const user = get().user
@@ -40,6 +42,7 @@ export const createLearnerSlice: StateCreator<AppState, [], [], LearnerSlice> = 
 
       if (!canReadLearnerList && user) {
         const learner = await learnerApi.getCurrent()
+        if (reqId !== _latestLearnersReqId) return
         set({
           learners: [learner],
           currentLearner: learner,
@@ -56,6 +59,7 @@ export const createLearnerSlice: StateCreator<AppState, [], [], LearnerSlice> = 
         pageSize: 20,
         ...params,
       })
+      if (reqId !== _latestLearnersReqId) return
       set({
         learners: result.items,
         learnersTotal: result.total,
@@ -69,6 +73,7 @@ export const createLearnerSlice: StateCreator<AppState, [], [], LearnerSlice> = 
         },
       })
     } catch (err) {
+      if (reqId !== _latestLearnersReqId) return
       reportError(err, { tags: { area: 'learner', action: 'fetch_list' } })
       set({
         learnersLoading: false,

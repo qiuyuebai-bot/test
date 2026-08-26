@@ -31,6 +31,13 @@ export interface TrainingSlice {
   clearTrainingContext: () => void
 }
 
+let _latestPositionsReqId = 0
+let _latestCompetenciesReqId = 0
+let _latestAssessmentRecordsReqId = 0
+let _latestCertificationsReqId = 0
+let _latestCertificationRecordsReqId = 0
+let _latestTrainingProjectsReqId = 0
+
 export const createTrainingSlice: StateCreator<AppState, [], [], TrainingSlice> = (set) => ({
   positions: [],
   positionsLoading: false,
@@ -45,6 +52,7 @@ export const createTrainingSlice: StateCreator<AppState, [], [], TrainingSlice> 
   activeTrainingContext: null,
 
   fetchPositions: async (params) => {
+    const reqId = ++_latestPositionsReqId
     set({ positionsLoading: true })
     try {
       const result = await trainingApi.listPositions({
@@ -52,23 +60,29 @@ export const createTrainingSlice: StateCreator<AppState, [], [], TrainingSlice> 
         page_size: params?.pageSize ?? 50,
         keyword: params?.keyword,
       })
+      if (reqId !== _latestPositionsReqId) return
       set({ positions: result.items, positionsLoading: false })
     } catch (err) {
+      if (reqId !== _latestPositionsReqId) return
       reportError(err, { tags: { area: 'training', action: 'fetch_positions' } })
       set({ positionsLoading: false })
     }
   },
 
   fetchCompetencies: async () => {
+    const reqId = ++_latestCompetenciesReqId
     try {
       const result = await trainingApi.listCompetencies({ page: 1, page_size: 100 })
+      if (reqId !== _latestCompetenciesReqId) return
       set({ competencies: result.items })
     } catch (err) {
+      if (reqId !== _latestCompetenciesReqId) return
       reportError(err, { tags: { area: 'training', action: 'fetch_competencies' } })
     }
   },
 
   fetchAssessmentRecords: async (params) => {
+    const reqId = ++_latestAssessmentRecordsReqId
     set({ assessmentRecordsLoading: true })
     try {
       const result = await trainingApi.listAssessmentRecords({
@@ -78,23 +92,29 @@ export const createTrainingSlice: StateCreator<AppState, [], [], TrainingSlice> 
         position_id: params?.positionId,
         status: params?.status,
       })
+      if (reqId !== _latestAssessmentRecordsReqId) return
       set({ assessmentRecords: result.items, assessmentRecordsLoading: false })
     } catch (err) {
+      if (reqId !== _latestAssessmentRecordsReqId) return
       reportError(err, { tags: { area: 'training', action: 'fetch_assessment_records' } })
       set({ assessmentRecordsLoading: false })
     }
   },
 
   fetchCertifications: async () => {
+    const reqId = ++_latestCertificationsReqId
     try {
       const result = await trainingApi.listCertifications({ page: 1, page_size: 50 })
+      if (reqId !== _latestCertificationsReqId) return
       set({ certifications: result.items })
     } catch (err) {
+      if (reqId !== _latestCertificationsReqId) return
       reportError(err, { tags: { area: 'training', action: 'fetch_certifications' } })
     }
   },
 
   fetchCertificationRecords: async (params) => {
+    const reqId = ++_latestCertificationRecordsReqId
     set({ certificationRecordsLoading: true })
     try {
       const result = await trainingApi.listCertificationRecords({
@@ -103,14 +123,17 @@ export const createTrainingSlice: StateCreator<AppState, [], [], TrainingSlice> 
         status: params?.status,
         learner_id: params?.learnerId,
       })
+      if (reqId !== _latestCertificationRecordsReqId) return
       set({ certificationRecords: result.items, certificationRecordsLoading: false })
     } catch (err) {
+      if (reqId !== _latestCertificationRecordsReqId) return
       reportError(err, { tags: { area: 'training', action: 'fetch_certification_records' } })
       set({ certificationRecordsLoading: false })
     }
   },
 
   fetchTrainingProjects: async (params) => {
+    const reqId = ++_latestTrainingProjectsReqId
     set({ trainingProjectsLoading: true })
     try {
       const result = await trainingApi.listTrainingProjects({
@@ -119,8 +142,10 @@ export const createTrainingSlice: StateCreator<AppState, [], [], TrainingSlice> 
         status: params?.status,
         position_id: params?.positionId,
       })
+      if (reqId !== _latestTrainingProjectsReqId) return
       set({ trainingProjects: result.items, trainingProjectsLoading: false })
     } catch (err) {
+      if (reqId !== _latestTrainingProjectsReqId) return
       reportError(err, { tags: { area: 'training', action: 'fetch_training_projects' } })
       set({ trainingProjectsLoading: false })
     }
