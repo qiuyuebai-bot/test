@@ -1,7 +1,7 @@
 {
   "report_version": "evidence-report-v2",
-  "generated_at": "2026-08-25T17:03:16.444846+00:00",
-  "git_revision": "7ed1cb1461aabb1294771aaf49ab39c5d87fa585",
+  "generated_at": "2026-08-26T07:21:17.662058+00:00",
+  "git_revision": "60eca3e03267f445238dcd25fc38641ab2fb2356",
   "working_tree_dirty": true,
   "report_kind": "development_validation",
   "acceptance_eligible": false,
@@ -10,7 +10,7 @@
     "model_name": "redacted_in_report"
   },
   "knowledge_base": {
-    "version": "bb352e4e131ef42c",
+    "version": "7deeba72eea87b2f",
     "slice_count": 466,
     "indexed_slice_count": 466
   },
@@ -67,7 +67,7 @@
         "debate_records.is_hallucination",
         "debate_records.resolution_status"
       ],
-      "calculated_at": "2026-08-25T17:03:13.843727",
+      "calculated_at": "2026-08-26T07:21:16.087486",
       "message": null,
       "metadata": {
         "total_checks": 175,
@@ -94,7 +94,7 @@
       "source": [
         "learning_resources.match_score"
       ],
-      "calculated_at": "2026-08-25T17:03:13.843727",
+      "calculated_at": "2026-08-26T07:21:16.087486",
       "message": null,
       "metadata": null
     },
@@ -115,7 +115,7 @@
         "answer_records.result",
         "answer_records.next_resource_id"
       ],
-      "calculated_at": "2026-08-25T17:03:13.843727",
+      "calculated_at": "2026-08-26T07:21:16.087486",
       "message": null,
       "metadata": null
     },
@@ -135,7 +135,7 @@
       "source": [
         "answer_records.result"
       ],
-      "calculated_at": "2026-08-25T17:03:13.843727",
+      "calculated_at": "2026-08-26T07:21:16.087486",
       "message": null,
       "metadata": null
     },
@@ -155,7 +155,7 @@
       "source": [
         "knowledge_slices.is_indexed"
       ],
-      "calculated_at": "2026-08-25T17:03:13.843727",
+      "calculated_at": "2026-08-26T07:21:16.087486",
       "message": null,
       "metadata": {
         "coverage_type": "index",
@@ -168,10 +168,10 @@
       "display_name": "生成内容覆盖率",
       "scope": "global",
       "scope_id": null,
-      "value": 76.27,
+      "value": 98.85,
       "unit": "%",
       "status": "ready",
-      "numerator": 331,
+      "numerator": 429,
       "denominator": 434,
       "sample_count": 76,
       "minimum_sample_size": 1,
@@ -183,7 +183,7 @@
         "knowledge_slices.title",
         "knowledge_slices.content"
       ],
-      "calculated_at": "2026-08-25T17:03:13.843727",
+      "calculated_at": "2026-08-26T07:21:16.087486",
       "message": null,
       "metadata": {
         "coverage_type": "generated_content",
@@ -262,7 +262,7 @@
         "source": [
           "learning_resources.match_score"
         ],
-        "calculated_at": "2026-08-25T17:03:13.843727",
+        "calculated_at": "2026-08-26T07:21:16.087486",
         "message": null,
         "metadata": {
           "source_filter": [
@@ -289,7 +289,7 @@
           "answer_records.result",
           "answer_records.next_resource_id"
         ],
-        "calculated_at": "2026-08-25T17:03:13.843727",
+        "calculated_at": "2026-08-26T07:21:16.087486",
         "message": null,
         "metadata": null
       },
@@ -347,7 +347,7 @@
         "source": [
           "knowledge_slices.is_indexed"
         ],
-        "calculated_at": "2026-08-25T17:03:13.843727",
+        "calculated_at": "2026-08-26T07:21:16.087486",
         "message": null,
         "metadata": {
           "coverage_type": "index",
@@ -360,10 +360,10 @@
         "display_name": "生成内容覆盖率",
         "scope": "global",
         "scope_id": null,
-        "value": 76.27,
+        "value": 98.85,
         "unit": "%",
         "status": "ready",
-        "numerator": 331,
+        "numerator": 429,
         "denominator": 434,
         "sample_count": 76,
         "minimum_sample_size": 1,
@@ -375,7 +375,7 @@
           "knowledge_slices.title",
           "knowledge_slices.content"
         ],
-        "calculated_at": "2026-08-25T17:03:13.843727",
+        "calculated_at": "2026-08-26T07:21:16.087486",
         "message": null,
         "metadata": {
           "coverage_type": "generated_content",

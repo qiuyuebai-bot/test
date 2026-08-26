@@ -19,6 +19,7 @@ from app.config import settings
 from app.models import KnowledgeDoc, KnowledgeSlice, LearningResource, IndustryEnum
 from app.utils.text_slice import TextSliceUtil
 from app.utils.logger import LoggerUtil
+from app.utils.resource_content import normalize_source_keywords
 from app.domains.knowledge.parser import KnowledgeDocumentParser
 from app.services.common import ResourceServiceHelper
 from app.domains.knowledge.schemas import (
@@ -324,6 +325,15 @@ class KnowledgeService:
             )
             if not slices or not any(item.get("content", "").strip() for item in slices):
                 raise ValueError("文档内容为空，无法建立知识索引")
+            # 切片器不产出 keywords 时用共享提取器补齐：DB 关键词降级检索、
+            # Chroma metadata 与 generated_content_coverage 判分共用同一套术语。
+            for item in slices:
+                if not item.get("keywords"):
+                    item["keywords"] = normalize_source_keywords(
+                        [],
+                        title=item.get("title") or "",
+                        content=item.get("content") or "",
+                    )
             doc.slice_count = len(slices)
             doc.process_progress = 60
             db.flush()

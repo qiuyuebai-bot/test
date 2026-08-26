@@ -18,6 +18,7 @@ from app.domains.learner.models import LearnerProfile
 from app.domains.resource.models import LearningResource
 from app.services.common import ResourceServiceHelper
 from app.utils.auth import CurrentUser
+from app.utils.resource_content import strip_fallback_disclosure
 
 
 PENDING = "pending"
@@ -416,7 +417,9 @@ class KnowledgePublicationService:
             return KnowledgePublicationService._mark_failed(db, request, "讲义质量校验未通过，无法发布到知识库")
 
         snapshot = request.snapshot or {}
-        content = str(snapshot.get("content") or "")
+        # 知识库只收录知识内容本身；“参考知识库资料不足”是面向学习者的运维
+        # 声明（保留在资源原文），发布前剥离，防止话术被切片当作知识证据。
+        content = strip_fallback_disclosure(snapshot.get("content"))
         if not content.strip():
             return KnowledgePublicationService._mark_failed(db, request, "申请快照正文为空")
 

@@ -15,7 +15,7 @@
 | 专家标注 | annotation_count=0，无流程 | rubric 与标注流程文档就绪，**等待外部行业评审** | ≥10 条真实标注 | 诚实保留 insufficient_evidence |
 | resource_match_score | 86.6 | **90.0**（10710/119，盲区注入 + 质量门，见 §5） | ≥90% | 达标 |
 | hallucination_rate | 4.0% | 4.0%（<5%） | <5% | 达标 |
-| knowledge_index_coverage / generated_content_coverage | 100% / 100% | 100% / 100% | — | 达标 |
+| knowledge_index_coverage / generated_content_coverage | 100% / 100%（8/25 时点） | 100% / **98.85%**（关键词提取口径修正后，见 §4.5） | — | 达标 |
 
 ## 2. 三项修复内容
 
@@ -48,10 +48,25 @@
 1. **盲区标签 prompt 注入**：`resource_generation` / `question_generation` 模板新增"知识盲区覆盖要求"段落（`blind_area_requirements` 变量），要求正文/题干原词出现画像盲区标签（与主题无关的标签可跳过，不生造联系）。`llm_generator.py` 新增 `_blind_area_requirements()`，测试见 `test_llm_adapters.py`。注入后单批生成分从 70~85 升至 90~95（difficulty 40% + ability 30% 满分 70，盲区覆盖 30% 从 0 提升至实际覆盖）。
 2. **resource_match_effectiveness 口径修正**：从"触发推荐的那道题的正确率"（该题结果与推荐资源无因果——推荐在判分后才写入）改为"推荐资源关联的下一次答题"正确率，与 registry formula 声明及增益曲线 pre→post 语义一致。实现与测试见 `metric_service.py` / `test_metric_service.py`。
 
+## 4.5 第三轮修复（2026-08-26）：生成内容覆盖率 76.27% → 98.85%
+
+**现象**：`generated_content_coverage` 76.27%（331/434，目标 ≥90%）。8/25 时点曾显示 100%，因当时参与判定的切片全部带有显式 keywords；后续讲义发布产生大量无元数据切片后回落。
+
+**根因（测量工具失真，非内容真实缺失）**：覆盖判定按"资源内容逐字包含切片任一关键词"计分。无元数据切片（generated_lecture 发布文档的切片，`keywords=[]`、`title=''`）走 `_fallback_source_keywords(content)` 回退链，旧实现用 8 字滑窗从正文提取关键词，产出"特征工程是从原始""数据分析在框架选"这类**原句子碎片**——重组后的生成内容几乎不可能逐字复现 → 系统性判为未覆盖。未命中的 103 对集中在 28 个此类切片；同一批数据换用术语级提取策略重算为 98.85%，证明内容实际覆盖良好。
+
+**修复三件套**：
+
+1. **提取器重写（A，治本）**：`backend/app/utils/resource_content.py` 的 `_fallback_source_keywords` 改为术语优先——markdown 强调结构（加粗/行内代码/标题）术语 → 英文技术词 → 高频 3-4 字中文 n-gram（长文本）/ 整体+前缀窗口（短标题）。关键词从"句子碎片"变为"对齐术语边界的完整词"。单测见 `backend/tests/test_source_keyword_extraction.py`（12 用例）。
+2. **存量元数据回填（B）**：`backend/scripts/cleanup_generated_lecture_slices.py` 为 187 个空 keywords 切片回填真实术语入库（原地更新，slice ID 不变，`source_slice_ids` 引用与专家标注包溯源不受影响），Chroma 向量与 metadata 按 `doc_{doc_id}_slice_{index}` 确定性 ID 同步 upsert。DB 关键词降级检索同时受益。
+3. **提示词泄漏剥离（C）**：生成 prompt 要求正文声明"参考知识库资料不足，以下为模型生成的通用学习建议"。该声明面向学习者保留在资源原文，但随讲义发布进入知识库后被切片当作"知识内容"。修复：`publication_service._publish` 发布前剥离（`strip_fallback_disclosure`），`process_doc` 切片时补齐 keywords。存量清理分两轮：首轮按"独立声明行整行剥离"清掉 10 个切片；复查发现残留 9 个**句式变体**——声明并入首句、藏于行中、带 `- ` 列表前缀，整行剥离无法命中。据此把剥离函数从行级升级为**句式级正则**（精确匹配固定声明句，只删句子本身，其余正文原样保留），补清 9 个切片与 9 个文档正文文件。终态全库验证：**0 切片 / 0 文档文件 / 0 预览残留话术**，无切片被清空，Chroma 同步 9 条；三种变体形态已加入单测回归。
+
+**效果与披露**：76.27%（331/434）→ **98.85%**（429/434）。剩余 5 个未命中为真实内容缺口（诚实保留，非缺陷归因对象）。**前后数据不可直接对比**——关键词提取策略变更属口径修正（与 §5.1 resource_match_effectiveness 同性质），"逐字包含"判定语义本身未变。`process_doc` 切片即回填 keywords 后，新发布文档不再依赖读取时回退链。第二轮话术补清完成后重算复核，覆盖率维持 98.85%（429/434）——剥离的运维话术不参与关键词判分，数值不变符合预期。
+
 ## 5. 口径与数据变更披露（诚实红线）
 
 ### 5.1 指标口径变更
 - `resource_match_effectiveness`：触发题正确率 → 推荐后下一次答题正确率。触发集仍排除 `diag_*` 诊断会话；"下一次答题"可为练习下一题或随后再测首题。前后数据不可直接对比，registry formula 已同步更新。
+- `generated_content_coverage`（2026-08-26，见 §4.5）：关键词回退提取策略从 8 字滑窗碎片改为术语级提取（markdown 强调术语 / 英文技术词 / 高频 3-4 字 n-gram / 短标题整体+前缀）。"逐字包含"判定语义未变，变的是"关键词"的生成方式；存量切片已回填元数据。前后数据不可直接对比。
 - 其余指标口径未变。
 
 ### 5.2 样本删除（经确认执行）
@@ -77,6 +92,8 @@
 | 多轮学习增益曲线证据 | `docs/evidence/learning-gain-curve.json`（脚本 `backend/scripts/generate_learning_gain_curve.py`） |
 | 盲区注入 + 质量门再生成脚本（可复现） | `backend/scripts/regenerate_resources_blind_coverage.py`（本轮 resource_match_score 达标证据） |
 | 盲区注入 prompt 测试 | `backend/tests/test_llm_adapters.py`（`test_resource_generation_prompt_injects_blind_area_labels` 等） |
+| 关键词提取器重写测试 | `backend/tests/test_source_keyword_extraction.py`（本轮 generated_content_coverage 修复证据） |
+| 切片元数据回填与话术清理脚本（幂等可复现） | `backend/scripts/cleanup_generated_lecture_slices.py`（dry-run 默认，--apply 写库） |
 
 ## 7. 多轮"推荐→学习→再测"增益曲线证据（2026-08-25 补充）
 

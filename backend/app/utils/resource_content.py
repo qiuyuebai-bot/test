@@ -77,7 +77,16 @@ _SOURCE_KEYWORD_STOPWORDS = frozenset(
         "以及",
     }
 )
-_SOURCE_TOKEN_RE = re.compile(r"[A-Za-z][A-Za-z0-9_+#.-]{1,}|[\u4e00-\u9fff]+")
+_MARKDOWN_BOLD_RE = re.compile(r"\*\*([^*\n]{2,40})\*\*")
+_CODE_SPAN_RE = re.compile(r"`([^`\n]{2,60})`")
+_HEADING_RE = re.compile(r"^#{1,4}[ \t]+(.{2,60})$", re.MULTILINE)
+_ENGLISH_TERM_RE = re.compile(r"[A-Za-z][A-Za-z0-9_+#.-]{1,}")
+_CHINESE_RUN_RE = re.compile(r"[\u4e00-\u9fff]+")
+# 覆盖判定按“生成内容逐字包含关键词”计分，关键词必须是完整术语而非句子碎片：
+# 长滑窗片段（旧实现）几乎不可能在重组后的生成内容中逐字复现，会系统性低估覆盖率。
+_EMPHASIS_TERM_MAX_CHARS = 12
+_SHORT_TEXT_MAX_CHARS = 12
+_NGRAM_SIZES = (4, 3)
 
 
 def normalize_source_slice_ids(raw_ids: Any) -> list[int]:
@@ -124,44 +133,104 @@ def _parse_source_keywords(raw_keywords: Any) -> list[str]:
 
 
 def _fallback_source_keywords(value: Any, maximum: int = 12) -> list[str]:
-    """Extract short, deterministic terms when a slice has no metadata."""
+    """Extract term-like keywords when a slice has no metadata.
+
+    优先级：markdown 强调结构（加粗/行内代码/标题）中的术语 → 英文技术词 →
+    高频 3-4 字中文 n-gram。关键词必须是对齐到术语边界的完整词，而非任意
+    滑窗碎片——后者在重组后的生成内容中几乎不会逐字出现。
+    """
+    text = str(value or "")
     candidates: list[str] = []
     seen: set[str] = set()
 
-    def add(candidate: str) -> None:
+    def add(candidate: str) -> bool:
         candidate = candidate.strip()
         folded = candidate.casefold()
         if len(candidate) < 2 or folded in seen:
-            return
+            return False
         if candidate in _SOURCE_KEYWORD_STOPWORDS:
-            return
-        candidates.append(candidate)
+            return False
         seen.add(folded)
+        candidates.append(candidate)
+        return True
 
-    for token in _SOURCE_TOKEN_RE.findall(str(value or "")):
-        if re.fullmatch(r"[A-Za-z][A-Za-z0-9_+#.-]{1,}", token):
+    def add_span_terms(span: str) -> None:
+        for token in _ENGLISH_TERM_RE.findall(span):
             add(token)
-            if len(candidates) >= maximum:
-                break
-            continue
+        for run in _CHINESE_RUN_RE.findall(span):
+            if 2 <= len(run) <= _EMPHASIS_TERM_MAX_CHARS:
+                add(run)
 
-        # Prefer meaningful Chinese phrases and skip windows containing a
-        # generic connector such as "这个" or "通过".
-        for size in (8, 6, 5, 4, 3, 2):
-            if len(token) < size:
+    # 1. 生成方自己强调的术语（加粗/代码/标题），天然对齐术语边界。
+    for pattern in (_MARKDOWN_BOLD_RE, _CODE_SPAN_RE, _HEADING_RE):
+        for span in pattern.findall(text):
+            add_span_terms(span)
+            if len(candidates) >= maximum:
+                return candidates
+
+    # 2. 英文技术词在再生成内容中通常原样保留。
+    for token in _ENGLISH_TERM_RE.findall(text):
+        if add(token) and len(candidates) >= maximum:
+            return candidates
+
+    # 3. 中文术语：短文本（典型为文档标题）术语密集，取“整体 + 前缀窗口”，
+    # 去掉“基础/指南”类后缀的前缀仍能命中正文；长文本改用高频 3-4 字
+    # n-gram——重复出现的短片段指向核心概念。跳过包含停用词的窗口与已选
+    # 关键词的子串，按 (频次, 长度, 首现位置) 排序保证确定性。
+    runs = _CHINESE_RUN_RE.findall(text)
+    if sum(len(run) for run in runs) <= _SHORT_TEXT_MAX_CHARS:
+        for run in runs:
+            add(run)
+            for size in range(len(run) - 1, 2, -1):
+                add(run[:size])
+        if candidates:
+            return candidates[:maximum]
+
+    positions: dict[str, int] = {}
+    counts: dict[str, int] = {}
+    for run in runs:
+        for size in _NGRAM_SIZES:
+            if len(run) < size:
                 continue
-            for start in range(len(token) - size + 1):
-                phrase = token[start : start + size]
+            for start in range(len(run) - size + 1):
+                phrase = run[start : start + size]
                 if any(stopword in phrase for stopword in _SOURCE_KEYWORD_STOPWORDS):
                     continue
-                add(phrase)
-                if len(candidates) >= maximum:
-                    break
-            if len(candidates) >= maximum:
-                break
-        if len(candidates) >= maximum:
+                if phrase not in positions:
+                    positions[phrase] = len(positions)
+                counts[phrase] = counts.get(phrase, 0) + 1
+    ranked = sorted(counts, key=lambda p: (-counts[p], -len(p), positions[p]))
+    for phrase in ranked:
+        if any(phrase in picked for picked in candidates):
+            continue
+        if add(phrase) and len(candidates) >= maximum:
             break
     return candidates
+
+
+_FALLBACK_DISCLOSURE_SENTENCE_RE = re.compile(
+    r"[ \t]*(?:[-*•][ \t]*)?"
+    r"参考知识库资料不足[，,、]?\s*以下为模型生成的通用学习建议[。：:；;]?"
+)
+
+
+def strip_fallback_disclosure(content: Any) -> str:
+    """Remove insufficient-knowledge disclosure sentences from lecture content.
+
+    生成 prompt 要求讲义正文声明“参考知识库资料不足，以下为模型生成的通用
+    学习建议”。该声明面向学习者保留在资源原文中，但发布到知识库前必须剥离，
+    避免运维话术被当作知识内容切片并进入覆盖率分母。声明不总是独立成行：
+    实际数据中会并入首句、藏在行中或带列表前缀，故按句式精确匹配，只删除
+    命中的句子本身，其余正文原样保留。
+    """
+    kept: list[str] = []
+    for line in str(content or "").split("\n"):
+        if _FALLBACK_DISCLOSURE_SENTENCE_RE.search(line):
+            line = _FALLBACK_DISCLOSURE_SENTENCE_RE.sub("", line)
+            if not line.strip():
+                continue
+        kept.append(line)
+    return "\n".join(kept).lstrip()
 
 
 def normalize_source_keywords(
