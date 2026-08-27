@@ -97,8 +97,13 @@ jobs:
           $version = node -p "require('./package.json').version"
           $assetLabel = "ZhiyuEngine-Setup-$version.exe"
           $checksumLabel = "$assetLabel.sha256"
-          $installerUpload = "$($installer.FullName)#$assetLabel"
-          $checksumUpload = "$($checksum.FullName)#$checksumLabel"
+          # 不使用 gh 的 file#label 语法，先复制为 ASCII 文件名再上传，兼容 Windows 编码环境。
+          $installerUpload = Join-Path $env:RUNNER_TEMP $assetLabel
+          $checksumUpload = Join-Path $env:RUNNER_TEMP $checksumLabel
+          Copy-Item -LiteralPath $installer.FullName -Destination $installerUpload -Force
+          $checksumText = Get-Content -LiteralPath $checksum.FullName -Raw
+          $checksumText = $checksumText -replace [regex]::Escape($installer.Name), $assetLabel
+          Set-Content -LiteralPath $checksumUpload -Value $checksumText -Encoding ascii -NoNewline
           $existingRelease = gh release view "$env:GITHUB_REF_NAME" --json tagName --jq .tagName 2>$null
           if ($existingRelease -eq $env:GITHUB_REF_NAME) {
             gh release upload "$env:GITHUB_REF_NAME" $installerUpload $checksumUpload --clobber
