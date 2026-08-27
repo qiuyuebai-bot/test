@@ -1,2 +1,30 @@
--r requirements.txt
+# Windows 桌面端仅打包启动、登录、AI 调用和本地数据所需依赖。
+# Chroma、Sentence Transformers 与 Torch 是可选增强组件；桌面端缺失时由
+# 知识库关键词检索降级路径接管，避免在 GitHub 标准 Windows 运行器中冻结
+# 数 GB 的模型运行时而导致构建不稳定。
+fastapi==0.139.2
+uvicorn[standard]==0.27.0
+python-multipart==0.0.32
+sqlalchemy==2.0.25
+alembic==1.13.1
+psycopg2-binary==2.9.9
+openai>=1.0.0
+celery==5.3.6
+redis==5.0.1
+pydantic==2.13.4
+pydantic-settings==2.14.2
+python-dotenv==1.2.2
+python-jose[cryptography]==3.5.0
+cryptography>=42.0.0
+passlib[bcrypt]==1.7.4
+httpx==0.26.0
+google-auth>=2.38,<3
+aiofiles==23.2.1
+loguru==0.7.2
+psutil==7.1.3
+jieba==0.42.1
+reportlab==4.0.8
+pypdf>=4.0.0
+wheel==0.47.0
+jaraco.context==6.1.2
 pyinstaller==6.22.2

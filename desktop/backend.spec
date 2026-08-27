@@ -2,7 +2,7 @@
 """PyInstaller 规格：将 FastAPI 后端和运行必需资源制作成独立目录包。"""
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules
+from PyInstaller.utils.hooks import collect_submodules
 
 
 ROOT = Path(SPECPATH).resolve().parent
@@ -16,13 +16,8 @@ datas = [
     (str(BACKEND / "app" / "prompts"), "app/prompts"),
 ]
 
-# Chroma、令牌器和嵌入模型的 Python/动态资源在桌面离线降级与正常模式间共用。
-for package in ("chromadb", "tiktoken", "sentence_transformers", "transformers", "tokenizers"):
-    try:
-        datas.extend(collect_data_files(package))
-        datas.extend(collect_dynamic_libs(package))
-    except Exception:
-        pass
+# Chroma 与本地嵌入模型属于可选增强能力。未打入桌面包时，知识库会自动
+# 降级为 SQLite 关键词检索；不收集其大型模型运行时以确保 CI 可稳定打包。
 
 hiddenimports = collect_submodules("app")
 hiddenimports.extend([
