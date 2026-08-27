@@ -63,7 +63,18 @@ jobs:
         run: npm run desktop:smoke
 
       - name: Package Windows installer
-        run: npm run desktop:package
+        shell: pwsh
+        run: |
+          # GitHub 对非管理员隐藏运行日志；失败时输出已脱敏的末尾日志供定位。
+          $logFile = Join-Path $env:RUNNER_TEMP 'desktop-package.log'
+          & npm.cmd run desktop:package 2>&1 | Tee-Object -FilePath $logFile
+          $packageExitCode = $LASTEXITCODE
+          if ($packageExitCode -ne 0) {
+            $summary = (Get-Content -LiteralPath $logFile -Tail 35) -join ' '
+            $summary = $summary -replace '(?i)(token|password|api[ _-]?key)=[^\s]+', '$1=[REDACTED]'
+            Write-Output "::error title=Windows installer packaging::$summary"
+            exit $packageExitCode
+          }
 
       - name: Verify packaged desktop login flow
         shell: pwsh
