@@ -66,7 +66,7 @@ export default function OnboardingName() {
         </p>
 
         <h1 className="text-4xl font-semibold leading-tight tracking-normal text-slate-950 sm:text-5xl">
-          欢迎来到千早AI音
+          欢迎来到千语
           <br />
           请问怎么称呼你
         </h1>

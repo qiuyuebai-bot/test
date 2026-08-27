@@ -113,7 +113,7 @@ export default function Login() {
 
           <div className="relative z-20 mt-14 flex items-center gap-3 text-indigo-950">
             <Brain className="h-7 w-7 text-indigo-700" />
-            <span className="text-2xl font-bold">知域引擎</span>
+            <span className="text-2xl font-bold">千语</span>
           </div>
         </section>
 
