@@ -49,8 +49,21 @@ jobs:
           backend\venv\Scripts\python.exe -m pip install --upgrade pip
           backend\venv\Scripts\python.exe -m pip install -r backend\requirements-desktop-build.txt
 
-      - name: Build and verify installer
-        run: npm run build:electron
+      # 拆分构建阶段，发布失败时可在 Actions 中直接定位到具体环节。
+      - name: Build frontend
+        run: npm run build
+
+      - name: Generate desktop icons
+        run: npm run desktop:icons
+
+      - name: Build embedded backend
+        run: npm run desktop:backend
+
+      - name: Verify embedded backend
+        run: npm run desktop:smoke
+
+      - name: Package Windows installer
+        run: npm run desktop:package
 
       - name: Verify packaged desktop login flow
         shell: pwsh

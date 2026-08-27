@@ -31,6 +31,7 @@
     "desktop:icons": "node scripts/generate-desktop-icons.mjs",
     "desktop:backend": "node scripts/build-desktop-backend.mjs",
     "desktop:unpacked": "node scripts/build-desktop.mjs --dir",
+    "desktop:package": "node scripts/build-desktop.mjs --package-only",
     "desktop:smoke": "node scripts/desktop-smoke.mjs",
     "desktop:e2e": "node scripts/desktop-e2e.mjs",
     "build:electron": "node scripts/build-desktop.mjs --installer",

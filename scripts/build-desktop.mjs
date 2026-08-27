@@ -9,6 +9,7 @@ import { fileURLToPath } from "node:url";
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const isWindows = process.platform === "win32";
 const unpacked = process.argv.includes("--dir");
+const packageOnly = process.argv.includes("--package-only");
 const npm = isWindows ? "npm.cmd" : "npm";
 const builder = isWindows
   ? join(ROOT, "node_modules", ".bin", "electron-builder.cmd")
@@ -34,10 +35,12 @@ function run(command, args) {
   });
 }
 
-await run(npm, ["run", "build"]);
-await run(npm, ["run", "desktop:icons"]);
-await run(npm, ["run", "desktop:backend"]);
-await run(process.execPath, [join(ROOT, "scripts", "desktop-smoke.mjs")]);
+if (!packageOnly) {
+  await run(npm, ["run", "build"]);
+  await run(npm, ["run", "desktop:icons"]);
+  await run(npm, ["run", "desktop:backend"]);
+  await run(process.execPath, [join(ROOT, "scripts", "desktop-smoke.mjs")]);
+}
 
 // 受限环境可能跳过 Electron 的 postinstall，此处在打包前补齐本机运行时。
 if (!existsSync(electronExecutable)) {
