@@ -51,6 +51,13 @@ from app.utils.resource_content import normalize_resource_topic
 
 router = APIRouter(prefix="/agent", tags=["Agent协同调度"])
 
+# The desktop deployment serves requests from one application process, while
+# production deployments may use multiple workers.  The process lock removes
+# the local double-click race; the row lock in ``run_full_pipeline`` extends
+# that claim to database-backed multi-worker deployments.
+_full_pipeline_submission_lock = threading.Lock()
+_ACTIVE_FULL_PIPELINE_STATUSES = ("pending", "running")
+
 
 def _validate_training_context(db: Session, learner_id: int, context: Optional[Dict]) -> Optional[str]:
     """Validate client-provided training context against persisted plan data."""
@@ -63,6 +70,20 @@ def _check_task_permission(db: Session, current_user: CurrentUser, task: AgentTa
     if task.learner_id is None:
         return False
     return LearnerService.check_data_permission(db, current_user.user_id, task.learner_id)
+
+
+def _find_active_full_pipeline_task(db: Session, learner_id: int) -> Optional[AgentTask]:
+    """Return the newest unfinished resource pipeline for one learner."""
+    return (
+        db.query(AgentTask)
+        .filter(
+            AgentTask.learner_id == learner_id,
+            AgentTask.task_type == "full_pipeline",
+            AgentTask.status.in_(_ACTIVE_FULL_PIPELINE_STATUSES),
+        )
+        .order_by(AgentTask.created_at.desc(), AgentTask.id.desc())
+        .first()
+    )
 
 
 def _parse_json_value(value, fallback):
@@ -373,6 +394,18 @@ def create_agent_task(
             except ValueError as exc:
                 return bad_request(message=str(exc))
 
+        task_input = {
+            "target_topic": request.target_topic,
+            "resource_type": request.resource_type,
+            "industry": request.industry,
+            **(request.input_data or {}),
+        }
+        if request.task_type in {"resource_generation", "full_pipeline"}:
+            try:
+                task_input["target_topic"] = normalize_resource_topic(task_input.get("target_topic"))
+            except ValueError as exc:
+                return bad_request(message=str(exc))
+
         task_info = orchestrator.create_task(
             learner_id=request.learner_id,
             task_name=request.task_name,
@@ -443,18 +476,24 @@ def start_agent_task(
                 target_topic=target_topic,
                 resource_type=resource_type,
                 industry=industry,
+                owner_user_id=current_user.user_id,
             )
             logger.info(f"启动Agent任务（Celery）: task_id={task_id}")
         else:
+            owner_user_id = current_user.user_id
+
             def run_task():
                 try:
-                    orchestrator.run_full_pipeline(
-                        task_id=task_id,
-                        learner_id=task.learner_id,
-                        target_topic=target_topic,
-                        resource_type=resource_type,
-                        industry=industry,
-                    )
+                    from app.services.ai_config_service import AIConfigService
+
+                    with AIConfigService.use_user_runtime_config(owner_user_id):
+                        orchestrator.run_full_pipeline(
+                            task_id=task_id,
+                            learner_id=task.learner_id,
+                            target_topic=target_topic,
+                            resource_type=resource_type,
+                            industry=industry,
+                        )
                 except Exception as e:
                     logger.error(f"后台任务执行失败: task_id={task_id}, error={e}")
 
@@ -1212,39 +1251,69 @@ def run_full_pipeline(
         if context_error:
             return bad_request(context_error)
 
-        # 创建任务
-        task = AgentTask(
-            learner_id=request.learner_id,
-            task_name=f"生成{request.target_topic}学习资源",
-            task_type="full_pipeline",
-            agent_type="system",
-            flow_stage="init",
-            flow_description="任务初始化",
-            input_data=json.dumps({
-                "target_topic": request.target_topic,
-                "resource_type": request.resource_type,
-                "industry": request.industry,
-                "training_context": request.training_context,
-            }, ensure_ascii=False),
-            status="pending",
-            progress=0,
-        )
-        db.add(task)
-        db.flush()
-        task_id = task.id
-        db.commit()
+        # Claim one active pipeline per learner before starting a background
+        # thread.  This prevents a double click (or a retried POST) from
+        # creating several long-running generations and several resources.
+        with _full_pipeline_submission_lock:
+            # PostgreSQL honors this row lock across API workers. SQLite (the
+            # bundled desktop database) is covered by the in-process lock.
+            db.query(LearnerProfile.id).filter(
+                LearnerProfile.id == request.learner_id
+            ).with_for_update().first()
+
+            active_task = _find_active_full_pipeline_task(db, request.learner_id)
+            if active_task:
+                return success(
+                    data={
+                        "task_id": active_task.id,
+                        "reused": True,
+                        "status": active_task.status,
+                    },
+                    message="该学习者已有资源生成任务正在执行，已返回原任务",
+                )
+
+            task = AgentTask(
+                learner_id=request.learner_id,
+                task_name=f"生成{request.target_topic}学习资源",
+                task_type="full_pipeline",
+                agent_type="system",
+                flow_stage="init",
+                flow_description="任务初始化",
+                input_data=json.dumps({
+                    "target_topic": request.target_topic,
+                    "resource_type": request.resource_type,
+                    "industry": request.industry,
+                    "training_context": request.training_context,
+                }, ensure_ascii=False),
+                # Mark the claim before the thread starts so another request
+                # cannot start the same workflow during this small window.
+                status="running",
+                progress=0,
+                started_at=utcnow_naive(),
+            )
+            db.add(task)
+            db.flush()
+            task_id = task.id
+            db.commit()
+        owner_user_id = current_user.user_id
         
         # 后台线程立即启动（支持SSE实时进度）
         def run_task():
             try:
-                orchestrator.run_full_pipeline(
-                    task_id=task_id,
-                    learner_id=request.learner_id,
-                    target_topic=request.target_topic,
-                    resource_type=request.resource_type,
-                    industry=request.industry,
-                    training_context=request.training_context,
-                )
+                from app.services.ai_config_service import AIConfigService
+
+                # A raw thread does not inherit request ContextVars. Bind the
+                # requester explicitly so every pipeline LLM call uses this
+                # account's persisted provider and selected model.
+                with AIConfigService.use_user_runtime_config(owner_user_id):
+                    orchestrator.run_full_pipeline(
+                        task_id=task_id,
+                        learner_id=request.learner_id,
+                        target_topic=request.target_topic,
+                        resource_type=request.resource_type,
+                        industry=request.industry,
+                        training_context=request.training_context,
+                    )
             except Exception as e:
                 logger.error(f"完整流水线执行失败: task_id={task_id}, error={e}")
         

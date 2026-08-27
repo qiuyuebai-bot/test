@@ -114,6 +114,10 @@ export const coreApi = {
     return http.get<LearningResource>(`/resources/${id}`)
   },
 
+  deleteResource(id: number): Promise<{ id: number; status: string }> {
+    return http.delete<{ id: number; status: string }>(`/resources/${id}`)
+  },
+
   exportResource(id: number, format: 'txt' | 'md' = 'txt'): Promise<Blob> {
     return http.get<Blob>(`/resources/${id}/export`, { format })
   },

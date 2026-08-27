@@ -232,7 +232,6 @@ def strip_fallback_disclosure(content: Any) -> str:
         kept.append(line)
     return "\n".join(kept).lstrip()
 
-
 def normalize_source_keywords(
     raw_keywords: Any,
     *,

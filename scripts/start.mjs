@@ -19,6 +19,7 @@
 
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, copyFileSync, mkdirSync } from "node:fs";
+import { createServer } from "node:net";
 import { join, resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createInterface } from "node:readline";
@@ -33,7 +34,7 @@ const CONFIG = {
     entryModule: "app.main:app",
     host: "0.0.0.0",
     port: 8000,
-    healthPath: "/health/live",
+    healthPath: "/api/v1/health/live",
     startupTimeoutMs: 60000,
     requirementsFile: "requirements.txt",
   },
@@ -42,6 +43,9 @@ const CONFIG = {
     packageJson: "package.json",
     devScript: "serve",
     nodeModules: "node_modules",
+    port: 5173,
+    startupTimeoutMs: 120000,
+    titleMarker: "<title>领域知识个性化生成与多智能体协同决策系统</title>",
   },
   envExample: ".env.example",
   envFile: ".env",
@@ -297,6 +301,64 @@ async function waitForHttpReady(url, timeoutMs) {
   return false;
 }
 
+function isPortAvailable(port) {
+  return new Promise((resolve) => {
+    const server = createServer();
+    server.unref();
+    server.once("error", () => resolve(false));
+    server.listen({ host: "0.0.0.0", port, exclusive: true }, () => {
+      server.close(() => resolve(true));
+    });
+  });
+}
+
+async function isExpectedServiceRunning(url, validate) {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 2000);
+  try {
+    const response = await fetch(url, { signal: controller.signal });
+    if (!response.ok) return false;
+    return validate(await response.text());
+  } catch {
+    return false;
+  } finally {
+    clearTimeout(timeoutId);
+  }
+}
+
+async function inspectServicePort({ label, port, url, validate }) {
+  if (await isPortAvailable(port)) return { reuse: false, conflict: false };
+
+  if (await isExpectedServiceRunning(url, validate)) {
+    log("warn", `${label}端口 ${port} 已有本项目服务运行，将直接复用`);
+    return { reuse: true, conflict: false };
+  }
+
+  log("error", `${label}端口 ${port} 已被其他程序占用，请关闭占用进程后重试`);
+  return { reuse: false, conflict: true };
+}
+
+function openFrontend() {
+  const url = `http://localhost:${CONFIG.frontend.port}/`;
+  const command = IS_WINDOWS
+    ? { file: "cmd.exe", args: ["/d", "/s", "/c", "start", "", url] }
+    : process.platform === "darwin"
+      ? { file: "open", args: [url] }
+      : { file: "xdg-open", args: [url] };
+
+  try {
+    const opener = spawn(command.file, command.args, {
+      detached: true,
+      stdio: "ignore",
+      windowsHide: true,
+    });
+    opener.unref();
+    log("success", `服务已就绪，正在打开: ${url}`);
+  } catch (error) {
+    log("warn", `无法自动打开浏览器，请手动访问 ${url}（${error.message}）`);
+  }
+}
+
 // ============================================================
 // 进程管理：输出聚合 + 优雅关闭
 // ============================================================
@@ -347,7 +409,7 @@ function printUsage() {
 `);
 }
 
-function main() {
+async function main() {
   const argv = process.argv.slice(2);
   const flags = {
     setup: argv.includes("--setup"),
@@ -406,22 +468,54 @@ function main() {
     process.exit(1);
   }
 
+  // 先识别已运行的本项目服务，避免 Vite 因严格端口冲突退出并连带关闭后端。
+  const backendState = wantBackend
+    ? await inspectServicePort({
+        label: "后端",
+        port: CONFIG.backend.port,
+        url: `http://127.0.0.1:${CONFIG.backend.port}${CONFIG.backend.healthPath}`,
+        validate: (body) => body.includes('"status":"alive"'),
+      })
+    : { reuse: false, conflict: false };
+  const frontendState = wantFrontend
+    ? await inspectServicePort({
+        label: "前端",
+        port: CONFIG.frontend.port,
+        url: `http://127.0.0.1:${CONFIG.frontend.port}/`,
+        validate: (body) => body.includes(CONFIG.frontend.titleMarker),
+      })
+    : { reuse: false, conflict: false };
+
+  if (backendState.conflict || frontendState.conflict) {
+    log("info", "未启动任何新服务，已有进程不会被关闭");
+    process.exit(1);
+  }
+
   // 启动服务
   const services = [];
-  if (wantBackend) services.push(startBackend(env));
-  if (wantFrontend) services.push(startFrontend(env));
+  if (wantBackend && !backendState.reuse) services.push(startBackend(env));
+  if (wantFrontend && !frontendState.reuse) services.push(startFrontend(env));
 
   services.forEach(attachOutput);
 
   section("服务地址");
   if (wantBackend) {
-    log("info", `后端启动中:  http://localhost:${CONFIG.backend.port}`);
+    log("info", `${backendState.reuse ? "后端已运行" : "后端启动中"}:  http://localhost:${CONFIG.backend.port}`);
     log("info", `API 文档:  http://localhost:${CONFIG.backend.port}/docs`);
   }
   if (wantFrontend) {
-    log("info", "前端正在构建；看到 Vite 输出 Local 地址后再打开:  http://localhost:5173");
+    if (frontendState.reuse) {
+      log("info", `前端已运行:  http://localhost:${CONFIG.frontend.port}`);
+    } else {
+      log("info", `前端正在构建；看到 Vite 输出 Local 地址后再打开:  http://localhost:${CONFIG.frontend.port}`);
+    }
   }
-  console.log(`\n${CONFIG.colors.dim}按 Ctrl+C 停止所有服务${CONFIG.colors.reset}\n`);
+  if (services.length === 0) {
+    log("success", "前后端均已运行，无需重复启动");
+    if (wantFrontend) openFrontend();
+    return;
+  }
+  console.log(`\n${CONFIG.colors.dim}按 Ctrl+C 停止本次启动的服务${CONFIG.colors.reset}\n`);
 
   // 优雅关闭
   let shuttingDown = false;
@@ -455,18 +549,26 @@ function main() {
     service.onUnexpectedExit = () => shutdown(`${service.label} exit`);
   });
 
-  const backend = services.find((service) => service.label === "backend");
-  if (backend) {
-    const healthUrl = `http://127.0.0.1:${CONFIG.backend.port}${CONFIG.backend.healthPath}`;
-    void waitForHttpReady(healthUrl, CONFIG.backend.startupTimeoutMs).then((ready) => {
-      if (ready) {
-        log("success", `鍚庣鍋ュ悍妫€鏌ラ€氳繃: ${healthUrl}`);
-      } else {
-        log("error", `鍚庣鍋ュ悍妫€鏌ヨ秴鏃?: ${healthUrl}`);
-        shutdown("backend readiness timeout");
-      }
-    });
-  }
+  const healthUrl = `http://127.0.0.1:${CONFIG.backend.port}${CONFIG.backend.healthPath}`;
+  const frontendUrl = `http://127.0.0.1:${CONFIG.frontend.port}/`;
+  void Promise.all([
+    wantBackend ? waitForHttpReady(healthUrl, CONFIG.backend.startupTimeoutMs) : true,
+    wantFrontend ? waitForHttpReady(frontendUrl, CONFIG.frontend.startupTimeoutMs) : true,
+  ]).then(([backendReady, frontendReady]) => {
+    if (!backendReady) {
+      log("error", `后端健康检查超时: ${healthUrl}`);
+      shutdown("backend readiness timeout");
+      return;
+    }
+    if (!frontendReady) {
+      log("error", `前端启动检查超时: ${frontendUrl}`);
+      shutdown("frontend readiness timeout");
+      return;
+    }
+
+    if (wantBackend) log("success", `后端健康检查通过: ${healthUrl}`);
+    if (wantFrontend) openFrontend();
+  });
 
   process.on("SIGINT", () => shutdown("SIGINT"));
   process.on("SIGTERM", () => shutdown("SIGTERM"));
@@ -478,4 +580,7 @@ function main() {
   }
 }
 
-main();
+main().catch((error) => {
+  log("error", `启动检查失败: ${error.message}`);
+  process.exit(1);
+});

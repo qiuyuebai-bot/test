@@ -7,7 +7,7 @@ import threading
 from copy import deepcopy
 from contextlib import contextmanager
 from fastapi import APIRouter, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
 from sqlalchemy import case, func, text
 
 from app.config import settings
@@ -43,6 +43,14 @@ def _read_only_db_context():
 @router.get("/", tags=["基础"])
 async def root(request: Request):
     """根路径 - 系统信息"""
+    if settings.is_desktop:
+        # 桌面端的根地址是 React 入口；运行状态仍可从 /health/live 获取。
+        from app.desktop_runtime import desktop_web_dir
+
+        web_dir = desktop_web_dir()
+        index_path = web_dir / "index.html" if web_dir else None
+        if index_path and index_path.is_file():
+            return FileResponse(index_path)
     return success({
         "name": settings.APP_NAME,
         "version": settings.APP_VERSION,
@@ -235,7 +243,7 @@ def _readiness_response(request: Request, http_status: int, overall_status: str,
 @router.get("/health/llm")
 @router.get("/api/v1/health/llm")
 def health_llm():
-    """Return a redacted DeepSeek connectivity check."""
+    """Return a redacted AI connectivity check, scoped when authenticated."""
     from app.utils.llm import LLMUtil
 
     return success(LLMUtil.health_check())

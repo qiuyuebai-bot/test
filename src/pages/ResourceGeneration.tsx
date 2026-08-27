@@ -4,7 +4,7 @@ import { useStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
 import type { LearningResource } from '@/types'
 import { agentApi, coreApi } from '@/api'
-import { useTaskSSE } from '@/hooks'
+import { useResourceGenerationTask } from '@/hooks'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
 import Button from '@/components/Button'
@@ -31,6 +31,7 @@ import {
   Search,
   X,
   Building2,
+  Trash2,
 } from 'lucide-react'
 import EmptyState from '@/components/EmptyState'
 import { CardSkeleton } from '@/components/Skeleton'
@@ -128,7 +129,6 @@ export default function ResourceGeneration() {
     })),
   )
 
-  const [sseTaskId, setSseTaskId] = useState<number | null>(null)
   const [stageDescription, setStageDescription] = useState('')
   const [debateInfo, setDebateInfo] = useState<{ round: number; total: number } | null>(null)
   const [industryOptions, setIndustryOptions] = useState<{ value: string; label: string }[]>([])
@@ -141,13 +141,15 @@ export default function ResourceGeneration() {
   )
   const [targetTopic, setTargetTopic] = useState(requestedTopic)
   const [selectedIndustry, setSelectedIndustry] = useState('人工智能训练')
-  const [isGenerating, setIsGenerating] = useState(false)
   const [currentStepDesc, setCurrentStepDesc] = useState('')
   const [error, setError] = useState<string | null>(null)
-  const cancelledRef = useRef(false)
+  const [resourceToDelete, setResourceToDelete] = useState<LearningResource | null>(null)
+  const [deletingResourceId, setDeletingResourceId] = useState<number | null>(null)
   const completeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const debateRoundText = debateInfo ? `第${debateInfo.round}/${debateInfo.total}轮辩论中...` : ''
+  const debateRoundText = debateInfo
+    ? `第${debateInfo.round}${debateInfo.total > 0 ? `/${debateInfo.total}` : ''}轮辩论中...`
+    : ''
 
   useEffect(() => {
     setIndustryOptions(industryLabels.map((name) => ({ value: name, label: name })))
@@ -170,21 +172,25 @@ export default function ResourceGeneration() {
           setStageDescription((data.description as string) || '')
           break
         case 'debate_round':
-          setDebateInfo({
-            round: data.round as number,
-            total: data.maxRounds as number,
-          })
+          {
+            const round = Number(data.round)
+            const total = Number(data.maxRounds ?? data.max_rounds ?? data.totalRounds ?? data.total_rounds)
+            if (Number.isFinite(round) && round > 0) {
+              setDebateInfo({ round, total: Number.isFinite(total) && total > 0 ? total : 0 })
+            }
+          }
           break
         case 'debate_result':
-          setDebateInfo({
-            round: data.round as number,
-            total: data.maxRounds as number,
-          })
+          {
+            const round = Number(data.round)
+            const total = Number(data.maxRounds ?? data.max_rounds ?? data.totalRounds ?? data.total_rounds)
+            if (Number.isFinite(round) && round > 0) {
+              setDebateInfo({ round, total: Number.isFinite(total) && total > 0 ? total : 0 })
+            }
+          }
           break
         case 'task_failed':
           setError((data.error as string) || '资源生成失败')
-          setIsGenerating(false)
-          setSseTaskId(null)
           break
       }
     },
@@ -248,14 +254,14 @@ export default function ResourceGeneration() {
     void selectResourceById(requestedResourceId)
   }, [requestedResourceId, selectResourceById])
 
-  const sse = useTaskSSE(sseTaskId, {
+  const generationTask = useResourceGenerationTask({
+    learnerId: selectedLearnerId,
     onEvent: handleSSEEvent,
-    onComplete: (data) => {
+    onComplete: (_taskId, data) => {
       setStageDescription('任务完成')
       setDebateInfo(null)
       if (completeTimeoutRef.current) clearTimeout(completeTimeoutRef.current)
       completeTimeoutRef.current = setTimeout(() => {
-        setIsGenerating(false)
         void fetchResources({
           page: 1,
           pageSize: 50,
@@ -266,12 +272,14 @@ export default function ResourceGeneration() {
         const resourceId = completed?.result?.resourceId ?? completed?.result?.resource_id
         if (resourceId) void selectResourceById(resourceId)
       }, 1500)
-      setSseTaskId(null)
     },
-    onError: () => {
-      // SSE 连接错误
+    onFailed: (_taskId, message) => {
+      setError(message)
+      setDebateInfo(null)
     },
   })
+  const sse = generationTask.stream
+  const isGenerating = generationTask.isGenerating
 
   useEffect(() => {
     fetchLearners({ page: 1, pageSize: 50 })
@@ -315,22 +323,21 @@ export default function ResourceGeneration() {
   }, [learners, currentLearner, requestedLearnerId, selectedLearnerId, setCurrentLearner])
 
   useEffect(() => {
-    setCurrentStepDesc(stageDescription)
-  }, [stageDescription])
+    setCurrentStepDesc(stageDescription || generationTask.description)
+  }, [generationTask.description, stageDescription])
 
   useEffect(() => {
-    if (sse.error) {
-      setError(sse.error)
-      setIsGenerating(false)
+    if (generationTask.connectionError && generationTask.taskId) {
+      setError('实时进度连接暂时中断，任务仍在后台继续执行')
     }
-  }, [sse.error])
+  }, [generationTask.connectionError, generationTask.taskId])
 
   const selectedLearner =
     learners.find((l) => l.id === selectedLearnerId) || currentLearner || learners[0]
 
   const currentStepIndex =
-    (sse.currentStage ? stageToStepIndex[sse.currentStage] : undefined) ?? (isGenerating ? 0 : -1)
-  const generationProgress = sse.progress
+    (generationTask.currentStage ? stageToStepIndex[generationTask.currentStage] : undefined) ?? (isGenerating ? 0 : -1)
+  const generationProgress = generationTask.progress
 
   const handleSelectLearner = (learnerId: number) => {
     const learner = learners.find((l) => l.id === learnerId)
@@ -375,12 +382,11 @@ export default function ResourceGeneration() {
       setError('请输入目标知识点')
       return
     }
+    if (!generationTask.beginSubmission()) return
 
-    setIsGenerating(true)
     setError(null)
     setCurrentStepDesc('任务初始化中...')
     setDebateInfo(null)
-    cancelledRef.current = false
 
     try {
       const result = await agentApi.runFullPipeline({
@@ -389,23 +395,12 @@ export default function ResourceGeneration() {
         resourceType: activeTab,
         industry: selectedIndustry,
       })
-
-      if (cancelledRef.current) return
-      setSseTaskId(result.taskId)
+      generationTask.attachTask(result.taskId)
     } catch (err) {
-      if (cancelledRef.current) return
-      setIsGenerating(false)
+      generationTask.failSubmission()
       setError(err instanceof Error ? err.message : '资源生成失败，请重试')
     }
-  }, [selectedLearner, targetTopic, activeTab, selectedIndustry])
-
-  const handleCancel = () => {
-    cancelledRef.current = true
-    setSseTaskId(null)
-    setIsGenerating(false)
-    setCurrentStepDesc('')
-    setDebateInfo(null)
-  }
+  }, [activeTab, generationTask, selectedIndustry, selectedLearner, targetTopic])
 
   const filteredResources = resources.filter((r) => r.resourceType === activeTab)
 
@@ -457,6 +452,28 @@ export default function ResourceGeneration() {
     a.click()
     URL.revokeObjectURL(url)
     toast.success('资源已导出')
+  }
+
+  const handleDeleteResource = async () => {
+    if (!resourceToDelete || deletingResourceId != null) return
+    const resource = resourceToDelete
+    setDeletingResourceId(resource.id)
+    try {
+      await coreApi.deleteResource(resource.id)
+      if (selectedResource?.id === resource.id) setSelectedResource(null)
+      setResourceToDelete(null)
+      await fetchResources({
+        page: 1,
+        pageSize: 50,
+        learnerId: selectedLearnerId || undefined,
+        topic: requestedTopic || undefined,
+      })
+      toast.success('资源已删除')
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : '删除资源失败')
+    } finally {
+      setDeletingResourceId(null)
+    }
   }
 
   const renderResourceDetail = () => {
@@ -560,7 +577,7 @@ export default function ResourceGeneration() {
                 ? `查看${requestedTopic || requestedDimension || '当前学习者'}的已有资源`
                 : viewMode === 'generate'
                   ? `已填入${requestedTopic || requestedDimension || '目标主题'}，确认后开始生成`
-                  : '多 Agent 协同产出学习路径指南、图文讲义、案例场景、测试题、学习路线图'}
+                  : '多 Agent 协同生成一份个性化学习资源'}
             </p>
           </div>
           {error && (
@@ -713,7 +730,7 @@ export default function ResourceGeneration() {
                       variant="primary"
                       className="w-full justify-center"
                       onClick={handleGenerate}
-                      disabled={resourceLoading}
+                      disabled={resourceLoading || generationTask.isSubmitting}
                     >
                       <Play className="w-4 h-4" />
                       生成资源
@@ -722,10 +739,10 @@ export default function ResourceGeneration() {
                     <Button
                       variant="outline"
                       className="w-full justify-center"
-                      onClick={handleCancel}
+                      loading
+                      disabled
                     >
-                      <X className="w-4 h-4" />
-                      取消生成
+                      正在生成
                     </Button>
                   )}
                 </div>
@@ -889,7 +906,7 @@ export default function ResourceGeneration() {
                   刷新
                 </button>
               </div>
-              <div className="space-y-2 max-h-80 overflow-y-auto">
+              <div className="space-y-2 max-h-[min(32rem,55vh)] overflow-y-auto pr-1 overscroll-contain">
                 {resourceLoading ? (
                   <div className="space-y-2">
                     {Array.from({ length: 3 }).map((_, i) => (
@@ -907,21 +924,45 @@ export default function ResourceGeneration() {
                     const statusInfo = getReviewStatusInfo(resource)
                     const isSelected = selectedResource?.id === resource.id
                     return (
-                      <button
+                      <div
                         key={resource.id}
-                        onClick={() => handleSelectResource(resource)}
-                        className={`w-full p-3 rounded-lg border text-left transition-all ${
+                        className={`w-full p-3 rounded-lg border transition-all ${
                           isSelected
                             ? 'border-primary/30 bg-primary/5'
                             : 'border-border bg-bg-secondary/30 hover:border-primary/20'
                         }`}
                       >
-                        <div className="flex items-start justify-between gap-2 mb-1.5">
-                          <p className="text-sm font-medium text-text-primary line-clamp-1 flex-1">
-                            {resource.title}
-                          </p>
+                        <div className="flex items-start gap-2 mb-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handleSelectResource(resource)}
+                            className="min-w-0 flex-1 text-left"
+                            aria-label={`${resource.title} v${resource.versionNumber}`}
+                          >
+                            <p className="text-sm font-medium text-text-primary line-clamp-1">
+                              {resource.title}
+                            </p>
+                          </button>
+                          {isAiGeneratedResource(resource) && (
+                            <button
+                            type="button"
+                            onClick={() => setResourceToDelete(resource)}
+                            disabled={deletingResourceId === resource.id}
+                            aria-label={`删除${resource.title}`}
+                            title="删除资源"
+                              className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-xs text-text-tertiary hover:bg-error/10 hover:text-error disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              <span>删除</span>
+                            </button>
+                          )}
                         </div>
-                        <div className="flex items-center gap-1.5 flex-wrap">
+                        <button
+                          type="button"
+                          onClick={() => handleSelectResource(resource)}
+                          className="w-full text-left"
+                        >
+                          <div className="flex items-center gap-1.5 flex-wrap">
                           {statusInfo && (
                             <Badge variant={statusInfo.variant} size="sm">
                               {statusInfo.label}
@@ -935,11 +976,17 @@ export default function ResourceGeneration() {
                           <span className="text-xs text-text-tertiary">
                             v{resource.versionNumber}
                           </span>
-                        </div>
-                        <p className="text-xs text-text-tertiary mt-1.5 line-clamp-2">
-                          {resource.contentSummary || '暂无摘要'}
-                        </p>
-                      </button>
+                          </div>
+                          {resource.contentSummary && (
+                            <p className="text-xs text-text-tertiary mt-1.5 line-clamp-2">
+                              {resource.contentSummary}
+                            </p>
+                          )}
+                          <Badge variant={isAiGeneratedResource(resource) ? 'success' : 'warning'} size="sm">
+                            {isAiGeneratedResource(resource) ? 'AI生成' : '规则兜底'}
+                          </Badge>
+                        </button>
+                      </div>
                     )
                   })
                 )}
@@ -1112,6 +1159,42 @@ export default function ResourceGeneration() {
           </div>
         )}
       </Modal>
+
+      <Modal
+        isOpen={resourceToDelete != null}
+        onClose={() => deletingResourceId == null && setResourceToDelete(null)}
+        maxWidth="max-w-md"
+        header={<h2 className="text-base font-semibold text-text-primary">删除资源</h2>}
+        footer={
+          <div className="flex justify-end gap-2 px-6 py-4">
+            <Button
+              variant="ghost"
+              size="sm"
+              disabled={deletingResourceId != null}
+              onClick={() => setResourceToDelete(null)}
+            >
+              取消
+            </Button>
+            <Button
+              variant="primary"
+              size="sm"
+              loading={deletingResourceId != null}
+              onClick={() => void handleDeleteResource()}
+            >
+              确认删除
+            </Button>
+          </div>
+        }
+      >
+        <div className="px-6 py-5 text-sm text-text-secondary">
+          确定删除“{resourceToDelete?.title}”吗？删除后将从资源列表中移除，已发布的知识库内容不受影响。
+        </div>
+      </Modal>
     </>
   )
+}
+
+function isAiGeneratedResource(resource: LearningResource): boolean {
+  const method = resource.generationMethod?.trim().toLowerCase()
+  return Boolean(method && method !== 'deterministic_fallback' && method !== 'rule_fallback')
 }

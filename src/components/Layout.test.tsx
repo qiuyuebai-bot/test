@@ -30,7 +30,7 @@ describe('Layout navigation', () => {
     expect(screen.getAllByRole('link', { name: '就业培训' }).length).toBeGreaterThan(0)
   })
 
-  it('renders the four navigation groups for administrators', () => {
+  it('renders the AI service entry after the management navigation for administrators', () => {
     render(
       <MemoryRouter initialEntries={['/dashboard']}>
         <Routes>
@@ -44,9 +44,11 @@ describe('Layout navigation', () => {
     expect(navigation.getByRole('heading', { name: '学习准备' })).toBeInTheDocument()
     expect(navigation.getByRole('heading', { name: '学习应用' })).toBeInTheDocument()
     expect(navigation.getByRole('heading', { name: '系统管理' })).toBeInTheDocument()
+    expect(navigation.getByRole('heading', { name: '系统设置' })).toBeInTheDocument()
     expect(navigation.getByRole('link', { name: '运维总览' })).toBeInTheDocument()
     expect(navigation.getByRole('link', { name: '领域知识库' })).toBeInTheDocument()
     expect(navigation.getByRole('link', { name: '多智能体' })).toBeInTheDocument()
+    expect(navigation.getByRole('link', { name: 'AI 服务' })).toHaveAttribute('href', '/ai-config')
   })
 
   it('hides the system management group for non-admin users', () => {
@@ -68,5 +70,7 @@ describe('Layout navigation', () => {
     expect(navigation.queryByRole('link', { name: '量化指标' })).not.toBeInTheDocument()
     expect(navigation.queryByRole('link', { name: '运行监控' })).not.toBeInTheDocument()
     expect(navigation.queryByRole('link', { name: '就业培训' })).not.toBeInTheDocument()
+    expect(navigation.getByRole('heading', { name: '系统设置' })).toBeInTheDocument()
+    expect(navigation.getByRole('link', { name: 'AI 服务' })).toHaveAttribute('href', '/ai-config')
   })
 })

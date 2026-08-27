@@ -3,14 +3,17 @@ FastAPI 主应用入口
 领域知识个性化生成与多智能体协同决策系统
 """
 import time
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, nullcontext
+from pathlib import Path
 from loguru import logger
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from app.config import settings
 from app.database import init_database, engine
+from app.desktop_runtime import desktop_web_dir
 from app.utils.logger import LoggerUtil
 from app.utils.rate_limiter import RateLimitMiddleware
 from app.middleware import (
@@ -37,23 +40,37 @@ async def lifespan(app: FastAPI):
     try:
         init_database()
         logger.info("数据库初始化完成")
-        init_default_admin()
-        if settings.SEED_ON_STARTUP:
+        if settings.is_desktop:
+            logger.info("桌面模式跳过默认管理员和演示数据，等待本机首次初始化")
+        elif settings.SEED_ON_STARTUP:
+            init_default_admin()
             init_learner_seed_data()
             init_knowledge_seed_data()
             logger.info("种子数据初始化完成（SEED_ON_STARTUP=true）")
         else:
+            init_default_admin()
             logger.info("跳过种子数据初始化（SEED_ON_STARTUP=false，可用 CLI: python -m app.seed_data）")
 
-        # Warm the vector store and embedding provider before the service is
-        # reported healthy, so the first learner request does not pay the
-        # one-time Chroma initialization cost.
-        from app.domains.knowledge.service import KnowledgeService
+        # 桌面版首启不应因模型下载或 Chroma 初始化阻塞；首次使用知识库时再按需加载。
+        if settings.is_desktop:
+            app.state.knowledge_status = "lazy"
+            logger.info("桌面模式跳过知识向量库预热，将在首次使用时按需初始化")
+        else:
+            # Warm the vector store and embedding provider before the service is
+            # reported healthy, so the first learner request does not pay the
+            # one-time Chroma initialization cost.
+            from app.domains.knowledge.service import KnowledgeService
 
-        KnowledgeService.warmup()
+            try:
+                KnowledgeService.warmup()
+                app.state.knowledge_status = "ready"
+            except Exception as exc:
+                # Chroma 是可选增强能力；桌面离线场景仍可使用 SQLite 关键词检索。
+                app.state.knowledge_status = "degraded"
+                logger.warning("知识向量库预热失败，已降级为本地关键词检索: {}", exc)
     except Exception as e:
         logger.error(f"数据库初始化失败: {e}")
-        if settings.APP_ENV == "production":
+        if settings.APP_ENV == "production" or settings.is_desktop:
             raise  # 生产环境数据库初始化失败必须阻止启动
 
     yield
@@ -111,7 +128,39 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+if settings.is_desktop and not settings.DESKTOP_AUTH_TOKEN:
+    raise RuntimeError("桌面模式必须提供 DESKTOP_AUTH_TOKEN")
+
 app.state.start_time = time.time()
+
+
+@app.middleware("http")
+async def bind_ai_config_owner(request, call_next):
+    """Bind the JWT owner before sync/async endpoints run.
+
+    FastAPI may execute dependencies and sync routes in different worker
+    contexts.  Binding at middleware scope lets ContextVar propagate through
+    both paths, while ``get_current_user`` still performs the authoritative
+    database active-user check for protected routes.
+    """
+
+    from app.utils.auth import ACCESS_TOKEN_COOKIE, verify_access_token
+    from app.utils.llm_runtime import use_runtime_user_id
+
+    token = None
+    authorization = request.headers.get("Authorization", "")
+    if authorization.startswith("Bearer "):
+        token = authorization[7:].strip()
+    if not token:
+        token = request.cookies.get(ACCESS_TOKEN_COOKIE)
+    user_id = None
+    if token:
+        payload = verify_access_token(token)
+        value = payload.get("user_id") if payload else None
+        if isinstance(value, int) or (isinstance(value, str) and value.isdigit()):
+            user_id = int(value)
+    with use_runtime_user_id(user_id) if user_id is not None else nullcontext():
+        return await call_next(request)
 
 # CORS
 cors_origins = settings.cors_origin_list
@@ -121,7 +170,7 @@ app.add_middleware(
     allow_origins=cors_origins,
     allow_credentials=settings.CORS_ALLOW_CREDENTIALS,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Requested-With"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-Requested-With", "X-Zhiyu-Desktop-Token"],
 )
 
 # Prometheus 指标采集
@@ -146,6 +195,11 @@ logger.info("安全响应头中间件已启用: CSP, X-Frame-Options, nosniff, H
 
 # OpenTelemetry
 setup_otel(app)
+
+if settings.is_desktop:
+    from app.middleware.desktop_auth import DesktopAuthMiddleware
+
+    app.add_middleware(DesktopAuthMiddleware, token=settings.DESKTOP_AUTH_TOKEN)
 
 # 全局异常处理器
 register_exception_handlers(app)
@@ -211,6 +265,15 @@ app.include_router(training_router, prefix=settings.API_PREFIX)
 from app.routers.config import router as config_router
 app.include_router(config_router, prefix=settings.API_PREFIX)
 
+# 每个账号一套 AI 服务配置：所有已登录角色均可管理自己的生效模型。
+from app.routers.ai_config import router as ai_config_router
+app.include_router(ai_config_router, prefix=settings.API_PREFIX)
+
+if settings.is_desktop:
+    from app.routers.desktop import router as desktop_router
+
+    app.include_router(desktop_router, prefix=settings.API_PREFIX)
+
 # 角色自适应 Dashboard 路由
 from app.domains.dashboard.router import router as dashboard_router
 app.include_router(dashboard_router, prefix=settings.API_PREFIX)
@@ -222,6 +285,33 @@ app.include_router(privacy_router, prefix=settings.API_PREFIX)
 # 审计日志路由（管理员可查）
 from app.routers.audit import router as audit_router
 app.include_router(audit_router, prefix=settings.API_PREFIX)
+
+
+def _register_desktop_spa() -> None:
+    """最后注册 SPA 回退，确保任何 API 路由优先匹配。"""
+    web_dir = desktop_web_dir()
+    if not settings.is_desktop or web_dir is None:
+        return
+    index_path = web_dir / "index.html"
+    if not index_path.is_file():
+        raise RuntimeError(f"桌面前端资源不存在: {index_path}")
+
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def desktop_spa(full_path: str):
+        requested = Path(full_path.lstrip("/"))
+        candidate = (web_dir / requested).resolve()
+        try:
+            candidate.relative_to(web_dir)
+        except ValueError as exc:
+            raise HTTPException(status_code=404, detail="资源不存在") from exc
+        if requested.parts and candidate.is_file():
+            return FileResponse(candidate)
+        if requested.suffix:
+            raise HTTPException(status_code=404, detail="资源不存在")
+        return FileResponse(index_path)
+
+
+_register_desktop_spa()
 
 
 if __name__ == "__main__":

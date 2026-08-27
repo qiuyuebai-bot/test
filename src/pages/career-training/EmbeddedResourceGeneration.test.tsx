@@ -9,20 +9,12 @@ vi.mock('@/api', () => ({
   coreApi: {
     getResourceList: vi.fn().mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20, totalPages: 0 }),
     getResourceDetail: vi.fn(),
+    deleteResource: vi.fn().mockResolvedValue({ id: 1, status: 'archived' }),
   },
 }))
 
-vi.mock('@/hooks/useTaskSSE', () => ({
-  useTaskSSE: vi.fn().mockReturnValue({
-    events: [],
-    currentStage: null,
-    progress: 0,
-    isConnected: false,
-    isCompleted: false,
-    isFailed: false,
-    error: null,
-    lastEvent: null,
-  }),
+vi.mock('@/hooks/useResourceGenerationTask', () => ({
+  useResourceGenerationTask: vi.fn(),
 }))
 
 vi.mock('@/store', async () => {
@@ -36,7 +28,7 @@ vi.mock('@/components/MarkdownContent', () => ({
 }))
 
 import { agentApi, coreApi } from '@/api'
-import { useTaskSSE } from '@/hooks/useTaskSSE'
+import { useResourceGenerationTask } from '@/hooks/useResourceGenerationTask'
 import { resetMockStore } from '../../test/mockStore'
 import EmbeddedResourceGeneration from './EmbeddedResourceGeneration'
 import type { PositionDetail } from '@/types/training'
@@ -60,15 +52,28 @@ describe('EmbeddedResourceGeneration', () => {
     vi.clearAllMocks()
     vi.mocked(agentApi.runFullPipeline).mockResolvedValue({ taskId: 42 })
     vi.mocked(coreApi.getResourceList).mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20, totalPages: 0 })
-    vi.mocked(useTaskSSE).mockReturnValue({
-      events: [],
+    vi.mocked(useResourceGenerationTask).mockReturnValue({
+      taskId: null,
+      isSubmitting: false,
+      isGenerating: false,
       currentStage: null,
       progress: 0,
-      isConnected: false,
-      isCompleted: false,
-      isFailed: false,
-      error: null,
-      lastEvent: null,
+      description: '',
+      connectionError: null,
+      stream: {
+        events: [],
+        currentStage: null,
+        progress: 0,
+        isConnected: false,
+        isCompleted: false,
+        isFailed: false,
+        error: null,
+        lastEvent: null,
+      },
+      beginSubmission: vi.fn(() => true),
+      attachTask: vi.fn(),
+      failSubmission: vi.fn(),
+      clearTrackedTask: vi.fn(),
     } as never)
   })
 
@@ -77,10 +82,11 @@ describe('EmbeddedResourceGeneration', () => {
     expect(screen.getByText(/需要学习者画像/)).toBeInTheDocument()
   })
 
-  it('有 learnerId 时显示配置表单与岗位预填', () => {
+  it('有 learnerId 时显示配置表单与岗位预填', async () => {
     render(<EmbeddedResourceGeneration position={mockPosition} learnerId={10} />)
     expect(screen.getByDisplayValue('前端工程师')).toBeInTheDocument()
     expect(screen.getByRole('button', { name: /生成资料/ })).toBeInTheDocument()
+    await waitFor(() => expect(coreApi.getResourceList).toHaveBeenCalled())
   })
 
   it('挂载时拉取已有资源列表', async () => {
@@ -123,21 +129,61 @@ describe('EmbeddedResourceGeneration', () => {
     })
   })
 
-  it('SSE 完成后刷新资源列表', async () => {
-    vi.mocked(useTaskSSE).mockReturnValue({
-      events: [],
-      currentStage: 'task_completed',
-      progress: 100,
-      isConnected: false,
-      isCompleted: true,
-      isFailed: false,
-      error: null,
-      lastEvent: null,
+  it('恢复到进行中的任务时保持生成按钮不可重复提交', async () => {
+    vi.mocked(useResourceGenerationTask).mockReturnValue({
+      taskId: 42,
+      isSubmitting: false,
+      isGenerating: true,
+      currentStage: 'generation',
+      progress: 50,
+      description: '正在生成学习资源...',
+      connectionError: null,
+      stream: {
+        events: [],
+        currentStage: 'generation',
+        progress: 50,
+        isConnected: true,
+        isCompleted: false,
+        isFailed: false,
+        error: null,
+        lastEvent: null,
+      },
+      beginSubmission: vi.fn(() => false),
+      attachTask: vi.fn(),
+      failSubmission: vi.fn(),
+      clearTrackedTask: vi.fn(),
     } as never)
+
     render(<EmbeddedResourceGeneration position={mockPosition} learnerId={10} />)
-    // isCompleted + taskId 触发刷新；但 taskId 初始为 null，故主要靠挂载 useEffect 验证刷新行为
-    await waitFor(() => {
-      expect(coreApi.getResourceList).toHaveBeenCalled()
-    })
+
+    expect(screen.getByRole('button', { name: '生成资料' })).toBeDisabled()
+    expect(screen.getByText('生成进度')).toBeInTheDocument()
+    await waitFor(() => expect(coreApi.getResourceList).toHaveBeenCalled())
   })
+
+  it('只为 AI 生成资源显示删除操作，并在确认后移除资源', async () => {
+    vi.mocked(coreApi.getResourceList).mockResolvedValue({
+      items: [
+        { id: 1, title: 'AI 指南', resourceType: 'guide', generationMethod: 'deepseek', content: '# AI' },
+        { id: 2, title: '兜底指南', resourceType: 'guide', generationMethod: 'deterministic_fallback', content: '# 兜底' },
+      ],
+      total: 2,
+      page: 1,
+      pageSize: 20,
+      totalPages: 1,
+    } as never)
+
+    render(<EmbeddedResourceGeneration position={mockPosition} learnerId={10} />)
+
+    expect(await screen.findByText('AI生成')).toBeInTheDocument()
+    expect(screen.getByText('规则兜底')).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: '删除AI 指南' })).toBeInTheDocument()
+    expect(screen.queryByRole('button', { name: '删除兜底指南' })).not.toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: '删除AI 指南' }))
+    await userEvent.click(screen.getByRole('button', { name: '确认删除' }))
+
+    await waitFor(() => expect(coreApi.deleteResource).toHaveBeenCalledWith(1))
+    expect(screen.queryByText('AI 指南')).not.toBeInTheDocument()
+  })
+
 })

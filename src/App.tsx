@@ -4,6 +4,7 @@ import Layout from './components/Layout'
 import ToastContainer from './components/Toast'
 import { PageSkeleton } from './components/Skeleton'
 import { ProtectedRoute, PublicOnlyRoute } from './components/ProtectedRoute'
+import DesktopBootstrapGate from './components/DesktopBootstrapGate'
 import { useStore } from './store'
 import { routeLoaders } from './lib/routePrefetch'
 
@@ -22,6 +23,7 @@ const SystemTest = lazy(routeLoaders['/monitoring'])
 const MetricsDashboard = lazy(routeLoaders['/metrics'])
 const AdminOpsOverview = lazy(routeLoaders['/ops'])
 const CareerTraining = lazy(routeLoaders['/career-training'])
+const AiConfig = lazy(routeLoaders['/ai-config'])
 
 function PageFallback() {
   return <PageSkeleton />
@@ -40,8 +42,9 @@ function App() {
 
   return (
     <BrowserRouter>
-      <Suspense fallback={<PageFallback />}>
-        <Routes>
+      <DesktopBootstrapGate>
+        <Suspense fallback={<PageFallback />}>
+          <Routes>
           <Route
             path="/login"
             element={
@@ -105,6 +108,7 @@ function App() {
             <Route path="resources/:resourceId/read" element={<ResourceReader />} />
             <Route path="report" element={<LearningReport />} />
             <Route path="guidance" element={<AdaptiveGuidance />} />
+            <Route path="ai-config" element={<AiConfig />} />
             <Route
               path="career-training"
               element={
@@ -150,9 +154,10 @@ function App() {
             />
           </Route>
           <Route path="*" element={<Navigate to="/dashboard" replace />} />
-        </Routes>
-      </Suspense>
-      <ToastContainer />
+          </Routes>
+        </Suspense>
+        <ToastContainer />
+      </DesktopBootstrapGate>
     </BrowserRouter>
   )
 }

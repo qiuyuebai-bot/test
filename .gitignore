@@ -2,6 +2,7 @@
 # 依赖目录
 # ===========================================
 node_modules/
+/.venv/
 backend/venv/
 backend/.venv/
 __pycache__/
@@ -26,6 +27,13 @@ backend/build/
 launcher/bin/
 launcher/obj/
 launcher/publish/
+desktop/out/
+release/
+release-staging/
+desktop/assets/icon.ico
+desktop/assets/icon-*.png
+*.blockmap
+*.exe
 
 # ===========================================
 # 环境变量与密钥
@@ -33,7 +41,16 @@ launcher/publish/
 .env
 .env.local
 .env.*.local
+/.env.development
+/.env.staging
+/.env.production
+!/.env.example
+backend/.env
 backend/.env.development
+backend/.env.staging
+backend/.env.production
+backend/.env.bak-*
+!/backend/.env.example
 *.pem
 *.key
 *.p12
@@ -113,10 +130,21 @@ pip_list*.txt
 test_*result*.txt
 test_report.xml
 test-results/
+playwright-report/
 server_start_log.txt
 vite-requests.log
 cache_status.log
 check.txt
+eslint_output.txt
+tsc_output.txt
+test_summary.txt
+test_with_chroma.txt
+report_l*.json
+report_test.json
+vite.config.ts.timestamp-*.mjs
+backend/compileall_output.txt
+backend/pyflakes_output.txt
+backend/verify_result.txt
 
 # ===========================================
 # TypeScript 缓存

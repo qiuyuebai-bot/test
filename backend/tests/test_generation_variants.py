@@ -5,6 +5,7 @@ from app.agents.orchestrator import AgentOrchestrator
 
 def test_full_pipeline_does_not_reuse_existing_exercise_resource(monkeypatch):
     orch = AgentOrchestrator()
+    saved_resources = []
 
     def fail_if_reuse_called(*args, **kwargs):
         raise AssertionError("resource generation should not reuse existing resources")
@@ -48,17 +49,17 @@ def test_full_pipeline_does_not_reuse_existing_exercise_resource(monkeypatch):
         },
     )
     monkeypatch.setattr(orch, "_run_debate_process", lambda *args, **kwargs: ([], "fresh exercise content"))
-    monkeypatch.setattr(
-        orch.task_repo,
-        "save_resource_and_complete",
-        lambda *args, **kwargs: {
+    def save_one_resource(*args, **kwargs):
+        saved_resources.append((args, kwargs))
+        return {
             "task_id": 101,
             "resource_id": 202,
             "generation_result": {"word_count": 22},
             "final_score": 90,
             "passed": True,
-        },
-    )
+        }
+
+    monkeypatch.setattr(orch.task_repo, "save_resource_and_complete", save_one_resource)
 
     result = orch.run_full_pipeline(
         task_id=101,
@@ -68,3 +69,4 @@ def test_full_pipeline_does_not_reuse_existing_exercise_resource(monkeypatch):
     )
 
     assert result["resource_id"] == 202
+    assert len(saved_resources) == 1

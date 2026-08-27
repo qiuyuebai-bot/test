@@ -16,6 +16,7 @@ from loguru import logger
 from app.config import settings
 from app.database import get_db
 from app.models.user import User, UserRoleEnum
+from app.utils.llm_runtime import set_runtime_user_id
 
 
 # ===========================================
@@ -398,6 +399,9 @@ def get_current_user(
             headers={"WWW-Authenticate": "Bearer"},
         )
     
+    # Bind only the owner ID to this request context.  LLMUtil resolves the
+    # encrypted per-user configuration lazily; no secret travels in JWTs.
+    set_runtime_user_id(user.id)
     return CurrentUser(
         user_id=user.id,
         username=user.username,

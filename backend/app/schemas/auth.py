@@ -97,6 +97,27 @@ class RegisterRequest(BaseModel):
         return v
 
 
+class DesktopBootstrapRequest(BaseModel):
+    """首次安装时建立本机管理员，不复用 Web 演示账号。"""
+
+    username: str = Field(..., min_length=3, max_length=50)
+    password: str = Field(..., min_length=8, max_length=128)
+
+    @field_validator("username")
+    @classmethod
+    def validate_username(cls, value: str) -> str:
+        if not re.match(r"^[a-zA-Z0-9_]+$", value):
+            raise ValueError("用户名只能包含字母、数字和下划线")
+        return value
+
+    @field_validator("password")
+    @classmethod
+    def validate_password(cls, value: str) -> str:
+        if not re.search(r"[a-zA-Z]", value) or not re.search(r"[0-9]", value):
+            raise ValueError("密码必须包含字母和数字")
+        return value
+
+
 class OnboardingNameRequest(BaseModel):
     """注册后设置称呼"""
     name: str = Field(

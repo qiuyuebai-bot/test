@@ -416,7 +416,6 @@ export default function KnowledgeBase() {
       mountedRef.current = false
       searchDebouncedRef.current?.cancel()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   const selectedIndustry = selectedDomain === 'all' ? undefined : domainToIndustry(selectedDomain)

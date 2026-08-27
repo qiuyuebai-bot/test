@@ -445,7 +445,6 @@ export default function LearnerProfilePage() {
     return () => {
       searchDebouncedRef.current?.cancel()
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   useEffect(() => {

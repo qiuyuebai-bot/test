@@ -1,0 +1,43 @@
+appId: com.zhiyu.engine
+productName: 知域引擎
+copyright: Copyright (c) 2026
+directories:
+  output: release
+  buildResources: desktop/assets
+# The build script ensures this runtime exists before electron-builder starts.
+electronDist: node_modules/electron/dist
+files:
+  - desktop/main.mjs
+  - desktop/preload.cjs
+  - desktop/runtime.mjs
+  - desktop/loading.html
+  - desktop/assets/**/*
+  - package.json
+extraResources:
+  - from: desktop/out/backend
+    to: backend
+  - from: dist
+    to: web
+asar: true
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+  icon: desktop/assets/icon.ico
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: 知域引擎
+  installerIcon: desktop/assets/icon.ico
+  uninstallerIcon: desktop/assets/icon.ico
+  license: desktop/assets/license.txt
+  include: desktop/installer.nsh
+  artifactName: 知域引擎-Setup-${version}.${ext}
+  uninstallDisplayName: 知域引擎
+  deleteAppDataOnUninstall: false
+  runAfterFinish: true

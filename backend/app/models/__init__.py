@@ -6,6 +6,7 @@ from app.database import Base
 
 # 用户相关模型
 from app.models.user import User, UserRoleEnum
+from app.models.ai_config import UserAIConfig
 from app.domains.learner.models import LearnerProfile, EducationLevelEnum, LearningStyleEnum, LearningPhaseEnum
 
 # 岗位与胜任力相关模型
@@ -61,6 +62,7 @@ __all__ = [
     # 用户相关
     "User",
     "UserRoleEnum",
+    "UserAIConfig",
     "LearnerProfile",
     "EducationLevelEnum",
     "LearningStyleEnum",

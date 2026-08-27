@@ -21,7 +21,9 @@ from app.services.common import BaseService, ResourceServiceHelper
 from app.constants import ADAPTIVE_DECISION_THRESHOLD, MAX_DIFFICULTY
 from app.utils.seed_loader import load_seed_payload
 from app.services.llm_question_generator import LLMQuestionGenerator
+from app.services.ai_config_service import AIConfigService
 from app.utils.llm import LLMUtil
+from app.utils.llm_runtime import use_runtime_config
 from app.domains.knowledge.service import KnowledgeService
 
 # 题库与知识点解释从 JSON 配置加载，避免在源码中硬编码业务数据
@@ -455,6 +457,7 @@ class AdaptiveTutoringService(BaseService):
         requested_difficulty = difficulty if difficulty is not None else recommended_difficulty
         # 用户明确选择难度时必须严格遵守；只有留空时才使用画像推荐难度。
         effective_difficulty = max(1, min(5, int(requested_difficulty)))
+        account_runtime = None
         with get_db_context() as db:
             knowledge = KnowledgeService.search(
                 db=db,
@@ -472,11 +475,25 @@ class AdaptiveTutoringService(BaseService):
                 .limit(20)
                 .all()
             )
+            account_record = AIConfigService.get_record(db, user_id)
+            if account_record and account_record.is_active:
+                account_runtime = AIConfigService.runtime_from_record(account_record)
         excluded_questions = [row[0] for row in previous_questions if row[0]]
 
         generated: List[Dict[str, Any]] = []
-        if LLMUtil.is_available():
-            try:
+        try:
+            if account_runtime is not None:
+                with use_runtime_config(account_runtime):
+                    generated = LLMQuestionGenerator.generate_question_set(
+                        normalized_topic,
+                        effective_difficulty,
+                        question_count,
+                        knowledge,
+                        variation_seed=f"{learner_id}-{normalized_topic}-{uuid.uuid4().hex}",
+                        excluded_questions=excluded_questions,
+                        training_context=training_context,
+                    )
+            elif LLMUtil.is_available():
                 generated = LLMQuestionGenerator.generate_question_set(
                     normalized_topic,
                     effective_difficulty,
@@ -486,8 +503,13 @@ class AdaptiveTutoringService(BaseService):
                     excluded_questions=excluded_questions,
                     training_context=training_context,
                 )
-            except Exception as exc:
-                logger.warning(f"[自适应导学] LLM 动态出题失败，使用题库兜底: {exc}")
+        except Exception as exc:
+            if account_runtime is not None:
+                logger.warning("[自适应导学] 当前账户 AI 动态出题失败: {}", exc)
+                raise ValueError(
+                    "当前 AI 服务未能生成题目，请到“AI 服务”重新连接测试后重试"
+                ) from exc
+            logger.warning(f"[自适应导学] LLM 动态出题失败，使用题库兜底: {exc}")
 
         excluded_signatures = {
             cls._question_signature(question)
@@ -512,6 +534,42 @@ class AdaptiveTutoringService(BaseService):
         generated = unique_generated[:question_count]
         for question in generated:
             question["difficulty"] = effective_difficulty
+
+        if account_runtime is not None and len(generated) < question_count:
+            raise ValueError("AI 返回的有效题目数量不足，请重试生成")
+
+        # 知识库派生兜底：LLM 不可用或出题失败时，优先基于知识库内容出题，
+        # 保证题目具备主题针对性，而不是直接落入通用模板。
+        if len(generated) < question_count and knowledge:
+            from app.utils.knowledge_questions import derive_questions
+
+            needed = question_count - len(generated)
+            multiple_indexes = tuple(
+                len(generated) + offset
+                for offset in range(needed + 2)
+                if (len(generated) + offset + 1) % 3 == 0
+            )
+            derived = derive_questions(
+                knowledge,
+                normalized_topic,
+                effective_difficulty,
+                needed + 2,
+                multiple_indexes=multiple_indexes,
+                variation_seed=f"{learner_id}-{normalized_topic}",
+            )
+            for question in derived:
+                if len(generated) >= question_count:
+                    break
+                if int(question.get("difficulty", effective_difficulty)) != effective_difficulty:
+                    continue
+                expected_multiple = (len(generated) + 1) % 3 == 0
+                if (question.get("type") == "multiple") != expected_multiple:
+                    continue
+                if not cls._is_duplicate_question(question, seen_signatures, seen_token_sets):
+                    seen_signatures.add(cls._question_signature(question))
+                    seen_token_sets.append(cls._question_tokens(question))
+                    question["difficulty"] = effective_difficulty
+                    generated.append(question)
 
         fallback = sorted(
             (

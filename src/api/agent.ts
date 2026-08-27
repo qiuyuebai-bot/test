@@ -68,8 +68,8 @@ export const agentApi = {
     return http.post<{ taskId: number }>(`/agent/tasks/${taskId}/start`)
   },
 
-  getTaskStatus(taskId: number): Promise<AgentTask> {
-    return http.get<AgentTask>(`/agent/tasks/${taskId}/status`)
+  getTaskStatus(taskId: number, options?: { silent?: boolean }): Promise<AgentTask> {
+    return http.get<AgentTask>(`/agent/tasks/${taskId}/status`, undefined, options)
   },
 
   getTaskLogs(taskId: number): Promise<{ taskId: number; logs: Array<{ stage: string; progress: number; description: string; timestamp: string }>; total: number }> {

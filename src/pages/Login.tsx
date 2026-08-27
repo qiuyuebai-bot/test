@@ -32,6 +32,7 @@ export default function Login() {
   const navigate = useNavigate()
   const location = useLocation()
   const [mode, setMode] = useState<AuthMode>('login')
+  const isDesktop = Boolean(window.zhiyuDesktop?.isDesktop)
 
   const from = (location.state as { from?: { pathname: string } })?.from?.pathname || '/'
   const isLogin = mode === 'login'
@@ -112,7 +113,7 @@ export default function Login() {
 
           <div className="relative z-20 mt-14 flex items-center gap-3 text-indigo-950">
             <Brain className="h-7 w-7 text-indigo-700" />
-            <span className="text-2xl font-bold">千早AI音</span>
+            <span className="text-2xl font-bold">知域引擎</span>
           </div>
         </section>
 
@@ -262,11 +263,13 @@ export default function Login() {
               </Form>
             )}
 
-            <div className="mt-8 border-t border-slate-100 pt-5 text-center">
-              <p className="text-xs text-slate-400">
-                {isLogin ? '默认账号：admin / admin123，也可以注册自己的账号' : '注册账号会写入本地数据库，保留 Docker 卷即可持久保存'}
-              </p>
-            </div>
+            {!isDesktop && (
+              <div className="mt-8 border-t border-slate-100 pt-5 text-center">
+                <p className="text-xs text-slate-400">
+                  {isLogin ? '默认账号：admin / admin123，也可以注册自己的账号' : '注册账号会写入本地数据库，保留 Docker 卷即可持久保存'}
+                </p>
+              </div>
+            )}
           </div>
         </section>
       </div>

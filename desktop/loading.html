@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>知域引擎</title>
+    <style>
+      :root { color-scheme: light; font-family: "Microsoft YaHei UI", "Segoe UI", sans-serif; }
+      body { align-items: center; background: #f7fafc; color: #13283f; display: flex; height: 100vh; justify-content: center; margin: 0; }
+      main { align-items: center; display: flex; flex-direction: column; gap: 18px; text-align: center; }
+      img { height: 72px; width: 72px; }
+      h1 { font-size: 22px; font-weight: 650; letter-spacing: 0; margin: 0; }
+      p { color: #5e7185; font-size: 14px; margin: 0; }
+      .line { background: #dce6ef; border-radius: 999px; height: 4px; overflow: hidden; width: 180px; }
+      .line::after { animation: load 1.4s ease-in-out infinite; background: #0f9b8e; content: ""; display: block; height: 100%; width: 45%; }
+      @keyframes load { from { transform: translateX(-110%); } to { transform: translateX(310%); } }
+    </style>
+  </head>
+  <body>
+    <main aria-live="polite">
+      <img src="assets/icon-256.png" alt="知域引擎" />
+      <h1>知域引擎</h1>
+      <p>正在准备本机学习空间</p>
+      <div class="line"></div>
+    </main>
+  </body>
+</html>

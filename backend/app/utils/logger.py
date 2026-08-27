@@ -20,8 +20,29 @@ from app.config import settings
 # 敏感字段脱敏
 # ===========================================
 
-# 敏感字段列表（小写匹配）
-SENSITIVE_FIELDS = {"password", "token", "secret", "api_key", "api_secret", "authorization"}
+# 敏感字段的规范化名称。匹配时会忽略大小写、下划线和连字符，
+# 因此前端的 apiKey / proxyPassword 与后端的 api_key 都会被处理。
+SENSITIVE_FIELDS = {
+    "password",
+    "token",
+    "secret",
+    "apikey",
+    "apisecret",
+    "authorization",
+    "xapikey",
+    "xgoogapikey",
+    "xproxypassword",
+    "proxypassword",
+    "accesstoken",
+    "refreshtoken",
+}
+
+
+def _is_sensitive_field(key: Any) -> bool:
+    if not isinstance(key, str):
+        return False
+    normalized = "".join(char for char in key.lower() if char.isalnum())
+    return normalized in SENSITIVE_FIELDS
 
 
 def _sanitize_value(value: Any) -> Any:
@@ -60,7 +81,7 @@ def _sanitize_dict(data: Any) -> Any:
     if isinstance(data, dict):
         sanitized = {}
         for k, v in data.items():
-            if isinstance(k, str) and k.lower() in SENSITIVE_FIELDS:
+            if _is_sensitive_field(k):
                 sanitized[k] = "***REDACTED***"
             elif isinstance(v, dict):
                 sanitized[k] = _sanitize_dict(v)

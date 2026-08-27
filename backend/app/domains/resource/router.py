@@ -76,6 +76,7 @@ def generate_resources(
                 learner_id=request.learner_id,
                 target_topic=request.target_topic,
                 industry=request.industry,
+                owner_user_id=current_user.user_id,
             )
 
             logger.info(f"Celery 任务已提交: task_id={task.id}, learner_id={request.learner_id}")
@@ -89,13 +90,20 @@ def generate_resources(
                 message="资源生成任务已推入异步队列，可通过 /api/v1/tasks/{task_id}/status 查询进度",
             )
         else:
+            owner_user_id = current_user.user_id
+
             def run_generation():
                 try:
-                    ResourceGenerationService.generate_all_resources(
-                        learner_id=request.learner_id,
-                        target_topic=request.target_topic,
-                        industry=request.industry,
-                    )
+                    from app.services.ai_config_service import AIConfigService
+
+                    # BackgroundTasks does not retain a dependable request
+                    # ContextVar boundary, so bind only the requester ID.
+                    with AIConfigService.use_user_runtime_config(owner_user_id):
+                        ResourceGenerationService.generate_all_resources(
+                            learner_id=request.learner_id,
+                            target_topic=request.target_topic,
+                            industry=request.industry,
+                        )
                 except Exception as e:
                     logger.error(f"资源生成失败: {e}")
 
@@ -141,6 +149,7 @@ def batch_generate_resources(
             learner_ids=learner_ids,
             target_topic=target_topic,
             industry=industry,
+            owner_user_id=current_user.user_id,
         )
 
         logger.info(f"Celery 批量任务已提交: task_id={task.id}, learners={len(learner_ids)}")
@@ -343,6 +352,34 @@ def get_resource_detail(
     except Exception as e:
         LoggerUtil.log_error("获取资源详情失败", e)
         return error(message=f"获取资源详情失败: {str(e)}")
+
+
+@router.delete("/resources/{resource_id}", summary="删除资源")
+def archive_resource(
+    resource_id: int,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> BaseResponse:
+    """归档资源，保留已发布知识库内容及历史关联。"""
+    try:
+        resource = db.query(LearningResource).filter(
+            LearningResource.id == resource_id
+        ).first()
+        if not resource:
+            return not_found(message=f"资源不存在: {resource_id}")
+        if not current_user.is_admin and not LearnerService.check_data_permission(
+            db, current_user.user_id, resource.learner_id
+        ):
+            return unauthorized("无权限删除该资源")
+
+        resource.is_enabled = False
+        resource.status = "archived"
+        db.commit()
+        return success(data={"id": resource_id, "status": "archived"}, message="资源已删除")
+    except Exception as e:
+        db.rollback()
+        LoggerUtil.log_error("删除资源失败", e)
+        return error(message="删除资源失败，请稍后重试")
 
 
 @router.post("/resources/{resource_id}/knowledge-publication-requests", summary="申请讲义加入领域知识库")

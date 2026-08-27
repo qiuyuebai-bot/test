@@ -13,6 +13,7 @@ export const routeLoaders = {
   '/resources/:resourceId/read': () => import('../pages/ResourceReader'),
   '/report': () => import('../pages/LearningReport'),
   '/guidance': () => import('../pages/AdaptiveGuidance'),
+  '/ai-config': () => import('../pages/AiConfig'),
   '/monitoring': () => import('../pages/SystemTest'),
   '/metrics': () => import('../pages/MetricsDashboard'),
   '/career-training': () => import('../pages/CareerTraining'),

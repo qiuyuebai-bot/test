@@ -219,7 +219,7 @@ def test_llm_question_generation_allows_ten_questions(monkeypatch):
     assert len(result) == 10
     assert sum(question["type"] == "multiple" for question in result) == 3
     assert result[2]["correctIndex"] == [0, 2]
-    assert result[0]["generation_method"] == "deepseek"
+    assert result[0]["generation_method"] == "ai_generated"
 
 
 def test_llm_question_generation_retries_with_new_variation_seed(monkeypatch, caplog):

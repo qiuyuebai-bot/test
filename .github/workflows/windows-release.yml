@@ -1,0 +1,74 @@
+name: Build Windows Installer
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish Windows installer
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Check out tagged source
+        uses: actions/checkout@v4
+
+      - name: Verify tag matches package version
+        shell: pwsh
+        run: |
+          $version = node -p "require('./package.json').version"
+          if ("v$version" -ne $env:GITHUB_REF_NAME) {
+            throw "标签 $env:GITHUB_REF_NAME 与 package.json 版本 $version 不一致"
+          }
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-desktop-build.txt
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Create desktop backend environment
+        shell: pwsh
+        run: |
+          python -m venv backend\venv
+          backend\venv\Scripts\python.exe -m pip install --upgrade pip
+          backend\venv\Scripts\python.exe -m pip install -r backend\requirements-desktop-build.txt
+
+      - name: Build and verify installer
+        run: npm run build:electron
+
+      - name: Verify packaged desktop login flow
+        shell: pwsh
+        env:
+          DESKTOP_E2E_OUTPUT_DIR: release
+        run: npm run desktop:e2e
+
+      - name: Publish GitHub Release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $installer = Get-ChildItem release\*.exe | Select-Object -First 1
+          if (-not $installer) { throw '未找到 Windows 安装包' }
+          $checksum = Get-ChildItem release\*.sha256 | Select-Object -First 1
+          if (-not $checksum) { throw '未找到安装包校验文件' }
+          if ($env:GITHUB_REF_NAME -eq 'v1.0.0') {
+            gh release create "$env:GITHUB_REF_NAME" $installer.FullName $checksum.FullName --title "知域引擎 $env:GITHUB_REF_NAME" --notes-file docs/RELEASE_NOTES_v1.0.0.md
+          } else {
+            gh release create "$env:GITHUB_REF_NAME" $installer.FullName $checksum.FullName --title "知域引擎 $env:GITHUB_REF_NAME" --generate-notes
+          }

@@ -354,6 +354,9 @@ class ResourceGenerationService(BaseService):
         """获取资源列表"""
         with get_db_context() as db:
             query = db.query(LearningResource)
+            # Archived resources remain available for historical references,
+            # but should not appear in the active resource picker.
+            query = query.filter(LearningResource.is_enabled.isnot(False))
             
             if learner_id:
                 query = query.filter(LearningResource.learner_id == learner_id)

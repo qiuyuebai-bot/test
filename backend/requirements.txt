@@ -30,8 +30,10 @@ pydantic-settings==2.14.2
 # 工具库
 python-dotenv==1.2.2
 python-jose[cryptography]==3.5.0
+cryptography>=42.0.0
 passlib[bcrypt]==1.7.4
 httpx==0.26.0
+google-auth>=2.38,<3
 aiofiles==23.2.1
 
 # 日志

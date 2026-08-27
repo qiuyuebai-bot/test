@@ -6,6 +6,7 @@ from celery import Celery
 from celery.schedules import crontab
 from loguru import logger
 from typing import Optional
+from contextlib import nullcontext
 
 from app.config import settings
 
@@ -68,6 +69,7 @@ def full_pipeline_task(
     target_topic: str,
     resource_type: str = "guide",
     industry: Optional[str] = None,
+    owner_user_id: Optional[int] = None,
 ):
     """
     完整流水线异步任务（Celery版本）
@@ -88,13 +90,20 @@ def full_pipeline_task(
         # 更新状态
         self.update_state(state="RUNNING", meta={"stage": "init", "progress": 0})
         
-        result = orchestrator.run_full_pipeline(
-            task_id=task_id,
-            learner_id=learner_id,
-            target_topic=target_topic,
-            resource_type=resource_type,
-            industry=industry,
+        from app.services.ai_config_service import AIConfigService
+
+        runtime_context = (
+            AIConfigService.use_user_runtime_config(owner_user_id)
+            if owner_user_id is not None else nullcontext()
         )
+        with runtime_context:
+            result = orchestrator.run_full_pipeline(
+                task_id=task_id,
+                learner_id=learner_id,
+                target_topic=target_topic,
+                resource_type=resource_type,
+                industry=industry,
+            )
         
         logger.info(f"[Celery] 任务完成: task_id={task_id}")
         
@@ -124,6 +133,7 @@ def batch_generation_task(
     target_topic: str,
     resource_type: str = "guide",
     industry: Optional[str] = None,
+    owner_user_id: Optional[int] = None,
 ):
     """
     批量生成任务（多用户）
@@ -133,10 +143,12 @@ def batch_generation_task(
         target_topic: 目标主题
         resource_type: 资源类型
         industry: 行业
+        owner_user_id: 触发任务的账户 ID（仅用于运行时读取其加密配置）
     """
     from app.agents.orchestrator import orchestrator
     from app.database import get_db_context
     from app.models import AgentTask
+    from app.services.ai_config_service import AIConfigService
     
     logger.info(f"[Celery] 开始批量生成任务: {len(learner_ids)}个学习者")
     
@@ -161,14 +173,20 @@ def batch_generation_task(
                 task_id = task.id
                 db.commit()
             
-            # 执行流水线
-            orchestrator.run_full_pipeline(
-                task_id=task_id,
-                learner_id=learner_id,
-                target_topic=target_topic,
-                resource_type=resource_type,
-                industry=industry,
+            # Queue payload only carries the owner ID.  Credentials are read
+            # from that account's encrypted row within the worker process.
+            runtime_context = (
+                AIConfigService.use_user_runtime_config(owner_user_id)
+                if owner_user_id is not None else nullcontext()
             )
+            with runtime_context:
+                orchestrator.run_full_pipeline(
+                    task_id=task_id,
+                    learner_id=learner_id,
+                    target_topic=target_topic,
+                    resource_type=resource_type,
+                    industry=industry,
+                )
             
             results.append({
                 "learner_id": learner_id,
@@ -207,6 +225,7 @@ def generate_resources_task(
     learner_id: int,
     target_topic: str,
     industry: Optional[str] = None,
+    owner_user_id: Optional[int] = None,
 ):
     """
     异步生成三类个性化学习资源（Celery 版本）
@@ -242,11 +261,18 @@ def generate_resources_task(
             meta={"stage": "generation", "progress": 40, "message": "正在生成三类资源..."}
         )
         
-        result = ResourceGenerationService.generate_all_resources(
-            learner_id=learner_id,
-            target_topic=target_topic,
-            industry=industry,
+        from app.services.ai_config_service import AIConfigService
+
+        runtime_context = (
+            AIConfigService.use_user_runtime_config(owner_user_id)
+            if owner_user_id is not None else nullcontext()
         )
+        with runtime_context:
+            result = ResourceGenerationService.generate_all_resources(
+                learner_id=learner_id,
+                target_topic=target_topic,
+                industry=industry,
+            )
         
         if result.get("success"):
             self.update_state(
@@ -297,6 +323,7 @@ def batch_generate_resources_task(
     learner_ids: list,
     target_topic: str,
     industry: Optional[str] = None,
+    owner_user_id: Optional[int] = None,
 ):
     """
     批量异步生成资源（多学习者）
@@ -329,11 +356,18 @@ def batch_generate_resources_task(
                 }
             )
             
-            result = ResourceGenerationService.generate_all_resources(
-                learner_id=learner_id,
-                target_topic=target_topic,
-                industry=industry,
+            from app.services.ai_config_service import AIConfigService
+
+            runtime_context = (
+                AIConfigService.use_user_runtime_config(owner_user_id)
+                if owner_user_id is not None else nullcontext()
             )
+            with runtime_context:
+                result = ResourceGenerationService.generate_all_resources(
+                    learner_id=learner_id,
+                    target_topic=target_topic,
+                    industry=industry,
+                )
             
             results.append({
                 "learner_id": learner_id,

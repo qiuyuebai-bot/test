@@ -274,8 +274,10 @@ class GenerationAgent(BaseAgent):
                     "generation_method": "deepseek",
                 }
             except Exception as exc:
-                if settings.REQUIRE_RESOURCE_LLM and isinstance(exc, LLMUnavailableError):
-                    raise
+                if settings.REQUIRE_RESOURCE_LLM or LLMUtil.requires_configured_provider():
+                    if isinstance(exc, LLMUnavailableError):
+                        raise
+                    raise LLMUnavailableError("invalid_generation_response") from exc
                 logger.warning(f"[知识生成Agent] LLM 实操指南生成失败，使用规则兜底: {exc}")
 
         difficulty = diagnosis.get("recommended_difficulty", {}).get("recommended_difficulty", 3)
@@ -375,8 +377,10 @@ class GenerationAgent(BaseAgent):
                     "generation_method": "deepseek",
                 }
             except Exception as exc:
-                if settings.REQUIRE_RESOURCE_LLM and isinstance(exc, LLMUnavailableError):
-                    raise
+                if settings.REQUIRE_RESOURCE_LLM or LLMUtil.requires_configured_provider():
+                    if isinstance(exc, LLMUnavailableError):
+                        raise
+                    raise LLMUnavailableError("invalid_generation_response") from exc
                 logger.warning(f"[知识生成Agent] LLM 测试题生成失败，使用规则兜底: {exc}")
 
         difficulty = diagnosis.get("recommended_difficulty", {}).get("recommended_difficulty", 3)
@@ -454,8 +458,10 @@ class GenerationAgent(BaseAgent):
                     "generation_method": "deepseek",
                 }
             except Exception as exc:
-                if settings.REQUIRE_RESOURCE_LLM and isinstance(exc, LLMUnavailableError):
-                    raise
+                if settings.REQUIRE_RESOURCE_LLM or LLMUtil.requires_configured_provider():
+                    if isinstance(exc, LLMUnavailableError):
+                        raise
+                    raise LLMUnavailableError("invalid_generation_response") from exc
                 logger.warning(f"[知识生成Agent] LLM 讲义生成失败，使用规则兜底: {exc}")
 
         difficulty = diagnosis.get("recommended_difficulty", {}).get("recommended_difficulty", 3)

@@ -48,9 +48,18 @@ class User(Base):
     created_at = Column(DateTime, server_default=func.now(), comment="创建时间")
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), comment="更新时间")
     last_login_at = Column(DateTime, nullable=True, comment="最后登录时间")
+    ai_config_onboarding_dismissed_at = Column(DateTime, nullable=True, comment="AI 配置引导跳过时间")
     
     # 关联关系
     learner_profile = relationship("LearnerProfile", back_populates="user", uselist=False)
+    # One active provider/model configuration per user; secret columns remain
+    # encrypted in the related model and are never exposed by this relation.
+    ai_config = relationship(
+        "UserAIConfig",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
     answer_records = relationship("AnswerRecord", back_populates="user")
     learning_paths = relationship("LearningPath", back_populates="user")
     

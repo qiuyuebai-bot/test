@@ -1,6 +1,6 @@
 """
 大模型通用调用封装
-接入 DeepSeek 等 OpenAI 兼容 API（使用 httpx 直连）
+接入环境变量回退和运行时多协议 AI 服务（使用 httpx 直连）
 使用单例 httpx 客户端复用连接，避免重复 TCP 握手开销
 
 P3-3 增强：
@@ -23,6 +23,9 @@ from loguru import logger
 
 from app.config import settings
 from app.utils.circuit_breaker import CircuitBreaker
+from app.utils.llm_runtime import LLMRuntimeConfig, get_runtime_config, get_runtime_user_id
+from app.services.ai_protocol_client import AIProtocolClient, RuntimeProtocolError
+from app.services.ai_providers import infer_provider_from_base_url, is_protocol_implemented
 
 
 class LLMUnavailableError(RuntimeError):
@@ -30,7 +33,7 @@ class LLMUnavailableError(RuntimeError):
 
     def __init__(self, reason: str = "provider_unavailable") -> None:
         self.reason = reason
-        super().__init__(f"DeepSeek 当前不可用（{reason}）")
+        super().__init__(f"AI 服务当前不可用（{reason}）")
 
 
 class LLMProviderError(RuntimeError):
@@ -40,7 +43,7 @@ class LLMProviderError(RuntimeError):
 class LLMUtil:
     """
     大模型通用调用工具类
-    接入统一的 OpenAI 兼容协议 API（默认 DeepSeek）
+    支持旧版 OpenAI 兼容环境变量回退和账户级运行时协议配置
     使用 httpx 直连，避免 OpenAI SDK 在受限环境中的兼容问题
     复用 httpx 客户端连接池，提升并发性能
     """
@@ -187,8 +190,43 @@ class LLMUtil:
     # ===========================================
 
     @classmethod
-    def is_available(cls) -> bool:
+    def _implicit_runtime_config(cls) -> Optional[LLMRuntimeConfig]:
+        """Resolve a user-bound config without ever selecting another user."""
+
+        bound = get_runtime_config()
+        if bound is not None:
+            return bound
+        try:
+            from app.services.ai_config_service import AIConfigService
+
+            return AIConfigService.get_active_runtime_config()
+        except Exception:
+            return None
+
+    @classmethod
+    def _effective_runtime_config(
+        cls, runtime_config: Optional[LLMRuntimeConfig] = None
+    ) -> Optional[LLMRuntimeConfig]:
+        return runtime_config or cls._implicit_runtime_config()
+
+    @classmethod
+    def requires_configured_provider(cls) -> bool:
+        """Return whether this call belongs to an account with saved AI settings.
+
+        Offline/demo mode may use deterministic fallback content.  Once an
+        authenticated account has explicitly saved a provider, returning
+        fallback content would make a failed model call look successful.
+        """
+
+        runtime = cls._effective_runtime_config()
+        return bool(runtime and runtime.owner_user_id is not None)
+
+    @classmethod
+    def is_available(cls, runtime_config: Optional[LLMRuntimeConfig] = None) -> bool:
         """检查大模型是否可用"""
+        effective_runtime = cls._effective_runtime_config(runtime_config)
+        if effective_runtime is not None:
+            return effective_runtime.is_configured and is_protocol_implemented(effective_runtime.protocol)
         if cls._available is not None:
             return cls._available
         cls._available = bool((settings.OPENAI_API_KEY or "").strip())
@@ -197,6 +235,18 @@ class LLMUtil:
     @classmethod
     def health_check(cls) -> Dict[str, Any]:
         """Check provider reachability without exposing credentials or payloads."""
+        runtime = cls._effective_runtime_config()
+        if runtime is not None:
+            from app.services.ai_config_service import AIConfigService
+
+            result = AIConfigService.test_connection(runtime)
+            return {
+                "available": result.success,
+                "provider": runtime.provider,
+                "model": runtime.model,
+                "latency_ms": result.latency_ms,
+                **({"reason": result.error_code} if not result.success else {}),
+            }
         started = time.perf_counter()
         if not cls.is_available():
             return {"available": False, "reason": "unauthorized"}
@@ -214,7 +264,12 @@ class LLMUtil:
             elif response.status_code >= 400:
                 reason = "provider_error"
             else:
-                return {"available": True, "provider": "deepseek", "model": settings.OPENAI_MODEL_NAME, "latency_ms": latency_ms}
+                return {
+                    "available": True,
+                    "provider": infer_provider_from_base_url(settings.OPENAI_API_BASE).id,
+                    "model": settings.OPENAI_MODEL_NAME,
+                    "latency_ms": latency_ms,
+                }
             return {"available": False, "reason": reason, "latency_ms": latency_ms}
         except httpx.TimeoutException:
             return {"available": False, "reason": "timeout"}
@@ -291,7 +346,7 @@ class LLMUtil:
             (响应文本, Token用量字典)
         """
         if response.status_code != 200:
-            logger.error(f"LLM API 返回错误: status={response.status_code}, body={response.text[:500]}")
+            logger.error(f"LLM API 返回错误: status={response.status_code}")
             raise LLMProviderError(f"API error: {response.status_code}")
 
         data = response.json()
@@ -324,7 +379,11 @@ class LLMUtil:
         # temperature 量化到 0.1 粒度，避免微小浮点差异导致缓存失效
         temp_quantized = round(float(temperature if temperature is not None else settings.OPENAI_TEMPERATURE), 1)
         model_name = model or settings.OPENAI_MODEL_NAME
-        key_str = f"{model_name}|{temp_quantized}|{system_prompt or ''}|{prompt}"
+        # Legacy .env fallback is shared operational configuration, but prompt
+        # results are still user data. Keep its cache partitioned per request
+        # owner so two accounts cannot receive one another's cached output.
+        owner_scope = get_runtime_user_id()
+        key_str = f"{owner_scope if owner_scope is not None else 'environment'}|{model_name}|{temp_quantized}|{system_prompt or ''}|{prompt}"
         return hashlib.sha256(key_str.encode("utf-8")).hexdigest()
 
     @classmethod
@@ -511,6 +570,117 @@ class LLMUtil:
         with cls._response_cache_lock:
             cls._response_cache.clear()
 
+    @classmethod
+    def _runtime_cache_key(
+        cls,
+        runtime: LLMRuntimeConfig,
+        messages: List[Dict[str, str]],
+        temperature: Optional[float],
+    ) -> str:
+        """Keep cached output isolated by account, credentials, and model.
+
+        The credential fingerprint is deliberately one-way and is never
+        logged.  It protects explicit runtime configs that are used outside a
+        request context, while ``owner_user_id`` partitions normal requests.
+        """
+
+        credential_scope = hashlib.sha256(
+            f"{runtime.api_key}\x00{runtime.proxy_password}".encode("utf-8")
+        ).hexdigest()
+
+        payload = json.dumps(
+            {
+                "owner_user_id": (
+                    runtime.owner_user_id
+                    if runtime.owner_user_id is not None
+                    else get_runtime_user_id()
+                ),
+                "credential_scope": credential_scope,
+                "provider": runtime.provider,
+                "protocol": runtime.protocol,
+                "base_url": runtime.normalized_base_url,
+                "model": runtime.model,
+                "temperature": temperature if temperature is not None else runtime.temperature,
+                "generation_params": {
+                    key: (runtime.generation_params or {})[key]
+                    for key in sorted(runtime.generation_params or {})
+                },
+                "messages": messages,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+        )
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
+
+    @classmethod
+    def _runtime_complete(
+        cls,
+        runtime: LLMRuntimeConfig,
+        messages: List[Dict[str, str]],
+        temperature: Optional[float],
+        *,
+        use_cache: bool,
+        allow_mock: bool,
+    ) -> Tuple[str, Dict[str, int]]:
+        # A saved account configuration is an explicit request for real model
+        # output. Never replace a provider failure with mock text in that case.
+        allow_fallback = allow_mock and runtime.owner_user_id is None
+        if not runtime.is_configured:
+            if not allow_fallback:
+                raise LLMUnavailableError("unauthorized")
+            prompt = messages[-1].get("content", "") if messages else ""
+            return cls._generate_mock_response(prompt), {
+                "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0
+            }
+        if not is_protocol_implemented(runtime.protocol):
+            if not allow_fallback:
+                raise LLMUnavailableError("unsupported_protocol")
+            prompt = messages[-1].get("content", "") if messages else ""
+            return cls._generate_mock_response(prompt), {
+                "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0
+            }
+
+        # Validate the destination again at request time. A persisted hostname
+        # may change its DNS answer after the configuration was saved.
+        from app.services.ai_config_service import AIConfigService
+
+        if not AIConfigService._is_permitted_endpoint(runtime):
+            if not allow_fallback:
+                raise LLMUnavailableError("unsafe_endpoint")
+            prompt = messages[-1].get("content", "") if messages else ""
+            return cls._generate_mock_response(prompt), {
+                "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0
+            }
+
+        cache_key: Optional[str] = None
+        effective_temperature = temperature if temperature is not None else runtime.temperature
+        if use_cache and cls._is_cacheable(effective_temperature):
+            cache_key = cls._runtime_cache_key(runtime, messages, effective_temperature)
+            cached = cls._get_cached_response(cache_key)
+            if cached is not None:
+                return cached
+
+        try:
+            result = AIProtocolClient.complete(
+                runtime,
+                messages,
+                temperature=float(effective_temperature if effective_temperature is not None else settings.OPENAI_TEMPERATURE),
+                max_tokens=int(runtime.max_tokens or settings.OPENAI_MAX_TOKENS),
+            )
+            cls._record_usage(result[1])
+            if cache_key and result[0]:
+                cls._set_cached_response(cache_key, result)
+            return result
+        except RuntimeProtocolError as exc:
+            cls._record_error()
+            logger.error("LLM runtime 调用失败: provider={}, protocol={}, reason={}", runtime.provider, runtime.protocol, exc.reason)
+            if not allow_fallback:
+                raise LLMUnavailableError(exc.reason) from exc
+            prompt = messages[-1].get("content", "") if messages else ""
+            return cls._generate_mock_response(prompt), {
+                "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0
+            }
+
     # ===========================================
     # 同步调用
     # ===========================================
@@ -524,6 +694,7 @@ class LLMUtil:
         model: Optional[str] = None,
         use_cache: bool = True,
         allow_mock: bool = True,
+        runtime_config: Optional[LLMRuntimeConfig] = None,
     ) -> Tuple[str, Dict[str, int]]:
         """
         同步调用大模型
@@ -538,6 +709,20 @@ class LLMUtil:
         Returns:
             (响应文本, Token用量字典)
         """
+        effective_runtime = cls._effective_runtime_config(runtime_config)
+        if effective_runtime is not None:
+            if model:
+                effective_runtime = LLMRuntimeConfig(
+                    **{**effective_runtime.__dict__, "model": model}
+                )
+            return cls._runtime_complete(
+                effective_runtime,
+                cls._build_messages(prompt, system_prompt),
+                temperature,
+                use_cache=use_cache,
+                allow_mock=allow_mock,
+            )
+
         if not cls.is_available():
             if not allow_mock:
                 raise LLMUnavailableError("unauthorized")
@@ -603,6 +788,7 @@ class LLMUtil:
         template: str,
         params: Dict[str, Any],
         system_prompt: Optional[str] = None,
+        runtime_config: Optional[LLMRuntimeConfig] = None,
     ) -> Tuple[str, Dict[str, int]]:
         """
         使用模板调用大模型
@@ -616,7 +802,7 @@ class LLMUtil:
             (响应文本, Token用量字典)
         """
         prompt = template.format(**params)
-        return cls.sync_call(prompt, system_prompt)
+        return cls.sync_call(prompt, system_prompt, runtime_config=runtime_config)
 
     @classmethod
     def call_with_prompt_template(
@@ -627,6 +813,7 @@ class LLMUtil:
         model: Optional[str] = None,
         use_cache: bool = True,
         allow_mock: bool = True,
+        runtime_config: Optional[LLMRuntimeConfig] = None,
     ) -> Tuple[str, Dict[str, int]]:
         """
         使用 Prompt 工程化模板调用大模型（P3-4）
@@ -658,6 +845,7 @@ class LLMUtil:
             model=model,
             use_cache=use_cache,
             allow_mock=allow_mock,
+            runtime_config=runtime_config,
         )
 
     @classmethod
@@ -666,6 +854,7 @@ class LLMUtil:
         messages: List[Dict[str, str]],
         temperature: Optional[float] = None,
         model: Optional[str] = None,
+        runtime_config: Optional[LLMRuntimeConfig] = None,
     ) -> Tuple[str, Dict[str, int]]:
         """
         多轮对话调用
@@ -678,6 +867,20 @@ class LLMUtil:
         Returns:
             (响应文本, Token用量字典)
         """
+        effective_runtime = cls._effective_runtime_config(runtime_config)
+        if effective_runtime is not None:
+            if model:
+                effective_runtime = LLMRuntimeConfig(
+                    **{**effective_runtime.__dict__, "model": model}
+                )
+            return cls._runtime_complete(
+                effective_runtime,
+                messages,
+                temperature,
+                use_cache=False,
+                allow_mock=True,
+            )
+
         if not cls.is_available():
             last_message = messages[-1]["content"] if messages else ""
             response = cls._generate_mock_response(last_message, None)
@@ -717,6 +920,7 @@ class LLMUtil:
         temperature: Optional[float] = None,
         model: Optional[str] = None,
         use_cache: bool = True,
+        runtime_config: Optional[LLMRuntimeConfig] = None,
     ) -> Tuple[str, Dict[str, int]]:
         """
         异步调用大模型
@@ -731,6 +935,19 @@ class LLMUtil:
         Returns:
             (响应文本, Token用量字典)
         """
+        effective_runtime = cls._effective_runtime_config(runtime_config)
+        if effective_runtime is not None:
+            return await asyncio.to_thread(
+                cls.sync_call,
+                prompt,
+                system_prompt,
+                temperature,
+                model,
+                use_cache,
+                True,
+                effective_runtime,
+            )
+
         if not cls.is_available():
             return cls._generate_mock_response(prompt, system_prompt), {
                 "prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0
@@ -791,6 +1008,7 @@ class LLMUtil:
         system_prompt: Optional[str] = None,
         temperature: Optional[float] = None,
         model: Optional[str] = None,
+        runtime_config: Optional[LLMRuntimeConfig] = None,
     ) -> AsyncGenerator[str, None]:
         """
         异步流式调用大模型
@@ -804,6 +1022,22 @@ class LLMUtil:
         Yields:
             流式响应的文本片段
         """
+        effective_runtime = cls._effective_runtime_config(runtime_config)
+        if effective_runtime is not None:
+            response, _ = await asyncio.to_thread(
+                cls.sync_call,
+                prompt,
+                system_prompt,
+                temperature,
+                model,
+                False,
+                True,
+                effective_runtime,
+            )
+            for char in response:
+                yield char
+            return
+
         if not cls.is_available():
             response = cls._generate_mock_response(prompt, system_prompt)
             for char in response:
@@ -830,8 +1064,8 @@ class LLMUtil:
                 json=payload,
             ) as response:
                 if response.status_code != 200:
-                    body = await response.aread()
-                    logger.error(f"LLM stream 错误: status={response.status_code}, body={body[:500]}")
+                    await response.aread()
+                    logger.error(f"LLM stream 错误: status={response.status_code}")
                     response_text = cls._generate_mock_response(prompt, system_prompt)
                     for char in response_text:
                         yield char

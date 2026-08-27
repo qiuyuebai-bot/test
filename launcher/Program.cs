@@ -1,7 +1,6 @@
 using System.Diagnostics;
 using System.Drawing;
 using System.Net.Http;
-using System.Net.Sockets;
 using System.Text;
 using System.Windows.Forms;
 
@@ -30,9 +29,6 @@ internal static class Program
 
 internal sealed class LauncherForm : Form
 {
-    private const int BackendPort = 8000;
-    private const int FrontendPort = 5173;
-
     private readonly Label _statusLabel = new();
     private readonly Label _rootLabel = new();
     private readonly TextBox _logBox = new();
@@ -47,6 +43,7 @@ internal sealed class LauncherForm : Form
     private bool _isStarting;
     private bool _isClosing;
     private bool _browserOpened;
+    private bool _servicesReady;
 
     public LauncherForm()
     {
@@ -131,6 +128,7 @@ internal sealed class LauncherForm : Form
 
         _isStarting = true;
         _browserOpened = false;
+        _servicesReady = false;
         using var startupCts = CancellationTokenSource.CreateLinkedTokenSource(_lifetimeCts.Token);
         _startupCts = startupCts;
         SetButtons(startEnabled: false, stopEnabled: false);
@@ -142,13 +140,6 @@ internal sealed class LauncherForm : Form
             {
                 SetStatus("状态：环境检查失败", Color.Firebrick);
                 AppendLog($"[error] {validationError}");
-                return;
-            }
-
-            if (await IsPortInUseAsync(BackendPort) || await IsPortInUseAsync(FrontendPort))
-            {
-                SetStatus("状态：端口被占用", Color.Firebrick);
-                AppendLog("[error] 端口 8000 或 5173 已被占用，请关闭已有服务后重试。");
                 return;
             }
 
@@ -165,6 +156,7 @@ internal sealed class LauncherForm : Form
                 return;
             }
 
+            _servicesReady = true;
             SetStatus("状态：前后端已就绪", Color.ForestGreen);
             AppendLog("[success] 前端：http://localhost:5173");
             AppendLog("[success] 后端：http://localhost:8000");
@@ -279,7 +271,7 @@ internal sealed class LauncherForm : Form
 
             BeginInvoke(new Action(() =>
             {
-                if (!_isStarting)
+                if (!_isStarting && !_servicesReady)
                 {
                     SetStatus("状态：服务已停止", Color.DimGray);
                     SetButtons(startEnabled: true, stopEnabled: false);
@@ -301,16 +293,16 @@ internal sealed class LauncherForm : Form
         var deadline = DateTime.UtcNow + timeout;
         while (DateTime.UtcNow < deadline)
         {
-            if (_launcherProcess is { HasExited: true })
-            {
-                return false;
-            }
-
             var backendReady = await IsHttpReadyAsync("http://127.0.0.1:8000/health/live");
             var frontendReady = await IsHttpReadyAsync("http://127.0.0.1:5173/");
             if (backendReady && frontendReady)
             {
                 return true;
+            }
+
+            if (_launcherProcess is { HasExited: true })
+            {
+                return false;
             }
 
             await Task.Delay(500, cancellationToken);
@@ -331,24 +323,6 @@ internal sealed class LauncherForm : Form
             return false;
         }
         catch (TaskCanceledException)
-        {
-            return false;
-        }
-    }
-
-    private static async Task<bool> IsPortInUseAsync(int port)
-    {
-        using var client = new TcpClient();
-        try
-        {
-            await client.ConnectAsync("127.0.0.1", port).WaitAsync(TimeSpan.FromMilliseconds(300));
-            return true;
-        }
-        catch (SocketException)
-        {
-            return false;
-        }
-        catch (TimeoutException)
         {
             return false;
         }
@@ -432,6 +406,7 @@ internal sealed class LauncherForm : Form
     private void StopManagedProcess()
     {
         _startupCts?.Cancel();
+        _servicesReady = false;
         var process = _launcherProcess;
         _launcherProcess = null;
         if (process is null)

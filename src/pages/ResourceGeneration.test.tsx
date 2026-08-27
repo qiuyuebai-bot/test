@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { MemoryRouter } from 'react-router-dom'
 
@@ -10,20 +10,12 @@ vi.mock('@/api', () => ({
   coreApi: {
     getResourceDetail: vi.fn(),
     getResourceList: vi.fn(),
+    deleteResource: vi.fn().mockResolvedValue({ id: 1, status: 'archived' }),
   },
 }))
 
 vi.mock('@/hooks', () => ({
-  useTaskSSE: vi.fn().mockReturnValue({
-    events: [],
-    currentStage: null,
-    progress: 0,
-    isConnected: false,
-    isCompleted: false,
-    isFailed: false,
-    error: null,
-    lastEvent: null,
-  }),
+  useResourceGenerationTask: vi.fn(),
 }))
 
 vi.mock('@/store', async () => {
@@ -36,8 +28,8 @@ vi.mock('@/components/MarkdownContent', () => ({
   default: ({ content }: { content: string }) => <div data-testid="markdown">{content}</div>,
 }))
 
-import { agentApi } from '@/api'
-import { useTaskSSE } from '@/hooks'
+import { agentApi, coreApi } from '@/api'
+import { useResourceGenerationTask } from '@/hooks'
 import { mockStoreState, resetMockStore, setMockStore } from '../test/mockStore'
 
 const learner = {
@@ -57,15 +49,28 @@ describe('ResourceGeneration context modes', () => {
       fetchResources: vi.fn().mockResolvedValue(undefined),
       fetchLearners: vi.fn().mockResolvedValue(undefined),
     })
-    vi.mocked(useTaskSSE).mockReturnValue({
-      events: [],
+    vi.mocked(useResourceGenerationTask).mockReturnValue({
+      taskId: null,
+      isSubmitting: false,
+      isGenerating: false,
       currentStage: null,
       progress: 0,
-      isConnected: false,
-      isCompleted: false,
-      isFailed: false,
-      error: null,
-      lastEvent: null,
+      description: '',
+      connectionError: null,
+      stream: {
+        events: [],
+        currentStage: null,
+        progress: 0,
+        isConnected: false,
+        isCompleted: false,
+        isFailed: false,
+        error: null,
+        lastEvent: null,
+      },
+      beginSubmission: vi.fn(() => true),
+      attachTask: vi.fn(),
+      failSubmission: vi.fn(),
+      clearTrackedTask: vi.fn(),
     } as never)
   })
 
@@ -105,6 +110,47 @@ describe('ResourceGeneration context modes', () => {
         targetTopic: '算法设计',
       }))
     })
+  })
+
+  it('submits the resource pipeline only once for repeated immediate clicks', async () => {
+    let resolveRequest: ((value: { taskId: number }) => void) | undefined
+    vi.mocked(agentApi.runFullPipeline).mockImplementationOnce(
+      () => new Promise((resolve) => { resolveRequest = resolve }),
+    )
+    const beginSubmission = vi.fn()
+      .mockReturnValueOnce(true)
+      .mockReturnValue(false)
+    vi.mocked(useResourceGenerationTask).mockReturnValue({
+      taskId: null,
+      isSubmitting: false,
+      isGenerating: false,
+      currentStage: null,
+      progress: 0,
+      description: '',
+      connectionError: null,
+      stream: {
+        events: [], currentStage: null, progress: 0, isConnected: false,
+        isCompleted: false, isFailed: false, error: null, lastEvent: null,
+      },
+      beginSubmission,
+      attachTask: vi.fn(),
+      failSubmission: vi.fn(),
+      clearTrackedTask: vi.fn(),
+    } as never)
+
+    const { default: Page } = await import('./ResourceGeneration')
+    render(
+      <MemoryRouter initialEntries={['/resources?mode=generate&learnerId=6&topic=%E7%AE%97%E6%B3%95%E8%AE%BE%E8%AE%A1']}>
+        <Page />
+      </MemoryRouter>,
+    )
+
+    const generateButton = await screen.findByRole('button', { name: '生成资源' })
+    fireEvent.click(generateButton)
+    fireEvent.click(generateButton)
+
+    expect(agentApi.runFullPipeline).toHaveBeenCalledTimes(1)
+    resolveRequest?.({ taskId: 42 })
   })
 
   it('does not expose quality validation failure labels for any resource type', async () => {
@@ -213,5 +259,36 @@ describe('ResourceGeneration context modes', () => {
       expect(within(preview).queryByText(/DeepSeek生成/)).not.toBeInTheDocument()
       expect(within(preview).queryByText('内容摘要')).not.toBeInTheDocument()
     }
+  })
+
+  it('deletes a resource after confirmation and refreshes the active list', async () => {
+    setMockStore({
+      resources: [{
+        id: 31,
+        title: '待删除指南',
+        resourceType: 'guide',
+        content: '# 指南',
+        contentSummary: '',
+        generationMethod: 'deepseek',
+        versionNumber: 1,
+      }],
+      resourcesTotal: 1,
+    })
+
+    const { default: Page } = await import('./ResourceGeneration')
+    render(
+      <MemoryRouter initialEntries={['/resources?mode=list&learnerId=6']}>
+        <Page />
+      </MemoryRouter>,
+    )
+
+    await userEvent.click(await screen.findByRole('button', { name: '删除待删除指南' }))
+    expect(screen.getByRole('dialog')).toHaveTextContent('确定删除“待删除指南”吗？')
+    await userEvent.click(screen.getByRole('button', { name: '确认删除' }))
+
+    await waitFor(() => {
+      expect(coreApi.deleteResource).toHaveBeenCalledWith(31)
+      expect(mockStoreState.fetchResources).toHaveBeenCalledWith(expect.objectContaining({ learnerId: 6 }))
+    })
   })
 })

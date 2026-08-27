@@ -1,9 +1,9 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
-import { BookOpen } from 'lucide-react'
+import { BookOpen, Trash2 } from 'lucide-react'
 import { useShallow } from 'zustand/react/shallow'
 import { agentApi, coreApi } from '@/api'
 import { useStore } from '@/store'
-import { useTaskSSE } from '@/hooks/useTaskSSE'
+import { useResourceGenerationTask } from '@/hooks/useResourceGenerationTask'
 import { reportError } from '@/lib/sentry'
 import Card from '@/components/Card'
 import Badge from '@/components/Badge'
@@ -12,6 +12,7 @@ import Input from '@/components/Input'
 import Select from '@/components/Select'
 import LoadingState from '@/components/LoadingState'
 import EmptyState from '@/components/EmptyState'
+import Modal from '@/components/Modal'
 const MarkdownContent = lazy(() => import('@/components/MarkdownContent'))
 import type { PositionDetail } from '@/types/training'
 import type { LearningResource } from '@/types'
@@ -28,12 +29,17 @@ const RESOURCE_TYPES = [
 ]
 
 const STAGE_LABEL: Record<string, string> = {
+  init: '任务初始化',
   diagnosis: '学情诊断',
   retrieval: '知识检索',
+  knowledge_retrieval: '知识检索',
   generation: '内容生成',
+  judge_first: '初次审核',
   debate: '辩论校验',
   revision: '最终修正',
+  final_revision: '最终修正',
   output: '输出成品',
+  complete: '已完成',
   task_completed: '已完成',
   task_failed: '失败',
 }
@@ -44,16 +50,34 @@ function formatMatchScore(value: number | null | undefined): string | null {
   return `${normalized.toFixed(2)}%`
 }
 
+function isAiGeneratedResource(resource: LearningResource): boolean {
+  const method = resource.generationMethod?.trim().toLowerCase()
+  return Boolean(method && method !== 'deterministic_fallback' && method !== 'rule_fallback')
+}
+
 export default function EmbeddedResourceGeneration({ position, learnerId }: Props) {
   const trainingContext = useStore(useShallow((state) => state.activeTrainingContext))
   const [topic, setTopic] = useState('')
   const [resourceType, setResourceType] = useState<string>('guide')
   const [industry, setIndustry] = useState<string>('')
-  const [taskId, setTaskId] = useState<number | null>(null)
-  const [generating, setGenerating] = useState(false)
   const [resources, setResources] = useState<LearningResource[]>([])
   const [selectedResource, setSelectedResource] = useState<LearningResource | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
+  const [generationError, setGenerationError] = useState<string | null>(null)
+  const [resourceToDelete, setResourceToDelete] = useState<LearningResource | null>(null)
+  const [deletingResourceId, setDeletingResourceId] = useState<number | null>(null)
+
+  const generationTask = useResourceGenerationTask({
+    learnerId,
+    onComplete: () => {
+      void fetchResources()
+    },
+    onFailed: (_taskId, message) => {
+      setGenerationError(message)
+    },
+  })
+  const sse = generationTask.stream
+  const generating = generationTask.isGenerating
 
   // 岗位变化时预填主题与行业
   useEffect(() => {
@@ -71,22 +95,11 @@ export default function EmbeddedResourceGeneration({ position, learnerId }: Prop
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [learnerId])
 
-  const sse = useTaskSSE(taskId, {
-    onComplete: () => {
-      setGenerating(false)
-      void fetchResources()
-    },
-    onError: () => setGenerating(false),
-  })
-
-  // SSE 完成（isCompleted 翻转为 true）时也刷新，兼容 mock 不触发 onComplete 的情况
   useEffect(() => {
-    if (sse.isCompleted && taskId) {
-      setGenerating(false)
-      void fetchResources()
+    if (generationTask.connectionError && generationTask.taskId) {
+      setGenerationError('实时进度连接暂时中断，任务仍在后台继续执行')
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sse.isCompleted, taskId])
+  }, [generationTask.connectionError, generationTask.taskId])
 
   async function fetchResources() {
     if (!learnerId) return
@@ -118,7 +131,8 @@ export default function EmbeddedResourceGeneration({ position, learnerId }: Prop
 
   async function handleGenerate() {
     if (!learnerId || !topic.trim()) return
-    setGenerating(true)
+    if (!generationTask.beginSubmission()) return
+    setGenerationError(null)
     setSelectedResource(null)
     try {
       const result = await agentApi.runFullPipeline({
@@ -128,10 +142,27 @@ export default function EmbeddedResourceGeneration({ position, learnerId }: Prop
         industry: industry || undefined,
         ...(trainingContext ? { trainingContext } : {}),
       })
-      setTaskId(result.taskId)
+      generationTask.attachTask(result.taskId)
     } catch (err) {
       reportError(err, { tags: { area: 'resource_generation', action: 'run_pipeline' } })
-      setGenerating(false)
+      generationTask.failSubmission()
+      setGenerationError(err instanceof Error ? err.message : '资源生成失败，请重试')
+    }
+  }
+
+  async function handleDeleteResource() {
+    if (!resourceToDelete || deletingResourceId != null) return
+    const resource = resourceToDelete
+    setDeletingResourceId(resource.id)
+    try {
+      await coreApi.deleteResource(resource.id)
+      setResources((current) => current.filter((item) => item.id !== resource.id))
+      if (selectedResource?.id === resource.id) setSelectedResource(null)
+      setResourceToDelete(null)
+    } catch (err) {
+      setGenerationError(err instanceof Error ? err.message : '删除资源失败')
+    } finally {
+      setDeletingResourceId(null)
     }
   }
 
@@ -139,7 +170,9 @@ export default function EmbeddedResourceGeneration({ position, learnerId }: Prop
     return <EmptyState type="default" title="需要学习者画像" description="当前账号没有关联的学习者画像，无法生成资料" />
   }
 
-  const currentStageLabel = sse.currentStage ? (STAGE_LABEL[sse.currentStage] ?? sse.currentStage) : null
+  const currentStageLabel = generationTask.currentStage
+    ? (STAGE_LABEL[generationTask.currentStage] ?? generationTask.currentStage)
+    : null
   const selectedMatchScore = formatMatchScore(selectedResource?.matchScore)
 
   return (
@@ -165,9 +198,15 @@ export default function EmbeddedResourceGeneration({ position, learnerId }: Prop
               <label className="block text-xs font-medium text-text-secondary mb-1">行业（可选）</label>
               <Input value={industry} onChange={(e) => setIndustry(e.target.value)} placeholder="如：软件开发" />
             </div>
-            <Button onClick={handleGenerate} loading={generating} disabled={!topic.trim()} className="w-full">
+            <Button
+              onClick={handleGenerate}
+              loading={generating}
+              disabled={!topic.trim() || generationTask.isSubmitting}
+              className="w-full"
+            >
               生成资料
             </Button>
+            {generationError && <p className="text-xs text-error" role="alert">{generationError}</p>}
           </div>
         </Card>
 
@@ -180,7 +219,7 @@ export default function EmbeddedResourceGeneration({ position, learnerId }: Prop
                 {currentStageLabel && <Badge variant="info">{currentStageLabel}</Badge>}
               </div>
               <div className="w-full h-2 bg-bg-secondary rounded-full overflow-hidden">
-                <div className="h-full bg-primary transition-all" style={{ width: `${sse.progress}%` }} />
+                <div className="h-full bg-primary transition-all" style={{ width: `${generationTask.progress}%` }} />
               </div>
               <div className="space-y-1 max-h-32 overflow-y-auto">
                 {sse.events.slice(-5).map((evt, i) => (
@@ -199,18 +238,39 @@ export default function EmbeddedResourceGeneration({ position, learnerId }: Prop
             <h4 className="text-sm font-medium text-text-primary mb-2">已生成资源</h4>
             <div className="space-y-1 max-h-48 overflow-y-auto">
               {resources.map((r) => (
-                <button
+                <div
                   key={r.id}
-                  onClick={() => void selectResource(r)}
                   className={`w-full text-left px-3 py-2 rounded-lg border text-sm transition-colors ${
                     selectedResource?.id === r.id ? 'border-primary bg-primary-light' : 'border-border hover:border-primary'
                   }`}
                 >
-                  <div className="truncate font-medium text-text-primary">{r.title}</div>
-                  <div className="text-xs text-text-tertiary">
-                    {r.resourceType} · L{r.difficultyLevel ?? '-'}
+                  <div className="flex items-start gap-2">
+                    <button type="button" onClick={() => void selectResource(r)} className="min-w-0 flex-1 text-left">
+                      <div className="truncate font-medium text-text-primary">{r.title}</div>
+                    </button>
+                    {isAiGeneratedResource(r) && (
+                      <button
+                        type="button"
+                        onClick={() => setResourceToDelete(r)}
+                        disabled={deletingResourceId === r.id}
+                        aria-label={`删除${r.title}`}
+                        title="删除资源"
+                        className="inline-flex shrink-0 items-center gap-1 rounded-md px-1.5 py-1 text-xs text-text-tertiary hover:bg-error/10 hover:text-error disabled:opacity-50"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        <span>删除</span>
+                      </button>
+                    )}
                   </div>
-                </button>
+                  <div className="mt-1 flex items-center gap-1.5">
+                    <Badge variant={isAiGeneratedResource(r) ? 'success' : 'warning'} size="sm">
+                      {isAiGeneratedResource(r) ? 'AI生成' : '规则兜底'}
+                    </Badge>
+                    <button type="button" onClick={() => void selectResource(r)} className="text-left text-xs text-text-tertiary">
+                      {r.resourceType} · L{r.difficultyLevel ?? '-'}
+                    </button>
+                  </div>
+                </div>
               ))}
             </div>
           </Card>
@@ -242,6 +302,27 @@ export default function EmbeddedResourceGeneration({ position, learnerId }: Prop
           )}
         </Card>
       </div>
+
+      <Modal
+        isOpen={resourceToDelete != null}
+        onClose={() => deletingResourceId == null && setResourceToDelete(null)}
+        maxWidth="max-w-md"
+        header={<h2 className="text-base font-semibold text-text-primary">删除资源</h2>}
+        footer={
+          <div className="flex justify-end gap-2 px-6 py-4">
+            <Button variant="ghost" size="sm" disabled={deletingResourceId != null} onClick={() => setResourceToDelete(null)}>
+              取消
+            </Button>
+            <Button variant="primary" size="sm" loading={deletingResourceId != null} onClick={() => void handleDeleteResource()}>
+              确认删除
+            </Button>
+          </div>
+        }
+      >
+        <div className="px-6 py-5 text-sm text-text-secondary">
+          确定删除“{resourceToDelete?.title}”吗？删除后将从当前资源列表移除，已发布的知识库内容不受影响。
+        </div>
+      </Modal>
     </div>
   )
 }

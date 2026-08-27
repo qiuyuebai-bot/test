@@ -182,6 +182,7 @@ class RateLimitMiddleware(BaseHTTPMiddleware):
             "/knowledge/upload": self._parse_rate_limit(settings.RATE_LIMIT_UPLOAD),
             "/resources/generate": (10, 60),
             "/resources/generate/sync": (10, 60),
+            "/ai-config/test": (10, 60),
             "/tutoring/answer": (60, 60),
         }
         

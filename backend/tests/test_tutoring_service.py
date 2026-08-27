@@ -10,6 +10,7 @@ from sqlalchemy.orm import Session
 
 from app.services import tutoring_service as tutoring_service_module
 from app.services.tutoring_service import AdaptiveTutoringService
+from app.utils.llm_runtime import LLMRuntimeConfig
 from app.models import LearnerProfile, LearningResource, AnswerRecord, IssuedTutoringQuestion
 
 
@@ -109,6 +110,46 @@ class TestDynamicQuestionGeneration:
         issued = db_session.query(IssuedTutoringQuestion).one()
         assert issued.answer_key
         assert issued.ability_dimension == "algorithm_design"
+
+    def test_account_ai_failure_is_not_hidden_by_default_questions(
+        self, sample_learner_profile, sample_user, monkeypatch
+    ):
+        runtime = LLMRuntimeConfig(
+            owner_user_id=sample_user.id,
+            provider="moonshot",
+            protocol="openai_chat",
+            base_url="https://api.moonshot.cn/v1",
+            api_key="placeholder-key",
+            model="kimi-k2.6",
+        )
+        monkeypatch.setattr(
+            tutoring_service_module.AIConfigService,
+            "get_record",
+            classmethod(
+                lambda cls, db, user_id, for_update=False: type(
+                    "ActiveConfig", (), {"is_active": True}
+                )()
+            ),
+        )
+        monkeypatch.setattr(
+            tutoring_service_module.AIConfigService,
+            "runtime_from_record",
+            classmethod(lambda cls, record: runtime),
+        )
+        monkeypatch.setattr(
+            tutoring_service_module.LLMQuestionGenerator,
+            "generate_question_set",
+            classmethod(lambda cls, *args, **kwargs: (_ for _ in ()).throw(RuntimeError("provider failed"))),
+        )
+
+        with pytest.raises(ValueError, match="AI 服务未能生成题目"):
+            AdaptiveTutoringService.generate_dynamic_questions(
+                user_id=sample_user.id,
+                learner_id=sample_learner_profile.id,
+                topic="BP算法",
+                difficulty=2,
+                question_count=1,
+             )
 
     def test_high_difficulty_fallback_uses_expert_rubric(
         self, db_session, sample_learner_profile, sample_user, monkeypatch

@@ -35,7 +35,7 @@ function difficultyLabel(value?: number): string {
 
 function generationLabel(method?: string | null): string | null {
   if (!method) return null
-  if (method === 'deepseek') return 'AI 动态生成'
+  if (method === 'deepseek' || method === 'ai_generated') return 'AI 动态生成'
   if (method === 'resource_generation') return '分阶资源题'
   if (method === 'deterministic_fallback') return '本地兜底题'
   return method

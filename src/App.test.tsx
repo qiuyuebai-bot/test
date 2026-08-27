@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { render, waitFor } from '@testing-library/react'
+import { render, screen, waitFor } from '@testing-library/react'
 
 vi.mock('@/store', async () => {
   const { useStoreMock } = await import('./test/mockStore')
@@ -8,6 +8,10 @@ vi.mock('@/store', async () => {
 
 vi.mock('./pages/Dashboard', () => ({
   default: () => <div>dashboard page</div>,
+}))
+
+vi.mock('./pages/AiConfig', () => ({
+  default: () => <div>AI config page</div>,
 }))
 
 import App from './App'
@@ -57,5 +61,14 @@ describe('hidden legacy routes', () => {
     render(<App />)
 
     await waitFor(() => expect(window.location.pathname).toBe('/dashboard'))
+  })
+
+  it.each(['teacher', 'learner'])('allows %s users to access AI configuration', async (role) => {
+    setMockStore({ user: { id: 2, username: role, role } })
+    window.history.replaceState({}, '', '/ai-config')
+    render(<App />)
+
+    expect(await screen.findByText('AI config page')).toBeInTheDocument()
+    expect(window.location.pathname).toBe('/ai-config')
   })
 })

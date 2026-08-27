@@ -19,11 +19,13 @@ import {
   ChevronDown,
   ShieldCheck,
   Briefcase,
+  ServerCog,
   type LucideIcon,
 } from 'lucide-react'
 import { clsx } from 'clsx'
 import { useState, useEffect, useRef } from 'react'
 import { prefetchRoute } from '@/lib/routePrefetch'
+import DesktopAIConfigGate from './DesktopAIConfigGate'
 
 type NavigationItem = {
   name: string
@@ -67,6 +69,12 @@ const navigationGroups: NavigationGroup[] = [
       { name: '多智能体', href: '/multi-agent', icon: Network },
       { name: '量化指标', href: '/metrics', icon: TrendingUp },
       { name: '运行监控', href: '/monitoring', icon: FlaskConical },
+    ],
+  },
+  {
+    name: '系统设置',
+    items: [
+      { name: 'AI 服务', href: '/ai-config', icon: ServerCog },
     ],
   },
 ]
@@ -301,6 +309,7 @@ export default function Layout() {
 
         {/* 内容区域 */}
         <main className="flex-1 min-h-0 overflow-y-auto p-4 md:p-6 bg-bg-secondary">
+          <DesktopAIConfigGate />
           <PageTransition key={location.pathname}>
             <Outlet />
           </PageTransition>

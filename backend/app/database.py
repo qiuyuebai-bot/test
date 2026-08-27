@@ -5,6 +5,7 @@
 - PostgreSQL：使用连接池（pool_size + max_overflow），pool_pre_ping 保活
 """
 from pathlib import Path
+import sqlite3
 from sqlalchemy import create_engine, event, inspect
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from typing import Generator
@@ -13,6 +14,7 @@ from loguru import logger
 from fastapi import HTTPException
 
 from app.config import settings
+from app.desktop_runtime import bundle_path, desktop_data_dir
 
 
 def _build_engine():
@@ -119,9 +121,9 @@ def init_database() -> None:
 
     logger.info(f"正在初始化数据库（已注册 {len(models.__all__)} 个模型，APP_ENV={settings.APP_ENV}）...")
 
-    is_production = settings.APP_ENV == "production"
+    is_production = settings.APP_ENV == "production" or settings.is_desktop
 
-    alembic_ini_path = Path(__file__).resolve().parent.parent / "alembic.ini"
+    alembic_ini_path = bundle_path("alembic.ini")
     if not alembic_ini_path.exists():
         if is_production:
             logger.error(f"生产环境未找到 alembic.ini: {alembic_ini_path}")
@@ -132,12 +134,13 @@ def init_database() -> None:
         table_names = set(inspect(engine).get_table_names())
         has_version_table = "alembic_version" in table_names
         user_tables = table_names - {"alembic_version"}
+        is_fresh_schema = not has_version_table and not user_tables
 
         # 初始迁移是历史基线（不创建表），所以新数据库需要先建立 ORM
         # 基线；后续启动一律跳过 create_all，让迁移文件管理 schema。
-        if not has_version_table or not user_tables:
+        if is_fresh_schema:
             Base.metadata.create_all(bind=engine)
-            logger.info("create_all 完成（仅用于无 Alembic 版本的初始基线）")
+            logger.info("create_all 完成（全新数据库的初始基线）")
         else:
             logger.info("检测到 Alembic 版本表，跳过 create_all，按迁移链升级")
 
@@ -147,10 +150,21 @@ def init_database() -> None:
             from alembic import command
 
             alembic_cfg = Config(str(alembic_ini_path))
+            # Alembic otherwise resolves ``script_location = alembic`` from
+            # the process working directory.  Keep migrations reliable when
+            # the backend is launched from the project root (for tests) too.
+            alembic_cfg.set_main_option("script_location", str(bundle_path("alembic")))
             # 显式从 settings 注入 DATABASE_URL，避免 alembic.ini 配置漂移
             alembic_cfg.set_main_option("sqlalchemy.url", settings.DATABASE_URL)
-            command.upgrade(alembic_cfg, "head")
-            logger.info("Alembic 迁移完成")
+            if is_fresh_schema:
+                # ORM 已按当前模型建立完整结构。全新库继续执行历史 ALTER
+                # 迁移会重复添加已存在的列，因此只写入当前迁移版本标记。
+                command.stamp(alembic_cfg, "head")
+                logger.info("全新数据库已标记为 Alembic 最新版本")
+            else:
+                _backup_desktop_sqlite_before_upgrade()
+                command.upgrade(alembic_cfg, "head")
+                logger.info("Alembic 迁移完成")
         except Exception as e:
             if is_production:
                 logger.error(f"生产环境 Alembic 迁移失败: {e}")
@@ -158,6 +172,24 @@ def init_database() -> None:
             warnings.warn(f"Alembic 迁移失败（不影响 create_all）: {e}")
 
     logger.info("数据库初始化完成")
+
+
+def _backup_desktop_sqlite_before_upgrade() -> None:
+    """桌面更新迁移前保留一份 SQLite 备份，避免安装升级损伤用户数据。"""
+    if not settings.is_desktop or not settings.is_sqlite:
+        return
+    raw_path = settings.DATABASE_URL[len("sqlite:///"):]
+    database_path = Path(raw_path)
+    if not database_path.exists():
+        return
+    backup_dir = desktop_data_dir() / "backups"
+    backup_dir.mkdir(parents=True, exist_ok=True)
+    backup_path = backup_dir / f"pre-upgrade-{settings.APP_VERSION}.db"
+    if backup_path.exists():
+        return
+    with sqlite3.connect(database_path) as source, sqlite3.connect(backup_path) as target:
+        source.backup(target)
+    logger.info("桌面数据库升级前备份已创建: {}", backup_path)
 
 
 def drop_database() -> None:

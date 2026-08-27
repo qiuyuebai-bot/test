@@ -14,10 +14,12 @@ import os
 import secrets
 from pathlib import Path
 
+from app.desktop_runtime import desktop_data_dir
+
 
 BACKEND_DIR = Path(__file__).resolve().parents[1]
 BASE_DIR = BACKEND_DIR.parent
-DATA_DIR = BASE_DIR / "data"
+DATA_DIR = desktop_data_dir()
 
 _APP_ENV = os.environ.get("APP_ENV", "development").lower()
 _VALID_ENVS = {"development", "staging", "production"}
@@ -97,6 +99,13 @@ def _default_sqlite_url() -> str:
     return f"sqlite:///{db_path.as_posix()}"
 
 
+def _desktop_log_dir() -> Path:
+    configured = os.environ.get("APP_DATA_DIR", "").strip()
+    if configured:
+        return Path(configured).expanduser().resolve().parent / "logs"
+    return BASE_DIR / "logs"
+
+
 class Settings(BaseSettings):
     """系统配置类"""
 
@@ -104,6 +113,11 @@ class Settings(BaseSettings):
         default="development",
         description="运行环境（development / staging / production）",
     )
+
+    DESKTOP_MODE: bool = Field(default=False, description="是否由 Windows 桌面外壳启动")
+    APP_DATA_DIR: str = Field(default="", description="桌面版用户数据目录")
+    DESKTOP_WEB_DIR: str = Field(default="", description="桌面版内嵌前端构建目录")
+    DESKTOP_AUTH_TOKEN: str = Field(default="", repr=False, description="桌面会话令牌")
 
     DATABASE_URL: str = Field(
         default_factory=_default_sqlite_url,
@@ -124,7 +138,7 @@ class Settings(BaseSettings):
         description="是否启用 Celery 异步任务队列（true: 任务走 Celery worker + Redis pub/sub 跨进程 SSE；false: 走进程内 daemon 线程，无需 Redis）",
     )
 
-    CHROMA_DB_PATH: str = Field(default="./data/chroma_db", description="Chroma向量数据库路径")
+    CHROMA_DB_PATH: str = Field(default_factory=lambda: str(DATA_DIR / "chroma_db"), description="Chroma向量数据库路径")
     CHROMA_COLLECTION_NAME: str = Field(default="knowledge_slices", description="Chroma集合名称")
     EMBEDDING_MODEL_PATH: str = Field(default="./models/embedding_model", description="Embedding模型路径")
 
@@ -138,16 +152,33 @@ class Settings(BaseSettings):
         default=False,
         description="是否启用 DeepSeek 思考模式；资源生成默认关闭以保证返回正式 content",
     )
+    OPENAI_THINKING_PARAM: bool = Field(
+        default=True,
+        description="是否在请求中显式发送 thinking 参数（DeepSeek v4 默认开启思考，需显式关闭；"
+        "dashscope 等不支持该字段的服务应设为 false）",
+    )
+    AI_CONFIG_ENCRYPTION_KEY: str = Field(
+        default="",
+        description="用户界面保存的 AI 密钥加密密钥（Fernet，可选；未设置时由 SECRET_KEY 稳定派生）",
+    )
+    AI_CONFIG_TEST_TIMEOUT_SECONDS: int = Field(
+        default=15,
+        description="AI 服务连接测试超时秒数",
+    )
+    AI_CONFIG_ALLOW_PRIVATE_ENDPOINTS: bool = Field(
+        default=False,
+        description="是否允许自定义 AI 服务使用内网/回环地址；Ollama 与 LM Studio 默认仅允许回环地址",
+    )
 
     # LLM 熔断器（Phase 7：防止 LLM 服务故障导致雪崩）
     LLM_CIRCUIT_BREAKER_ENABLED: bool = Field(default=True, description="是否启用 LLM 熔断器")
     LLM_CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = Field(default=5, description="连续失败多少次后触发熔断")
     LLM_CIRCUIT_BREAKER_RECOVERY_TIMEOUT: int = Field(default=60, description="熔断后冷却时间（秒），过后转半开试探")
 
-    UPLOAD_DIR: str = Field(default="./data/uploads", description="上传文件目录")
-    KNOWLEDGE_DOC_DIR: str = Field(default="./data/knowledge_docs", description="知识库文档目录")
-    RESOURCE_OUTPUT_DIR: str = Field(default="./data/resources", description="资源输出目录")
-    LOG_DIR: str = Field(default="./logs", description="日志目录")
+    UPLOAD_DIR: str = Field(default_factory=lambda: str(DATA_DIR / "uploads"), description="上传文件目录")
+    KNOWLEDGE_DOC_DIR: str = Field(default_factory=lambda: str(DATA_DIR / "knowledge_docs"), description="知识库文档目录")
+    RESOURCE_OUTPUT_DIR: str = Field(default_factory=lambda: str(DATA_DIR / "resources"), description="资源输出目录")
+    LOG_DIR: str = Field(default_factory=lambda: str(_desktop_log_dir()), description="日志目录")
 
     SECRET_KEY: str = Field(default_factory=_load_or_generate_secret, description="JWT密钥（自动生成或从环境变量读取）")
     JWT_ALGORITHM: str = Field(default="HS256", description="JWT算法")
@@ -241,6 +272,13 @@ class Settings(BaseSettings):
         """校验最大Token数"""
         if v < 100 or v > 128000:
             raise ValueError(f"OPENAI_MAX_TOKENS 必须在 100~128000 之间，当前值: {v}")
+        return v
+
+    @field_validator("AI_CONFIG_TEST_TIMEOUT_SECONDS")
+    @classmethod
+    def validate_ai_config_test_timeout(cls, v: int) -> int:
+        if v < 1 or v > 60:
+            raise ValueError("AI_CONFIG_TEST_TIMEOUT_SECONDS 必须在 1~60 之间")
         return v
 
     @field_validator("JWT_EXPIRE_MINUTES")
@@ -358,6 +396,7 @@ class Settings(BaseSettings):
     @model_validator(mode="after")
     def resolve_storage_paths(self):
         """Keep all local storage paths in the same project data root."""
+        storage_root = DATA_DIR if self.DESKTOP_MODE or self.APP_DATA_DIR else BASE_DIR
         for field_name in (
             "CHROMA_DB_PATH",
             "UPLOAD_DIR",
@@ -367,7 +406,7 @@ class Settings(BaseSettings):
         ):
             value = Path(getattr(self, field_name))
             if not value.is_absolute():
-                setattr(self, field_name, str((BASE_DIR / value).resolve()))
+                setattr(self, field_name, str((storage_root / value).resolve()))
         return self
 
     model_config = SettingsConfigDict(
@@ -396,6 +435,10 @@ class Settings(BaseSettings):
     @property
     def is_production(self) -> bool:
         return self.APP_ENV == "production"
+
+    @property
+    def is_desktop(self) -> bool:
+        return self.DESKTOP_MODE
 
     @property
     def cors_origin_list(self) -> list:

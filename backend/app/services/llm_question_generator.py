@@ -89,7 +89,7 @@ class LLMQuestionGenerator:
                 "difficulty": question["difficulty"],
                 "explanation": question["explanation"],
                 "knowledgePoints": question.get("knowledge_points", []),
-                "generation_method": "deepseek",
+                "generation_method": "ai_generated",
             })
         return result
 
