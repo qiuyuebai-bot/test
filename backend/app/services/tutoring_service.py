@@ -24,6 +24,7 @@ from app.services.llm_question_generator import LLMQuestionGenerator
 from app.services.ai_config_service import AIConfigService
 from app.utils.llm import LLMUtil
 from app.utils.llm_runtime import use_runtime_config
+from app.utils.resource_content import build_source_references, calculate_source_coverage
 from app.domains.knowledge.service import KnowledgeService
 
 # 题库与知识点解释从 JSON 配置加载，避免在源码中硬编码业务数据
@@ -836,7 +837,20 @@ class AdaptiveTutoringService(BaseService):
                 pending_question.status = "answered"
                 pending_question.answered_at = datetime.utcnow()
                 db.flush()
-            
+
+            # 答错即潜在新盲区：异步入队讲义增补（冷却/去重/落地校验见服务内部），
+            # 任何失败只记录日志，不阻塞答题主流程
+            if not is_correct:
+                cls._maybe_supplement_lecture(
+                    learner_id=learner_id,
+                    user_id=user_id,
+                    topic=question_topic,
+                    question_content=question_content,
+                    user_answer=user_answer,
+                    correct_answer=correct_answer,
+                    difficulty=question_difficulty,
+                )
+
             result = {
                 "success": True,
                 "learner_id": learner_id,
@@ -1329,6 +1343,15 @@ class AdaptiveTutoringService(BaseService):
                     "reference_knowledge": knowledge_explanation or "无可用参考资料",
                 },
             )
+            # 落地校验：检索到知识切片时，AI 讲解必须至少命中一个切片术语。
+            # 完全脱离参考知识的讲解按幻觉处理，回退确定性分支（其正文直接
+            # 取自知识库/种子文本，天然落地）。
+            if kb_results and not cls._explanation_grounded(
+                ai_content.get("simple_explanation", ""), kb_results
+            ):
+                raise ValueError(
+                    f"AI 讲解未命中任何参考切片: topic={question_topic}"
+                )
             # Keep the branch contract authoritative even if the model ignores
             # the requested decision in its free-form response.
             ai_content["type"] = decision
@@ -1355,6 +1378,91 @@ class AdaptiveTutoringService(BaseService):
             "suggested_resources": suggested_resources,
             "knowledge_source": "knowledge_base" if knowledge_explanation else "seed_data",
         }
+
+    @classmethod
+    def _maybe_supplement_lecture(
+        cls,
+        learner_id: int,
+        user_id: int,
+        topic: str,
+        question_content: str,
+        user_answer: Any,
+        correct_answer: Any,
+        difficulty: Any,
+    ) -> None:
+        """Answer-wrong hook: enqueue an incremental lecture supplement off the request path."""
+        try:
+            from app.services.lecture_supplement_service import LectureSupplementService
+
+            learner, latest_resource, last_at, active_pipeline = (
+                LectureSupplementService._load_context(learner_id, topic)
+            )
+            should, reason = LectureSupplementService.evaluate_trigger(
+                learner, topic, latest_resource, last_at, active_pipeline
+            )
+            if not should:
+                logger.debug(
+                    f"[讲义增补] 未触发: learner={learner_id}, topic={topic}, reason={reason}"
+                )
+                return
+
+            question_summary = (
+                f"题目：{str(question_content)[:200]}；"
+                f"学习者作答：{str(user_answer)[:100]}；"
+                f"正确答案：{str(correct_answer)[:100]}"
+            )
+            try:
+                difficulty_level = int(difficulty)
+            except (TypeError, ValueError):
+                difficulty_level = 3
+
+            from app.config import settings
+
+            if settings.USE_CELERY:
+                from app.celery_app import supplement_lecture_task
+
+                supplement_lecture_task.delay(
+                    learner_id=learner_id,
+                    topic=topic,
+                    question_summary=question_summary,
+                    difficulty_level=difficulty_level,
+                    owner_user_id=user_id,
+                )
+            else:
+                import threading
+
+                from app.services.ai_config_service import AIConfigService
+
+                def run_supplement():
+                    try:
+                        with AIConfigService.use_user_runtime_config(user_id):
+                            LectureSupplementService.run(
+                                learner_id=learner_id,
+                                topic=topic,
+                                question_summary=question_summary,
+                                difficulty_level=difficulty_level,
+                            )
+                    except Exception as exc:
+                        logger.error(
+                            f"[讲义增补] 后台执行失败: learner={learner_id}, error={exc}"
+                        )
+
+                threading.Thread(
+                    target=run_supplement,
+                    daemon=True,
+                    name=f"lecture-supplement-{learner_id}",
+                ).start()
+        except Exception as exc:
+            logger.warning(f"[讲义增补] 触发检查失败: learner={learner_id}, error={exc}")
+
+    @staticmethod
+    def _explanation_grounded(explanation: str, kb_results: List[Dict[str, Any]]) -> bool:
+        """Check whether the AI explanation engaged at least one retrieved slice."""
+        references = build_source_references(kb_results)
+        if not references:
+            return True
+        coverage = calculate_source_coverage(explanation, references)
+        return int(coverage.get("covered_slice_count", 0) or 0) >= 1
 
     @staticmethod
     def _select_relevant_passages(

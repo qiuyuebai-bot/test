@@ -30,6 +30,11 @@
     "description": "自适应导学反馈：根据答题结果生成解释、挑战和学习建议",
     "variables": ["decision", "knowledge_topic", "question", "user_answer", "correct_answer", "difficulty", "learning_style", "learner_summary", "reference_knowledge"]
   },
+  "lecture_supplement": {
+    "version": "1.0.0",
+    "description": "讲义增量增补：为答错的新知识盲区生成追加到现有讲义的补充章节",
+    "variables": ["learner_summary", "blind_topic", "question_summary", "difficulty_level", "reference_knowledge"]
+  },
   "debate_review": {
     "version": "1.0.0",
     "description": "基于参考资料的生成内容辩论与最终裁决",

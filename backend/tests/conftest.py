@@ -116,6 +116,7 @@ def client(db_session: Session) -> Generator[TestClient, None, None]:
         'app.services.report_service',
         'app.services.tutoring_service',
         'app.agents.orchestrator',
+        'app.services.lecture_supplement_service',
     ]
     
     patchers = []

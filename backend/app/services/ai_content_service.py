@@ -60,7 +60,48 @@ class AIContentService:
         """Generate one supported content type and validate its response."""
         if content_type == "tutoring_feedback":
             return cls._generate_tutoring_feedback(payload)
+        if content_type == "lecture_supplement":
+            return cls._generate_lecture_supplement(payload)
         raise AIContentError(f"unsupported AI content type: {content_type}")
+
+    @classmethod
+    def _generate_lecture_supplement(cls, payload: Dict[str, Any]) -> Dict[str, Any]:
+        if not LLMUtil.is_available():
+            raise AIContentError("LLM is unavailable")
+
+        response, _ = cls.call_with_prompt_template(
+            "lecture_supplement",
+            {
+                "learner_summary": json.dumps(
+                    payload.get("learner_summary", {}), ensure_ascii=False
+                )[:3000],
+                "blind_topic": str(payload.get("blind_topic", "")).strip()[:200],
+                "question_summary": str(payload.get("question_summary", "")).strip()[:2000],
+                "difficulty_level": payload.get("difficulty_level", 3),
+                "reference_knowledge": payload.get("reference_knowledge") or "无可用参考资料",
+            },
+            temperature=0.4,
+            use_cache=False,
+        )
+        result = parse_json_object(response)
+        if result.get("_meta", {}).get("model") == "mock":
+            raise AIContentError("LLM returned fallback mock response")
+
+        section_title = bounded_text(result.get("section_title"), "section_title", maximum=120)
+        section_content = bounded_text(
+            result.get("section_content"), "section_content", maximum=6000
+        )
+        key_points = [
+            bounded_text(item, "key_point", maximum=160)
+            for item in bounded_list(result.get("key_points", []), "key_points", maximum=8)
+        ]
+
+        return {
+            "section_title": section_title,
+            "section_content": section_content,
+            "key_points": key_points,
+            "generation_method": "deepseek",
+        }
 
     @classmethod
     def _generate_tutoring_feedback(cls, payload: Dict[str, Any]) -> Dict[str, Any]:

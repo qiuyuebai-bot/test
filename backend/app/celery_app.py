@@ -106,17 +106,49 @@ def full_pipeline_task(
             )
         
         logger.info(f"[Celery] 任务完成: task_id={task_id}")
-        
+
         return {
             "status": "success",
             "task_id": task_id,
             "result": str(result),
         }
-        
+
     except Exception as e:
         logger.error(f"[Celery] 任务失败: task_id={task_id}, error={e}")
         self.update_state(state="FAILURE", meta={"error": str(e)})
         raise
+
+
+@celery_app.task(name="agent_tasks.supplement_lecture")
+def supplement_lecture_task(
+    learner_id: int,
+    topic: str,
+    question_summary: str = "",
+    difficulty_level: int = 3,
+    owner_user_id: Optional[int] = None,
+):
+    """讲义增量增补任务：为答错的新盲区向现有讲义追加补充章节。
+
+    失败不重试——run() 内部已做落地校验与幂等复检，失败留待下次
+    答错自然重新触发（冷却窗口只记录成功增补）。
+    """
+    from app.services.ai_config_service import AIConfigService
+    from app.services.lecture_supplement_service import LectureSupplementService
+
+    logger.info(f"[Celery] 开始讲义增补: learner_id={learner_id}, topic={topic}")
+
+    runtime_context = (
+        AIConfigService.use_user_runtime_config(owner_user_id)
+        if owner_user_id is not None else nullcontext()
+    )
+    with runtime_context:
+        result = LectureSupplementService.run(
+            learner_id=learner_id,
+            topic=topic,
+            question_summary=question_summary,
+            difficulty_level=difficulty_level,
+        )
+    return result
 
 
 @celery_app.task(

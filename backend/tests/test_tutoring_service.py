@@ -9,6 +9,7 @@ from unittest.mock import MagicMock
 from sqlalchemy.orm import Session
 
 from app.services import tutoring_service as tutoring_service_module
+from app.services import lecture_supplement_service as lecture_supplement_module
 from app.services.tutoring_service import AdaptiveTutoringService
 from app.utils.llm_runtime import LLMRuntimeConfig
 from app.models import LearnerProfile, LearningResource, AnswerRecord, IssuedTutoringQuestion
@@ -29,6 +30,9 @@ def patch_tutoring_db_context(db_session: Session, monkeypatch):
 
     monkeypatch.setattr(
         tutoring_service_module, "get_db_context", override_get_db_context
+    )
+    monkeypatch.setattr(
+        lecture_supplement_module, "get_db_context", override_get_db_context
     )
     def disable_ai(cls, content_type, payload):
         raise RuntimeError("AI disabled in unit tests")

@@ -12,6 +12,7 @@ from app.models import AnswerRecord, IssuedTutoringQuestion, LearningResource
 from app.services.common import ResourceServiceHelper
 from app.schemas.core import GenerateResourcesRequest
 from app.services import tutoring_service as tutoring_service_module
+from app.services import lecture_supplement_service as lecture_supplement_module
 from app.services.tutoring_service import AdaptiveTutoringService
 from app.utils.auth import CurrentUser
 
@@ -29,6 +30,7 @@ def patch_sync_db_context(db_session: Session, monkeypatch):
 
     monkeypatch.setattr(task_repository_module, "get_db_context", override_get_db_context)
     monkeypatch.setattr(tutoring_service_module, "get_db_context", override_get_db_context)
+    monkeypatch.setattr(lecture_supplement_module, "get_db_context", override_get_db_context)
     monkeypatch.setattr(resource_service_module, "get_db_context", override_get_db_context)
 
 
