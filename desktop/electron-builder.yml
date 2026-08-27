@@ -20,6 +20,8 @@ extraResources:
     to: web
 asar: true
 win:
+  # 当前发布流程未配置 Windows 代码签名证书。保留图标与元数据编辑，仅跳过签名。
+  signExecutable: false
   target:
     - target: nsis
       arch:
