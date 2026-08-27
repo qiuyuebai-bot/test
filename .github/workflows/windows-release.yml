@@ -93,8 +93,14 @@ jobs:
           if (-not $installer) { throw '未找到 Windows 安装包' }
           $checksum = Get-ChildItem release\*.sha256 | Select-Object -First 1
           if (-not $checksum) { throw '未找到安装包校验文件' }
+          # 使用 ASCII 资产名，避免 Windows 命令行编码导致 GitHub 资产名丢失中文前缀。
+          $version = node -p "require('./package.json').version"
+          $assetLabel = "ZhiyuEngine-Setup-$version.exe"
+          $checksumLabel = "$assetLabel.sha256"
+          $installerUpload = "$($installer.FullName)#$assetLabel"
+          $checksumUpload = "$($checksum.FullName)#$checksumLabel"
           if ($env:GITHUB_REF_NAME -eq 'v1.0.0') {
-            gh release create "$env:GITHUB_REF_NAME" $installer.FullName $checksum.FullName --title "知域引擎 $env:GITHUB_REF_NAME" --notes-file docs/RELEASE_NOTES_v1.0.0.md
+            gh release create "$env:GITHUB_REF_NAME" $installerUpload $checksumUpload --title "知域引擎 $env:GITHUB_REF_NAME" --notes-file docs/RELEASE_NOTES_v1.0.0.md
           } else {
-            gh release create "$env:GITHUB_REF_NAME" $installer.FullName $checksum.FullName --title "知域引擎 $env:GITHUB_REF_NAME" --generate-notes
+            gh release create "$env:GITHUB_REF_NAME" $installerUpload $checksumUpload --title "知域引擎 $env:GITHUB_REF_NAME" --generate-notes
           }

@@ -50,7 +50,7 @@
 
 ## 安装与体验
 
-1. 在本页底部的 Assets 中下载 `知域引擎-Setup-1.0.0.exe`。
+1. 在本页底部的 Assets 中下载 `ZhiyuEngine-Setup-1.0.0.exe`（安装程序内部名称、桌面图标和开始菜单名称仍为“知域引擎”）。
 2. 双击安装包，按安装向导完成安装；默认会创建桌面快捷方式。
 3. 通过桌面或开始菜单中的“知域引擎”启动。
 4. 首次使用创建本地管理员账号。
@@ -96,4 +96,4 @@ git push origin v1.0.1
 2. 执行桌面端验证；
 3. 生成新的 Windows 安装包与 SHA-256 校验文件；
 4. 自动创建或更新对应的 GitHub Release；
-5. 将安装包上传到 Release 的 Assets，供用户直接下载。
+5. 将安装包上传到 Release 的 Assets，供用户直接下载。为避免 Windows 命令行编码问题，GitHub Assets 使用 ASCII 文件名 `ZhiyuEngine-Setup-{version}.exe`，不影响软件内品牌名称。
