@@ -50,7 +50,8 @@ if (!existsSync(electronExecutable)) {
   await run(process.execPath, [electronInstaller]);
 }
 
-await run(builder, ["--config", join(ROOT, "desktop", "electron-builder.yml"), "--win", ...(unpacked ? ["--dir"] : [])]);
+// Release 由 GitHub Actions 的最后一步统一创建，避免 electron-builder 因标签自动发布。
+await run(builder, ["--config", join(ROOT, "desktop", "electron-builder.yml"), "--win", "--publish", "never", ...(unpacked ? ["--dir"] : [])]);
 
 if (!unpacked) {
   const installer = join(ROOT, "release", `知域引擎-Setup-${JSON.parse(await readFile(join(ROOT, "package.json"), "utf8")).version}.exe`);
