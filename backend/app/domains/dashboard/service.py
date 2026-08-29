@@ -9,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.domains.agent.models import AgentTask
 from app.domains.learner.models import AnswerRecord, LearnerProfile
+from app.models import DiagnosticSession
 from app.domains.learner.service import LearnerService
 from app.domains.resource.models import LearningResource
 from app.services.common import ResourceServiceHelper
@@ -190,6 +191,21 @@ def _learner_dashboard_payload(
         AgentTask.task_type.in_(("learner_diagnosis", "full_pipeline")),
         AgentTask.status == "completed",
     ).scalar() or 0
+    # 向导的六维能力诊断走 DiagnosticSession 答题路径，不产生 AgentTask；
+    # 只认 AgentTask 会把完成答题诊断的学习者永远卡在"开始首次诊断"。
+    if diagnosis_count == 0:
+        if profile.diagnostic_status == "completed":
+            diagnosis_count = 1
+        else:
+            diagnosis_count = (
+                db.query(func.count(DiagnosticSession.id))
+                .filter(
+                    DiagnosticSession.learner_id == profile.id,
+                    DiagnosticSession.status == "completed",
+                )
+                .scalar()
+                or 0
+            )
     answer_count = db.query(func.count(AnswerRecord.id)).filter(
         AnswerRecord.learner_id == profile.id,
     ).scalar() or 0
