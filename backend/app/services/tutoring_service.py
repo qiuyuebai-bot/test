@@ -1246,6 +1246,7 @@ class AdaptiveTutoringService(BaseService):
         knowledge_explanation = ""
         kb_results = []
         knowledge_key_points: List[str] = []
+        knowledge_evidence: List[Dict[str, Any]] = []
         with get_db_context() as db:
             kb_results = KnowledgeService.search(
                 db=db,
@@ -1265,6 +1266,16 @@ class AdaptiveTutoringService(BaseService):
                     title = result.get("title", "") or result.get("doc_title", "")
                     if title:
                         knowledge_key_points.append(title)
+                    if content:
+                        knowledge_evidence.append({
+                            "doc_id": result.get("doc_id"),
+                            "doc_title": result.get("doc_title", "") or result.get("title", ""),
+                            "title": result.get("title", ""),
+                            "content_preview": (
+                                content[:160] + "..." if len(content) > 160 else content
+                            ),
+                            "similarity": result.get("similarity"),
+                        })
 
         # 2. 先从种子JSON取解释，没有则用知识库内容
         explanations = _QUESTION_EXPLANATIONS
@@ -1364,6 +1375,7 @@ class AdaptiveTutoringService(BaseService):
             )
             ai_content["recommendation"] = decision_copy["recommendation"]
             ai_content["suggested_resources"] = suggested_resources
+            ai_content["knowledge_evidence"] = knowledge_evidence
             return ai_content
         except Exception as exc:
             logger.warning(f"[自适应导学] AI 简化反馈失败，使用本地兜底: {exc}")
@@ -1376,6 +1388,7 @@ class AdaptiveTutoringService(BaseService):
             "practice_tips": decision_copy["practice"],
             "recommendation": decision_copy["recommendation"],
             "suggested_resources": suggested_resources,
+            "knowledge_evidence": knowledge_evidence,
             "knowledge_source": "knowledge_base" if knowledge_explanation else "seed_data",
         }
 

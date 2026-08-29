@@ -21,6 +21,25 @@ from app.utils.llm import LLMUnavailableError, LLMUtil
 from app.utils.resource_content import ResourceContentError, normalize_resource_content
 
 
+_LECTURE_BODY = """# 流水线自动讲义
+
+## 学习目标
+
+理解数据预处理在机器学习流水线中的位置，掌握标准化、归一化与缺失值处理的适用场景，
+并能在训练与评估之间正确隔离数据，避免泄露。
+
+## 核心内容
+
+标准化将特征缩放到均值为 0、方差为 1 的区间，适合分布近似正态的特征；
+归一化把数值压缩到 [0, 1] 区间，对线性模型和神经网络尤其重要。
+缺失值处理包括删除、均值填充、中位数填充与模型预测填充。
+
+## 实践要点
+
+先在训练集上拟合缩放参数，再应用到验证与测试集；类别特征优先使用独热编码或目标编码。
+"""
+
+
 @pytest.fixture
 def resource_persistence_context(db_session, monkeypatch):
     @contextmanager
@@ -228,7 +247,7 @@ def test_task_repository_auto_publishes_new_validated_lecture(
             generation_result={
                 "resource_type": "lecture",
                 "resource_title": "流水线自动讲义",
-                "content": "# 流水线自动讲义\n\n完整内容。",
+                "content": _LECTURE_BODY,
                 "content_json": {},
                 "generation_method": "deepseek",
             },
@@ -261,7 +280,7 @@ def test_task_repository_auto_publishes_reused_lecture(
                 "resource_type": "lecture",
                 "knowledge_topic": "测试主题",
                 "industry": "软件开发",
-                "content": "# 复用专属讲义\n\n完整内容。",
+                "content": _LECTURE_BODY,
                 "content_json": {},
                 "validation_score": 90,
             },
@@ -475,7 +494,7 @@ def test_sync_resource_save_auto_publishes_new_lecture(
             resource_type="lecture",
             resource_data={
                 "resource_title": "自动入库讲义",
-                "content": "# 自动入库讲义\n\nThis is complete content.",
+                "content": _LECTURE_BODY,
                 "_meta": {"score": 95},
             },
             diagnosis_result={},

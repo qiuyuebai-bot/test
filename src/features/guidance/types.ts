@@ -52,6 +52,22 @@ export interface PersistedSession {
   batchResult?: BatchSubmitResult | null
 }
 
+export interface KnowledgeEvidenceItem {
+  docId?: number
+  docTitle?: string
+  title?: string
+  contentPreview?: string
+  similarity?: number
+}
+
+export interface SuggestedResourceItem {
+  resourceId: number
+  title: string
+  type: string
+  matchScore?: number
+  difficultyLevel?: number
+}
+
 export interface GeneratedContent {
   type?: string
   title?: string
@@ -63,7 +79,7 @@ export interface GeneratedContent {
     keyPoints?: string[]
     application?: string
     pitfalls?: string[]
-    suggestedResources?: Array<{ resourceId: number; title: string; type: string; difficultyLevel?: number }>
+    suggestedResources?: SuggestedResourceItem[]
   }
   keyPoints?: string[]
   practiceTips?: string
@@ -72,7 +88,8 @@ export interface GeneratedContent {
   challengeObjectives?: string[]
   estimatedTime?: string
   bonusPoints?: number
-  suggestedResources?: Array<{ resourceId: number; title: string; type: string; matchScore?: number; difficultyLevel?: number }>
+  suggestedResources?: SuggestedResourceItem[]
+  knowledgeEvidence?: KnowledgeEvidenceItem[]
 }
 
 export interface SubmitResult {

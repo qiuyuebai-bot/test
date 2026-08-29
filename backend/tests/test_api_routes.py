@@ -204,9 +204,38 @@ class TestKnowledgeRoutes:
         assert data["total_slices"] == 10
         assert data["indexed_slices"] == 10
 
-    def test_trace_resource_requires_admin(self, client: TestClient, sample_learning_resource, auth_headers: dict):
-        """学习者不能查询知识溯源"""
+    def test_trace_resource_own_resource(self, client: TestClient, sample_learning_resource, auth_headers: dict):
+        """学习者可以查询自己资源的知识溯源"""
         response = client.get(f"/api/v1/knowledge/trace/{sample_learning_resource.id}", headers=auth_headers)
+        assert response.status_code == 200
+        data = response.json()
+        assert data["code"] == 200
+        assert data["data"]["resource"]["id"] == sample_learning_resource.id
+
+    def test_trace_resource_other_learner_forbidden(
+        self,
+        client: TestClient,
+        db_session: Session,
+        sample_learning_resource,
+        sample_learner_profile_production_engineer,
+        auth_headers: dict,
+    ):
+        """学习者不能查询他人资源的知识溯源"""
+        other_resource = LearningResource(
+            learner_id=sample_learner_profile_production_engineer.id,
+            title="他人资源",
+            resource_type="guide",
+            industry="人工智能",
+            content="# 其他学习者资源",
+            status="ready",
+            version="1.0",
+        )
+        db_session.add(other_resource)
+        db_session.commit()
+        db_session.refresh(other_resource)
+        assert other_resource.learner_id != sample_learning_resource.learner_id
+
+        response = client.get(f"/api/v1/knowledge/trace/{other_resource.id}", headers=auth_headers)
         assert response.status_code == 403
 
     def test_trace_resource_for_admin(self, client: TestClient, sample_learning_resource, admin_auth_headers: dict):

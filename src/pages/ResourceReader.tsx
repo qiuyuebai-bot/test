@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type CSSProp
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import {
   ArrowLeft,
+  BookOpen,
   Check,
   Copy,
   Download,
@@ -11,8 +12,9 @@ import {
   Send,
   SlidersHorizontal,
 } from 'lucide-react'
-import { coreApi } from '@/api'
+import { coreApi, knowledgeApi } from '@/api'
 import type { KnowledgePublicationRequest } from '@/api/core'
+import type { KnowledgeTraceResult } from '@/api/knowledge'
 import type { LearningResource } from '@/types'
 import { useStore } from '@/store'
 import Button from '@/components/Button'
@@ -50,12 +52,19 @@ function hideAnswerLines(content: string): string {
     .join('\n')
 }
 
+function formatSliceQuality(score?: number | null): string | null {
+  if (score == null || score <= 0) return null
+  const percent = score <= 1 ? score * 100 : score
+  return `${Math.round(percent)}%`
+}
+
 export default function ResourceReader() {
   const { resourceId } = useParams<{ resourceId: string }>()
   const navigate = useNavigate()
   const user = useStore((state) => state.user)
   const [resource, setResource] = useState<LearningResource | null>(null)
   const [publication, setPublication] = useState<KnowledgePublicationRequest | null>(null)
+  const [trace, setTrace] = useState<KnowledgeTraceResult | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
   const [size, setSize] = useState<ReaderSize>('medium')
@@ -82,6 +91,11 @@ export default function ResourceReader() {
           setPublication(null)
         }
       }
+      try {
+        setTrace(await knowledgeApi.traceResource(id))
+      } catch {
+        setTrace(null)
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : '资源加载失败')
     } finally {
@@ -101,6 +115,9 @@ export default function ResourceReader() {
   const content = useMemo(() => normalizeResourceContent(resource?.content).content || '', [resource?.content])
   const displayContent = resource?.resourceType === 'exercise' && !showAnswers ? hideAnswerLines(content) : content
   const hasAnswers = resource?.resourceType === 'exercise' && content.split('\n').some(isAnswerLine)
+  const traceDocs = trace?.sourceDocs || []
+  const traceSlices = trace?.sourceSlices || []
+  const hasKnowledgeSources = traceDocs.length > 0 || traceSlices.length > 0
   const headings = useMemo(() => {
     let headingIndex = 0
     return displayContent.split('\n').flatMap((line) => {
@@ -198,6 +215,48 @@ export default function ResourceReader() {
           <article data-testid="resource-reader-content" className="resource-reader-content leading-8 text-text-primary" style={{ '--reader-font-size': readerFontSize } as CSSProperties}>
             <Suspense fallback={<p className="text-sm text-text-tertiary">正在加载正文...</p>}><MarkdownContent content={displayContent} headingIdPrefix="reader" /></Suspense>
           </article>
+          {hasKnowledgeSources && (
+            <section data-testid="resource-knowledge-sources" className="mt-12 border-t border-border pt-6 print:hidden" aria-label="知识来源">
+              <div className="flex flex-wrap items-center gap-2">
+                <BookOpen className="h-4 w-4 text-text-tertiary" />
+                <h2 className="font-medium text-text-primary">知识来源</h2>
+                <span className="text-sm text-text-tertiary">生成本资源时引用的领域知识库内容，可据此核查内容依据</span>
+              </div>
+              {traceDocs.length > 0 && (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {traceDocs.map((doc) => (
+                    <div key={doc.id} className="flex flex-wrap items-center gap-2 rounded-md border border-border bg-bg-secondary px-3 py-1.5 text-sm">
+                      {user?.role === 'admin' ? (
+                        <Link to="/knowledge-base" className="font-medium text-text-primary hover:text-primary">{doc.title}</Link>
+                      ) : (
+                        <span className="font-medium text-text-primary">{doc.title}</span>
+                      )}
+                      {doc.industry && <span className="text-xs text-text-tertiary">{doc.industry}</span>}
+                      {doc.version && <span className="text-xs text-text-tertiary">v{doc.version}</span>}
+                    </div>
+                  ))}
+                </div>
+              )}
+              {traceSlices.length > 0 && (
+                <div className="mt-4 space-y-2">
+                  {traceSlices.map((slice) => {
+                    const quality = formatSliceQuality(slice.qualityScore)
+                    return (
+                      <div key={slice.id} className="rounded-lg border border-border bg-bg-secondary px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-tertiary">
+                          <span className="font-medium text-text-secondary">{slice.docTitle || `文档 #${slice.docId}`}</span>
+                          {slice.sliceIndex != null && <span>第 {slice.sliceIndex + 1} 段</span>}
+                          {quality && <span>切片质量 {quality}</span>}
+                        </div>
+                        {slice.title && <p className="mt-1.5 text-sm font-medium text-text-primary">{slice.title}</p>}
+                        {slice.contentPreview && <p className="mt-1 text-sm leading-6 text-text-secondary">{slice.contentPreview}</p>}
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+            </section>
+          )}
           {canApplyPublication && <div className="mt-12 border-t border-border pt-6 print:hidden"><div className="flex flex-wrap items-center justify-between gap-3"><div><p className="font-medium text-text-primary">将历史专属讲义加入领域知识库</p><p className="mt-1 text-sm text-text-secondary">仅历史资源需要提交人工入库申请；新生成且达标的讲义会自动入库。</p></div><Button variant="primary" onClick={() => void applyPublication()} disabled={submitting}><Send className="h-4 w-4" />{submitting ? '提交中...' : '提交人工入库申请'}</Button></div></div>}
           {automaticPublicationMessage && <div className="mt-12 border-t border-border pt-6 print:hidden"><p className="text-sm text-text-secondary">{automaticPublicationMessage}</p></div>}
           {publicationBlockedReason && <div className="mt-12 border-t border-border pt-6 print:hidden"><p className="text-sm text-text-secondary">{publicationBlockedReason}</p></div>}

@@ -22,6 +22,9 @@ vi.mock('@/api', () => ({
     getKnowledgePublicationRequest: vi.fn(),
     exportResource: vi.fn(),
   },
+  knowledgeApi: {
+    traceResource: vi.fn().mockResolvedValue({ resource: { id: 1 }, sourceSlices: [], sourceDocs: [] }),
+  },
 }))
 
 vi.mock('@/store', () => ({
@@ -34,7 +37,7 @@ vi.mock('@/components/MarkdownContent', () => ({
 }))
 
 import ResourceReader from './ResourceReader'
-import { coreApi } from '@/api'
+import { coreApi, knowledgeApi } from '@/api'
 
 afterEach(() => {
   cleanup()
@@ -183,5 +186,41 @@ describe('ResourceReader', () => {
     expect(screen.getByText('已入库')).toBeInTheDocument()
     expect(screen.queryByRole('button', { name: /入库申请/ })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: '查看知识库文档' })).not.toBeInTheDocument()
+  })
+
+  it('renders knowledge sources traced from the knowledge base', async () => {
+    vi.mocked(coreApi.getResourceDetail).mockResolvedValueOnce({
+      id: 7, title: '溯源讲义', resourceType: 'lecture', content: '# 内容', contentSummary: '',
+      targetLearnerId: 1, contentType: 'text', qualityScore: null, reviewStatus: 'approved', generatedByAgent: 'test', generationTime: '',
+      versionNumber: 1, knowledgeTopic: '测试主题', status: 'ready', validationPassed: true, hallucinationDetected: false,
+    })
+    vi.mocked(knowledgeApi.traceResource).mockResolvedValueOnce({
+      resource: { id: 7, title: '溯源讲义', type: 'lecture' },
+      sourceDocs: [{ id: 11, title: '智能制造工艺手册', industry: '智能制造', version: '2.0' }],
+      sourceSlices: [
+        { id: 31, docId: 11, docTitle: '智能制造工艺手册', title: '工艺参数基准', sliceIndex: 2, contentPreview: '关键工艺参数的取值范围与校核方法...', qualityScore: 0.92 },
+      ],
+    })
+    render(<MemoryRouter initialEntries={['/resources/7/read']}><Routes><Route path="/resources/:resourceId/read" element={<ResourceReader />} /></Routes></MemoryRouter>)
+    await waitFor(() => expect(screen.getAllByText('溯源讲义').length).toBeGreaterThan(0))
+    const panel = await screen.findByTestId('resource-knowledge-sources')
+    expect(within(panel).getByText('知识来源')).toBeInTheDocument()
+    expect(within(panel).getAllByText('智能制造工艺手册').length).toBe(2)
+    expect(within(panel).getByText('第 3 段')).toBeInTheDocument()
+    expect(within(panel).getByText('切片质量 92%')).toBeInTheDocument()
+    expect(within(panel).getByText('工艺参数基准')).toBeInTheDocument()
+    expect(within(panel).getByText(/关键工艺参数的取值范围/)).toBeInTheDocument()
+  })
+
+  it('hides the knowledge source panel when no trace data exists', async () => {
+    vi.mocked(coreApi.getResourceDetail).mockResolvedValueOnce({
+      id: 8, title: '无溯源讲义', resourceType: 'lecture', content: '# 内容', contentSummary: '',
+      targetLearnerId: 1, contentType: 'text', qualityScore: null, reviewStatus: 'approved', generatedByAgent: 'test', generationTime: '',
+      versionNumber: 1, knowledgeTopic: '测试主题', status: 'ready', validationPassed: true, hallucinationDetected: false,
+    })
+    vi.mocked(knowledgeApi.traceResource).mockResolvedValueOnce({ resource: { id: 8 }, sourceSlices: [], sourceDocs: [] })
+    render(<MemoryRouter initialEntries={['/resources/8/read']}><Routes><Route path="/resources/:resourceId/read" element={<ResourceReader />} /></Routes></MemoryRouter>)
+    await waitFor(() => expect(screen.getAllByText('无溯源讲义').length).toBeGreaterThan(0))
+    expect(screen.queryByTestId('resource-knowledge-sources')).not.toBeInTheDocument()
   })
 })

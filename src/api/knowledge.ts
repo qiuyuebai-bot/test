@@ -132,6 +132,31 @@ function mapSliceFromApi(raw: RawSlice): KnowledgeSlice {
   }
 }
 
+export interface KnowledgeTraceSlice {
+  id: number
+  docId: number
+  docTitle?: string
+  title?: string
+  sliceIndex?: number
+  contentPreview?: string
+  qualityScore?: number
+  relevance?: string
+}
+
+export interface KnowledgeTraceDoc {
+  id: number
+  title: string
+  industry?: string
+  author?: string
+  version?: string
+}
+
+export interface KnowledgeTraceResult {
+  resource?: { id: number; title?: string; type?: string }
+  sourceSlices?: KnowledgeTraceSlice[]
+  sourceDocs?: KnowledgeTraceDoc[]
+}
+
 export const knowledgeApi = {
   async getPublicationRequests(params?: PaginationParams & { status?: string; industry?: string }): Promise<PagedData<KnowledgePublicationRequest>> {
     return http.get<PagedData<KnowledgePublicationRequest>>('/knowledge/publication-requests', params as Record<string, string | number | boolean | undefined>)
@@ -207,8 +232,8 @@ export const knowledgeApi = {
     return http.get(`/knowledge/preview/${id}`, params as Record<string, string | number | boolean | undefined>)
   },
 
-  traceResource(resourceId: number): Promise<unknown> {
-    return http.get(`/knowledge/trace/${resourceId}`)
+  async traceResource(resourceId: number): Promise<KnowledgeTraceResult> {
+    return http.get<KnowledgeTraceResult>(`/knowledge/trace/${resourceId}`, undefined, { silent: true })
   },
 
   getIndustryStats(): Promise<unknown> {

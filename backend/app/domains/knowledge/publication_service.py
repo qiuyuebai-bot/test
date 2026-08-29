@@ -30,6 +30,24 @@ PUBLISH_FAILED = "publish_failed"
 ACTIVE_STATUSES = (PENDING, WAITING_VALIDATION, PUBLISHING, PUBLISHED, PUBLISH_FAILED)
 AUTOMATED_PUBLICATION_NOTE = "系统自动入库"
 _AUTO_TITLE_PLACEHOLDERS = {"none", "null", "undefined", "未命名", "未命名资源"}
+# 知识库入库最低正文长度；低于该值的讲义正文视为占位内容，禁止入库落盘
+_MIN_PUBLISHABLE_CONTENT_CHARS = 200
+_STUB_CONTENT_RE = re.compile(
+    r"^(?:#.*\n+)*\s*(?:完整内容。?|正文|this is complete content\.?|placeholder|待补充|todo)\s*$",
+    re.IGNORECASE,
+)
+
+
+def _content_stub_reason(content: Any) -> Optional[str]:
+    """Return a diagnostic reason when lecture content is placeholder-grade."""
+    text = str(content or "").strip()
+    if not text:
+        return "讲义正文为空"
+    if _STUB_CONTENT_RE.match(text):
+        return "讲义正文为占位文本"
+    if len(text) < _MIN_PUBLISHABLE_CONTENT_CHARS:
+        return "讲义正文过短，疑似占位内容"
+    return None
 
 
 class PublicationError(ValueError):
@@ -117,8 +135,9 @@ class KnowledgePublicationService:
             return "讲义标题为空或为占位标题"
         if not str(resource.industry or "").strip():
             return "讲义未绑定领域"
-        if not str(resource.content or "").strip():
-            return "讲义正文为空"
+        content_reason = _content_stub_reason(resource.content)
+        if content_reason:
+            return content_reason
         if (resource.format_type or "md") not in ("md", "text", "html"):
             return "讲义格式不支持入库"
         if resource.review_status != "approved":
@@ -221,8 +240,9 @@ class KnowledgePublicationService:
             raise PublicationError("仅最新版本讲义可以申请入库", "resource_not_latest")
         if resource.status in ("failed", "archived"):
             raise PublicationError("讲义生成失败或已归档，暂不能申请入库", "resource_not_publishable")
-        if not (resource.content or "").strip():
-            raise PublicationError("讲义正文不能为空", "content_empty")
+        content_reason = _content_stub_reason(resource.content)
+        if content_reason:
+            raise PublicationError(content_reason, "content_stub")
         if (resource.format_type or "md") not in ("md", "text", "html"):
             raise PublicationError("讲义格式不支持入库", "format_invalid")
 
@@ -420,8 +440,9 @@ class KnowledgePublicationService:
         # 知识库只收录知识内容本身；“参考知识库资料不足”是面向学习者的运维
         # 声明（保留在资源原文），发布前剥离，防止话术被切片当作知识证据。
         content = strip_fallback_disclosure(snapshot.get("content"))
-        if not content.strip():
-            return KnowledgePublicationService._mark_failed(db, request, "申请快照正文为空")
+        content_reason = _content_stub_reason(content)
+        if content_reason:
+            return KnowledgePublicationService._mark_failed(db, request, f"申请快照{content_reason}")
 
         version = _safe_version(request.resource_version)
         filename = f"generated_lecture_{request.resource_id}_v{version}_{request.content_hash[:16]}.md"

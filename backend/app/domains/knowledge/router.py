@@ -29,6 +29,8 @@ from app.domains.knowledge.schemas import (
 from app.domains.knowledge.service import KnowledgeService
 from app.domains.knowledge.publication_service import KnowledgePublicationService, PublicationError
 from app.domains.knowledge.parser import KnowledgeDocumentParser
+from app.domains.learner.service import LearnerService
+from app.models import LearningResource
 from app.services.common import BaseService
 from app.utils.auth import require_admin, get_current_user, CurrentUser
 
@@ -570,17 +572,27 @@ def get_doc_preview(
 def trace_resource_knowledge(
     resource_id: int,
     db: Session = Depends(get_db),
-    current_user: CurrentUser = Depends(require_admin),
+    current_user: CurrentUser = Depends(get_current_user),
 ):
     """
-    根据资源ID反向溯源知识库原始文档
-    
+    根据资源ID反向溯源知识库原始文档（学习者仅可查询自己的资源）
+
     - **resource_id**: 学习资源ID
     """
+    resource = db.query(LearningResource).filter(
+        LearningResource.id == resource_id
+    ).first()
+    if not resource:
+        return not_found("资源不存在")
+    if not current_user.is_admin and not LearnerService.check_data_permission(
+        db, current_user.user_id, resource.learner_id
+    ):
+        return forbidden("无权限查看该资源溯源")
+
     trace_result = KnowledgeService.trace_resource(db, resource_id)
     if not trace_result:
         return not_found("资源不存在")
-    
+
     return success(trace_result, "溯源查询成功")
 
 

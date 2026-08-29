@@ -20,10 +20,30 @@ from app.utils.auth import hash_password
 from app.utils.auth import CurrentUser
 
 
+_LECTURE_CONTENT = """# 数据预处理与特征工程
+
+## 为什么需要预处理
+
+原始数据往往存在缺失值、量纲差异和噪声，直接建模会让梯度被大数值特征主导。
+标准化将特征缩放到均值为 0、方差为 1 的区间，使各维度对距离计算的贡献均衡。
+
+## 常用方法
+
+- 标准化：适合分布近似正态的特征。
+- 归一化：把数值压缩到 [0, 1] 区间，对线性模型和神经网络尤其重要。
+- 缺失值处理：删除、均值填充、中位数填充或模型预测填充。
+
+## 实践要点
+
+先在训练集上拟合缩放参数，再应用到验证与测试集，避免数据泄露；
+类别特征应优先考虑独热编码或目标编码，而不是盲目缩放。
+"""
+
+
 def _lecture(
     db: Session,
     learner_id: int,
-    content: str = "# 讲义\n\n正文",
+    content: str = _LECTURE_CONTENT,
     status: str = "ready",
     validation_passed: bool = True,
     title: str = "测试专属讲义",
@@ -66,7 +86,7 @@ def test_lecture_publication_uses_snapshot_and_is_idempotent(
         KnowledgePublicationService.create_request(db_session, resource.id, learner)
     assert duplicate_error.value.code == "duplicate_request"
 
-    resource.content = "# 申请后修改的正文"
+    resource.content = _LECTURE_CONTENT + "\n## 增补说明\n\n申请提交后新增的段落。\n"
     db_session.commit()
 
     with patch(
@@ -76,7 +96,7 @@ def test_lecture_publication_uses_snapshot_and_is_idempotent(
         published = KnowledgePublicationService.approve_request(db_session, request.id, admin)
 
     assert published.status == "published"
-    assert published.snapshot["content"] == "# 讲义\n\n正文"
+    assert published.snapshot["content"] == _LECTURE_CONTENT
     assert published.knowledge_doc_id is not None
 
     with pytest.raises(PublicationError) as changed_error:
@@ -242,7 +262,7 @@ def test_auto_publish_rejects_ineligible_lecture_without_request(
 
 
 def test_generation_state_sync_does_not_discover_historical_lecture(
-    db_session: Session,
+    db_session,
     sample_learner_profile,
 ):
     resource = _lecture(db_session, sample_learner_profile.id)
@@ -250,3 +270,29 @@ def test_generation_state_sync_does_not_discover_historical_lecture(
     KnowledgePublicationService.sync_resource_generation_state(db_session, resource.id)
 
     assert db_session.query(KnowledgePublicationRequest).filter_by(resource_id=resource.id).count() == 0
+
+
+def test_auto_publish_rejects_stub_content_lecture(
+    db_session,
+    sample_learner_profile,
+):
+    resource = _lecture(db_session, sample_learner_profile.id, content="# 讲义\n\n完整内容。")
+
+    result = KnowledgePublicationService.auto_publish_resource(db_session, resource.id)
+
+    assert result is None
+    assert db_session.query(KnowledgePublicationRequest).filter_by(resource_id=resource.id).count() == 0
+
+
+def test_create_request_rejects_stub_content(
+    db_session,
+    sample_user,
+    sample_learner_profile,
+):
+    resource = _lecture(db_session, sample_learner_profile.id, content="正文")
+    learner = CurrentUser(sample_user.id, sample_user.username, "learner")
+
+    with pytest.raises(PublicationError) as exc_info:
+        KnowledgePublicationService.create_request(db_session, resource.id, learner)
+
+    assert exc_info.value.code == "content_stub"

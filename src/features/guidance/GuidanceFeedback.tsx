@@ -1,10 +1,22 @@
+import { Link } from 'react-router-dom'
 import Card from '@/components/Card'
-import type { GeneratedContent, SubmitResult } from './types'
-import { BookOpen, CheckCircle2, Lightbulb, Target } from 'lucide-react'
+import type { GeneratedContent, KnowledgeEvidenceItem, SubmitResult, SuggestedResourceItem } from './types'
+import { BookOpen, CheckCircle2, Database, Lightbulb, Target } from 'lucide-react'
 
 interface GuidanceFeedbackProps {
   questionTopic: string
   result: SubmitResult
+}
+
+const resourceTypeLabels: Record<string, string> = {
+  lecture: '专属讲义',
+  guide: '实操指南',
+  exercise: '分阶测试题',
+}
+
+function formatMatchScore(score: number): string {
+  const percent = score >= 0 && score <= 1 ? score * 100 : score
+  return `${Math.round(percent)}%`
 }
 
 function decisionKey(result: SubmitResult): string {
@@ -58,10 +70,69 @@ function ContentSections({ content, topic }: { content: GeneratedContent; topic:
   )
 }
 
+function EvidencePanel({ evidence }: { evidence: KnowledgeEvidenceItem[] }) {
+  return (
+    <details data-testid="guidance-knowledge-evidence" className="rounded-lg border border-border/70 bg-bg-secondary/30 px-4 py-3">
+      <summary className="flex cursor-pointer items-center gap-2 text-xs font-medium text-text-primary">
+        <Database className="h-3.5 w-3.5 text-text-tertiary" />
+        内容依据（引用的领域知识库切片）
+      </summary>
+      <div className="mt-3 space-y-2">
+        {evidence.map((item, index) => (
+          <div key={`${item.docId ?? 'doc'}-${index}`} className="rounded-md border border-border bg-bg-primary px-3 py-2.5">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-text-tertiary">
+              <span className="font-medium text-text-secondary">{item.docTitle || '领域知识文档'}</span>
+              {item.similarity != null && <span>相关度 {Math.round(item.similarity * 100)}%</span>}
+            </div>
+            {item.title && <p className="mt-1 text-sm font-medium text-text-primary">{item.title}</p>}
+            {item.contentPreview && <p className="mt-1 text-sm leading-6 text-text-secondary">{item.contentPreview}</p>}
+          </div>
+        ))}
+      </div>
+    </details>
+  )
+}
+
+function SuggestedResources({ resources }: { resources: SuggestedResourceItem[] }) {
+  return (
+    <div data-testid="guidance-suggested-resources">
+      <Card padding="md">
+        <div className="flex items-center gap-2">
+          <BookOpen className="h-4 w-4 text-primary" />
+          <h4 className="font-semibold text-text-primary">建议学习资源</h4>
+        </div>
+        <div className="mt-3 space-y-2">
+          {resources.map((resource) => (
+            <Link
+              key={resource.resourceId}
+              to={`/resources/${resource.resourceId}/read`}
+              className="flex items-center justify-between gap-3 rounded-lg border border-border bg-bg-secondary/50 px-3 py-2.5 transition-colors hover:border-primary/40"
+            >
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-text-primary">{resource.title}</p>
+                <p className="mt-0.5 text-xs text-text-tertiary">
+                  {resourceTypeLabels[resource.type] || resource.type}
+                  {resource.matchScore != null ? ` · 匹配度 ${formatMatchScore(resource.matchScore)}` : ''}
+                </p>
+              </div>
+              <span className="flex-shrink-0 text-xs font-medium text-primary">去阅读</span>
+            </Link>
+          ))}
+        </div>
+      </Card>
+    </div>
+  )
+}
+
 export default function GuidanceFeedback({ questionTopic, result }: GuidanceFeedbackProps) {
   const feedback = mainFeedback(result, result.generatedContent)
   const expansion = result.generatedContent?.knowledgeExpansion
   const decisionReason = result.agentDecision?.reason || result.nextAction?.description
+  const evidence = (result.generatedContent?.knowledgeEvidence || []).filter((item) => item.contentPreview || item.docTitle)
+  const suggestedResources = [
+    ...(result.generatedContent?.suggestedResources || []),
+    ...(expansion?.suggestedResources || []),
+  ].filter((resource, index, all) => all.findIndex((candidate) => candidate.resourceId === resource.resourceId) === index)
 
   return (
     <div className="space-y-4">
@@ -84,6 +155,10 @@ export default function GuidanceFeedback({ questionTopic, result }: GuidanceFeed
           </div>
         )}
       </Card>
+
+      {evidence.length > 0 && <EvidencePanel evidence={evidence} />}
+
+      {suggestedResources.length > 0 && <SuggestedResources resources={suggestedResources} />}
 
       {expansion && (
         <details className="rounded-xl border border-border bg-bg-card p-4">

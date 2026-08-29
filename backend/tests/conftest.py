@@ -15,6 +15,7 @@ from sqlalchemy.orm import sessionmaker, Session
 from fastapi.testclient import TestClient
 
 from app.database import Base, get_db
+from app.config import settings
 from app.main import app
 from app.models import (
     User, UserRoleEnum,
@@ -229,6 +230,12 @@ def _disable_chroma_for_tests():
     ks._chroma_collection = None
     yield
     ks._CHROMA_AVAILABLE = original
+
+
+@pytest.fixture(autouse=True)
+def _isolate_knowledge_doc_dir(tmp_path, monkeypatch):
+    """知识库文档目录隔离到临时目录，防止测试发布流程向真实目录写入文件。"""
+    monkeypatch.setattr(settings, "KNOWLEDGE_DOC_DIR", str(tmp_path))
 
 
 @pytest.fixture

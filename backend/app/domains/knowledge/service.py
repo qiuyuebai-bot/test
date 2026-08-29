@@ -1019,39 +1019,55 @@ class KnowledgeService:
         # 获取来源切片ID列表
         source_slice_ids = resource.source_slice_ids or []
         source_doc_ids = resource.source_doc_ids or []
-        
-        # 查询来源切片详情
+
+        # 查询来源切片详情（按资源记录的引用顺序返回）
         source_slices = []
+        slice_rows = {}
         if source_slice_ids:
             slices = db.query(KnowledgeSlice).filter(
                 KnowledgeSlice.id.in_(source_slice_ids)
             ).all()
-            source_slices = [
+            slice_rows = {s.id: s for s in slices}
+        slice_doc_ids = {s.doc_id for s in slice_rows.values() if s.doc_id is not None}
+
+        # 查询来源文档详情（同时覆盖切片关联文档，用于展示来源文档名）
+        doc_ids = set(source_doc_ids) | slice_doc_ids
+        doc_rows = {}
+        if doc_ids:
+            docs = db.query(KnowledgeDoc).filter(
+                KnowledgeDoc.id.in_(doc_ids)
+            ).all()
+            doc_rows = {d.id: d for d in docs}
+        source_docs = [
+            {
+                "id": d.id,
+                "title": d.title,
+                "industry": d.industry,
+                "author": d.author,
+                "version": d.version,
+            }
+            for d in (doc_rows[i] for i in source_doc_ids if i in doc_rows)
+        ]
+
+        for slice_id in source_slice_ids:
+            s = slice_rows.get(slice_id)
+            if not s:
+                continue
+            doc = doc_rows.get(s.doc_id)
+            source_slices.append(
                 {
                     "id": s.id,
                     "doc_id": s.doc_id,
-                    "content_preview": s.content[:100] + "...",
+                    "doc_title": doc.title if doc else "",
+                    "title": s.title,
+                    "slice_index": s.slice_index,
+                    "content_preview": (
+                        s.content[:120] + "..." if len(s.content or "") > 120 else (s.content or "")
+                    ),
+                    "quality_score": s.quality_score,
                     "relevance": "高",
                 }
-                for s in slices
-            ]
-        
-        # 查询来源文档详情
-        source_docs = []
-        if source_doc_ids:
-            docs = db.query(KnowledgeDoc).filter(
-                KnowledgeDoc.id.in_(source_doc_ids)
-            ).all()
-            source_docs = [
-                {
-                    "id": d.id,
-                    "title": d.title,
-                    "industry": d.industry,
-                    "author": d.author,
-                    "version": d.version,
-                }
-                for d in docs
-            ]
+            )
         
         # 构建溯源路径
         trace_path = [
