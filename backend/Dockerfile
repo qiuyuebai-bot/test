@@ -39,7 +39,10 @@ ENV PYTHONUNBUFFERED=1 \
 
 WORKDIR /app
 
-# Upgrade only the util-linux package family affected by CVE-2026-53615.
+# Targeted upgrades for security advisories with fixes available in trixie-security:
+# - util-linux family: CVE-2026-53615
+# - openssl family: CVE-2026-14456 (HIGH) and related OpenSSL advisories (CVE-2026-14457,
+#   54874, 63072-63076, 75803, 18798), fixed in 3.5.7-1~deb13u2
 # A full apt upgrade makes the arm64 QEMU build exceed the CI time budget.
 RUN apt-get update && \
     apt-get install -y --only-upgrade --no-install-recommends \
@@ -51,7 +54,10 @@ RUN apt-get update && \
         libuuid1 \
         login \
         mount \
-        util-linux && \
+        util-linux \
+        libssl3t64 \
+        openssl \
+        openssl-provider-legacy && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # 从构建阶段复制虚拟环境（运行阶段无需额外系统包，Python 自带 urllib 用于健康检查）
