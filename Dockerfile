@@ -43,7 +43,11 @@ LABEL description="领域知识个性化生成与多智能体协同决策系统 
 # 复制自定义 Nginx 配置
 COPY deploy/nginx/nginx.conf /etc/nginx/conf.d/default.conf
 
-RUN apk upgrade --no-cache
+# CI 每次构建传入 CACHEBUST（github.sha），在此声明并引用以强制重跑系统包升级层，
+# 避免镜像层缓存错过新发布的安全补丁（本次 CVE-2026-14456 失败即由此产生）
+ARG CACHEBUST=default
+RUN apk upgrade --no-cache && \
+    echo "cache-bust: ${CACHEBUST}"
 
 # 复制构建产物
 COPY --from=builder /app/dist /usr/share/nginx/html

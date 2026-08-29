@@ -44,6 +44,8 @@ WORKDIR /app
 # - openssl family: CVE-2026-14456 (HIGH) and related OpenSSL advisories (CVE-2026-14457,
 #   54874, 63072-63076, 75803, 18798), fixed in 3.5.7-1~deb13u2
 # A full apt upgrade makes the arm64 QEMU build exceed the CI time budget.
+# CACHEBUST（CI 每次构建传入 github.sha）强制重跑本层，避免镜像层缓存错过新补丁。
+ARG CACHEBUST=default
 RUN apt-get update && \
     apt-get install -y --only-upgrade --no-install-recommends \
         bsdutils \
@@ -58,6 +60,7 @@ RUN apt-get update && \
         libssl3t64 \
         openssl \
         openssl-provider-legacy && \
+    echo "cache-bust: ${CACHEBUST}" && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # 从构建阶段复制虚拟环境（运行阶段无需额外系统包，Python 自带 urllib 用于健康检查）
