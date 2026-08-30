@@ -273,12 +273,11 @@ class HallucinationUtil:
                 shared_entities = set(entity.lower() for entity in claim_fact["entities"]) & set(
                     entity.lower() for entity in reference_fact["entities"]
                 )
-                same_relation = (
-                    claim_fact["relation"]
-                    and reference_fact["relation"]
-                    and claim_fact["relation"] == reference_fact["relation"]
-                )
-                if not shared_entities and not same_relation:
+                # A shared relation such as "released" is not enough: two
+                # different products can share the same relation while
+                # carrying unrelated values. Require a shared entity before
+                # treating a numeric fact as contradictory.
+                if not shared_entities:
                     continue
                 if claim_fact["value"] == reference_fact["value"]:
                     continue

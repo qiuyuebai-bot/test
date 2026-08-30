@@ -158,6 +158,10 @@ class MetricsUtil:
             return "pending_review"
         if cls._is_evidence_gap_record(record):
             return "evidence_gap"
+        # A non-final audit may carry an intermediate approved/rejected
+        # decision.  It must remain pending until the final review is saved.
+        if "is_final_review" in metadata and not bool(metadata.get("is_final_review")):
+            return "pending_review"
         if not cls._is_reviewed_record(record):
             return "pending_review"
         if review_outcome in {"hallucination", "reviewed_hallucination"}:

@@ -84,6 +84,32 @@ def test_record_states_are_mutually_exclusive(db_session, sample_agent_task):
     assert MetricsUtil.classify_debate_record(hallucination) == "reviewed_hallucination"
 
 
+def test_non_final_review_cannot_enter_evaluated_sample(db_session, sample_agent_task):
+    _add_record(
+        db_session,
+        sample_agent_task.id,
+        is_hallucination=False,
+        resolution_status="resolved",
+        judge_decision="approved",
+    ).agent_judge_view = json.dumps(
+        {
+            "audit_metadata": {
+                "is_final_review": False,
+                "evidence_status": "sufficient",
+                "review_outcome": "clean",
+            }
+        },
+        ensure_ascii=False,
+    )
+    db_session.flush()
+
+    metrics = MetricsUtil.calculate_hallucination_metrics(db_session)
+
+    assert metrics["evaluated_checks"] == 0
+    assert metrics["pending_checks"] == 1
+    assert metrics["state_counts"]["pending_review"] == 1
+
+
 def test_strict_target_requires_61_records_when_h_is_three(
     db_session, sample_agent_task
 ):

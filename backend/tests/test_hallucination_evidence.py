@@ -65,6 +65,13 @@ def test_unrelated_years_do_not_create_a_conflict():
     ) is None
 
 
+def test_same_relation_on_different_entities_does_not_create_a_conflict():
+    assert HallucinationUtil._claim_conflict(
+        "Python 3.12 was released in 2023.",
+        {"content": "Java 17 was released in 2021.", "similarity": 0.91},
+    ) is None
+
+
 def test_judge_marks_weak_evidence_as_pending_not_hallucination():
     result = JudgeAgent().execute({
         "generated_content": "The Aurora protocol supports seven recovery modes.",
