@@ -301,6 +301,15 @@ class TaskRepository:
                 "risk_flags": risk_flags,
             }
             judge_view = dict(judge_standpoint)
+            if "citations" not in judge_view and debate_data.get("citations") is not None:
+                citations = debate_data.get("citations")
+                judge_view["citations"] = (
+                    list(citations)
+                    if isinstance(citations, (tuple, set))
+                    else citations
+                    if isinstance(citations, list)
+                    else []
+                )
             judge_view["audit_metadata"] = audit_metadata
             is_hallucination = bool(
                 debate_data.get("hallucination_detected")
