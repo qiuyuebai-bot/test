@@ -8,6 +8,7 @@ reported as ``insufficient_evidence`` rather than inferred as a pass.
 import argparse
 import hashlib
 import json
+from math import floor
 import subprocess
 from datetime import datetime, timezone
 from pathlib import Path
@@ -28,6 +29,10 @@ FORMULA_VERSION = "evidence-report-v2"
 MATCH_SCORE_SOURCES = {"agent_generation_pipeline", "backfill_match_scores"}
 FORMAL_MINIMUM_SAMPLE_SIZE = 10
 FORMAL_TARGET_PERCENT = 85.0
+HALLUCINATION_FORMAL_MINIMUM_SAMPLE_SIZE = 60
+HALLUCINATION_ROLLING_MINIMUM_SAMPLE_SIZE = 30
+HALLUCINATION_TARGET_PERCENT = 5.0
+METRIC_POLICY_VERSION = "hallucination-rate-v1"
 
 
 def _claim(
@@ -71,9 +76,13 @@ def _claim(
         elif operator == ">=" and numeric_value >= target:
             status = "passed"
             reason = f"指标值 {numeric_value:.2f}% 达到目标 {target:.2f}%"
+        elif operator == "<" and numeric_value < target:
+            status = "passed"
+            reason = f"指标值 {numeric_value:.2f}% 小于目标 {target:.2f}%"
         else:
             status = "failed"
-            reason = f"指标值 {numeric_value:.2f}% 未达到目标 {target:.2f}%"
+            comparator = "不小于" if operator == "<" else "未达到"
+            reason = f"指标值 {numeric_value:.2f}% {comparator}目标 {target:.2f}%"
 
     return {
         "metric_id": metric.get("metric_id"),
@@ -89,6 +98,20 @@ def _claim(
         "reason": reason,
         "metric_status": metric.get("status"),
     }
+
+
+def _required_additional_reviews(hallucinations: int, evaluated: int) -> int:
+    """Minimum clean reviews needed to make H/E strictly lower than 5%."""
+    try:
+        hallucinations = max(0, int(hallucinations))
+    except (TypeError, ValueError):
+        hallucinations = 0
+    try:
+        evaluated = max(0, int(evaluated))
+    except (TypeError, ValueError):
+        evaluated = 0
+    # The formal 60-review sample gate is checked separately by ``_claim``.
+    return max(0, floor(20 * hallucinations - evaluated) + 1)
 
 
 def _aggregate_claim_status(claims: list[Dict[str, Any]]) -> str:
@@ -215,7 +238,58 @@ def build_report(db) -> Dict[str, Any]:
         except (OSError, ValueError, json.JSONDecodeError):
             expert_labels = 0
 
+    hallucination_metric = by_id.get("hallucination_rate") or {}
+    hallucination_claim = _claim(
+        hallucination_metric,
+        target=HALLUCINATION_TARGET_PERCENT,
+        minimum_sample_size=HALLUCINATION_FORMAL_MINIMUM_SAMPLE_SIZE,
+        operator="<",
+    )
+    hallucination_metadata = hallucination_metric.get("metadata") or {}
+    if (
+        hallucination_metadata.get("high_risk_review_coverage") is None
+        or hallucination_metadata.get("invalid_records", 0) != 0
+        or (
+            hallucination_metadata.get("high_risk_checks", 0)
+            and hallucination_metadata.get("high_risk_review_coverage") != 100.0
+        )
+    ):
+        hallucination_claim = dict(hallucination_claim)
+        hallucination_claim["status"] = "insufficient_evidence"
+        hallucination_claim["reason"] = (
+            "高风险审查覆盖率未达到100%或存在无效记录，无法完成正式幻觉率验收"
+        )
+
+    rolling_details = hallucination_metadata.get("rolling_30d") or {}
+    rolling_metric = {
+        **rolling_details,
+        "metric_id": "hallucination_rate_rolling_30d",
+        "display_name": "30天滚动幻觉率",
+        "value": rolling_details.get("hallucination_rate"),
+        "numerator": rolling_details.get("confirmed_hallucinations", 0),
+        "denominator": rolling_details.get("evaluated_checks", 0),
+        "sample_count": rolling_details.get("evaluated_checks", 0),
+    }
+    rolling_claim = _claim(
+        rolling_metric,
+        target=HALLUCINATION_TARGET_PERCENT,
+        minimum_sample_size=HALLUCINATION_ROLLING_MINIMUM_SAMPLE_SIZE,
+        operator="<",
+    )
+    if (
+        rolling_details.get("high_risk_review_coverage") is None
+        or rolling_details.get("invalid_records", 0) != 0
+        or (
+            rolling_details.get("high_risk_checks", 0)
+            and rolling_details.get("high_risk_review_coverage") != 100.0
+        )
+    ):
+        rolling_claim = dict(rolling_claim)
+        rolling_claim["status"] = "insufficient_evidence"
+        rolling_claim["reason"] = "30天窗口高风险审查覆盖率缺失或未达到100%"
+
     claims = {
+        "hallucination_rate": hallucination_claim,
         "resource_match_score": _claim(post_fix_score_metric),
         "resource_match_effectiveness": _claim(by_id.get("resource_match_effectiveness")),
         "answer_accuracy": _claim(by_id.get("answer_accuracy")),
@@ -245,6 +319,9 @@ def build_report(db) -> Dict[str, Any]:
         "formal_evidence_policy": {
             "minimum_sample_size": FORMAL_MINIMUM_SAMPLE_SIZE,
             "target_percent": FORMAL_TARGET_PERCENT,
+            "hallucination_minimum_sample_size": HALLUCINATION_FORMAL_MINIMUM_SAMPLE_SIZE,
+            "hallucination_target_percent": HALLUCINATION_TARGET_PERCENT,
+            "metric_policy_version": METRIC_POLICY_VERSION,
             "status_values": ["passed", "failed", "insufficient_evidence"],
         },
         "target_thresholds": {
@@ -258,12 +335,28 @@ def build_report(db) -> Dict[str, Any]:
         "metrics": metrics,
         "evidence": {
             "claims": claims,
-            "formal_claim_status": _aggregate_claim_status(list(claims.values())),
+            "formal_claim_status": _aggregate_claim_status(
+                [*claims.values(), rolling_claim]
+            ),
             "hallucination": {
-                "numerator": by_id.get("hallucination_rate", {}).get("numerator", 0),
-                "denominator": by_id.get("hallucination_rate", {}).get("denominator", 0),
-                "sample_count": by_id.get("hallucination_rate", {}).get("sample_count", 0),
-                "status": by_id.get("hallucination_rate", {}).get("status", "no_data"),
+                "numerator": hallucination_metric.get("numerator", 0),
+                "denominator": hallucination_metric.get("denominator", 0),
+                "sample_count": hallucination_metric.get("sample_count", 0),
+                "status": hallucination_metric.get("status", "no_data"),
+                "claim": hallucination_claim,
+                "rolling_claim": rolling_claim,
+                "state_counts": hallucination_metadata.get("state_counts", {}),
+                "invalid_records": hallucination_metadata.get("invalid_records", 0),
+                "high_risk_checks": hallucination_metadata.get("high_risk_checks", 0),
+                "high_risk_reviewed": hallucination_metadata.get("high_risk_reviewed", 0),
+                "high_risk_review_coverage": hallucination_metadata.get("high_risk_review_coverage"),
+                "rolling_30d": hallucination_metadata.get("rolling_30d"),
+                "policy_version": hallucination_metadata.get("policy_version", METRIC_POLICY_VERSION),
+                "metric_policy_version": METRIC_POLICY_VERSION,
+                "required_additional_reviews": _required_additional_reviews(
+                    hallucination_metric.get("numerator", 0),
+                    hallucination_metric.get("denominator", 0),
+                ),
             },
             "adaptation": {
                 "resource_match_score": post_fix_score_metric,

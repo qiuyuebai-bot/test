@@ -1,9 +1,11 @@
 """Formal acceptance claims for the metrics evidence report."""
 
 from scripts.generate_metric_evidence import (
+    HALLUCINATION_FORMAL_MINIMUM_SAMPLE_SIZE,
     FORMAL_MINIMUM_SAMPLE_SIZE,
     _claim,
     _aggregate_claim_status,
+    _required_additional_reviews,
     build_report,
 )
 
@@ -41,6 +43,29 @@ def test_claim_passes_at_target():
     assert claim["status"] == "passed"
 
 
+def test_hallucination_claim_is_strict_and_requires_formal_sample():
+    metric = _metric(5.0, HALLUCINATION_FORMAL_MINIMUM_SAMPLE_SIZE, metric_id="hallucination_rate")
+    claim = _claim(
+        metric,
+        target=5.0,
+        minimum_sample_size=HALLUCINATION_FORMAL_MINIMUM_SAMPLE_SIZE,
+        operator="<",
+    )
+    assert claim["status"] == "failed"
+
+    insufficient = _claim(
+        _metric(4.0, HALLUCINATION_FORMAL_MINIMUM_SAMPLE_SIZE - 1, metric_id="hallucination_rate"),
+        target=5.0,
+        minimum_sample_size=HALLUCINATION_FORMAL_MINIMUM_SAMPLE_SIZE,
+        operator="<",
+    )
+    assert insufficient["status"] == "insufficient_evidence"
+
+
+def test_required_additional_reviews_for_current_baseline():
+    assert _required_additional_reviews(hallucinations=3, evaluated=53) == 8
+
+
 def test_aggregate_status_is_strict():
     assert _aggregate_claim_status([_claim(_metric(100, 10))]) == "passed"
     assert _aggregate_claim_status([_claim(_metric(80, 10))]) == "failed"
@@ -55,3 +80,13 @@ def test_build_report_includes_answer_accuracy_claim(db_session):
     answer_claim = report["evidence"]["claims"]["answer_accuracy"]
     assert answer_claim["target"] == 85.0
     assert answer_claim["minimum_sample_size"] == FORMAL_MINIMUM_SAMPLE_SIZE
+
+
+def test_build_report_includes_strict_hallucination_claim(db_session):
+    report = build_report(db_session)
+    claim = report["evidence"]["claims"]["hallucination_rate"]
+
+    assert claim["target"] == 5.0
+    assert claim["operator"] == "<"
+    assert claim["minimum_sample_size"] == HALLUCINATION_FORMAL_MINIMUM_SAMPLE_SIZE
+    assert "required_additional_reviews" in report["evidence"]["hallucination"]
