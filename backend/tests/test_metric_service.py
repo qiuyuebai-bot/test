@@ -202,7 +202,7 @@ def test_blind_spot_policy_distinguishes_not_applicable_and_collecting(
     assert collecting["denominator"] == 1
 
 
-def test_hallucination_rate_waits_for_five_reviewed_records(
+def test_hallucination_rate_waits_for_ten_reviewed_records(
     db_session, sample_agent_task
 ):
     for index in range(4):
@@ -223,7 +223,22 @@ def test_hallucination_rate_waits_for_five_reviewed_records(
     assert result["value"] is None
     assert result["status"] == "collecting"
     assert result["sample_count"] == 4
-    assert result["minimum_sample_size"] == 5
+    assert result["minimum_sample_size"] == 10
+
+
+def test_metric_contains_policy_and_rolling_window_metadata(db_session):
+    result = _by_id(
+        MetricService.calculate_metrics(
+            db_session,
+            scope="global",
+            metric_ids=["hallucination_rate"],
+        )
+    )["hallucination_rate"]
+
+    assert result["metadata"]["policy_version"] == "hallucination-rate-v1"
+    assert result["metadata"]["formal_minimum_sample_size"] == 60
+    assert result["metadata"]["operator"] == "<"
+    assert "rolling_30d" in result["metadata"]
 
 
 def test_metrics_api_exposes_registry_and_standard_results(client):

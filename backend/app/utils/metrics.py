@@ -257,6 +257,7 @@ class MetricsUtil:
             "minimum_sample_size": effective_minimum,
             "formal_minimum_sample_size": cls.FORMAL_MIN_HALLUCINATION_SAMPLE,
             "target_percent": cls.HALLUCINATION_TARGET_PERCENT,
+            "operator": "<",
             "policy_version": cls.HALLUCINATION_POLICY_VERSION,
             "window": {
                 "start": start_date.isoformat() if start_date else None,

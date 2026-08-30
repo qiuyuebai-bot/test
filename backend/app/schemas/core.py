@@ -189,9 +189,19 @@ class SystemMetricsResponse(BaseModel):
     pending_checks: int = 0
     confirmed_hallucinations: int = 0
     evidence_gaps: int = 0
+    state_counts: Dict[str, int] = Field(default_factory=dict)
+    invalid_records: int = 0
+    high_risk_checks: int = 0
+    high_risk_reviewed: int = 0
+    high_risk_review_coverage: Optional[float] = None
     pass_rate: Optional[float] = None
     has_sufficient_sample: bool = False
-    minimum_sample_size: int = 5
+    minimum_sample_size: int = 10
+    formal_minimum_sample_size: int = 60
+    target_percent: float = 5.0
+    operator: str = "<"
+    policy_version: str = "hallucination-rate-v1"
+    rolling_30d: Optional[Dict[str, Any]] = None
     resource_match_accuracy: Optional[float] = None
     knowledge_coverage_rate: Optional[float] = None
     knowledge_index_coverage_rate: Optional[float] = None

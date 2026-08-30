@@ -1163,7 +1163,7 @@ def get_hallucination_metrics(
     """
     统计幻觉率等核心指标
     
-    - 幻觉率 = 检出幻觉的内容数 / 总内容数
+    - 幻觉率 = 已确认幻觉数 / 已完成证据审查数
     - 返回: 总数量、幻觉数量、幻觉率、平均得分、通过率
     """
     try:
@@ -1173,7 +1173,14 @@ def get_hallucination_metrics(
             scope="global",
             metric_ids=["hallucination_rate"],
         )
-        return success(data={**metrics, "metric": standard[0] if standard else None})
+        metric = standard[0] if standard else {}
+        metadata = metric.get("metadata") or {}
+        return success(data={
+            **metrics,
+            "operator": metrics.get("operator", metadata.get("operator", "<")),
+            "rolling_30d": metadata.get("rolling_30d"),
+            "metric": metric or None,
+        })
 
     except Exception as e:
         LoggerUtil.log_error("获取幻觉率统计失败", e)

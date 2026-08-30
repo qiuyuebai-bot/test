@@ -276,13 +276,12 @@ async def system_info():
 @router.get("/api/v1/metrics", tags=["指标"])
 def get_core_metrics():
     """获取核心量化指标（从数据库真实统计）"""
-    from app.models import LearningResource, AgentTask, DebateRecord, KnowledgeSlice
+    from app.models import LearningResource, AgentTask, KnowledgeSlice
     from app.utils.metrics import MetricsUtil
     from app.services.metric_service import MetricService
     from sqlalchemy import func, case
 
     with _read_only_db_context() as db:
-        hallucination_metrics = MetricsUtil.calculate_hallucination_metrics(db)
         total_resources, active_learners, avg_match = db.query(
             func.count(LearningResource.id),
             func.count(func.distinct(LearningResource.learner_id)),
@@ -302,32 +301,34 @@ def get_core_metrics():
             round(completed_tasks / total_tasks * 100, 1) if total_tasks > 0 else 0
         )
 
-        total_debates, hallucination_count = db.query(
-            func.count(DebateRecord.id),
-            func.coalesce(
-                func.sum(case((DebateRecord.is_hallucination == True, 1), else_=0)), 0
-            ),
-        ).one()
-        hallucination_rate = (
-            round(hallucination_count / total_debates * 100, 1) if total_debates > 0 else 0
-        )
-        hallucination_rate = hallucination_metrics["hallucination_rate"]
-
         knowledge_coverage_rate = MetricsUtil.calculate_knowledge_index_coverage_rate(db)
         learning_blind_spot_coverage_rate = MetricsUtil.calculate_learning_blind_spot_coverage_rate(db)
         standard_metrics = MetricService.calculate_metrics(db, scope="global")
         standard_by_id = MetricService.by_id(standard_metrics)
+        hallucination_result = standard_by_id.get("hallucination_rate", {})
+        hallucination_metadata = hallucination_result.get("metadata") or {}
 
         return success({
             "metrics": standard_metrics,
             "metric_registry": MetricService.registry(),
-            "hallucination_rate": standard_by_id.get("hallucination_rate", {}).get("value"),
-            "total_checks": hallucination_metrics["total_checks"],
-            "evaluated_checks": hallucination_metrics["evaluated_checks"],
-            "pending_checks": hallucination_metrics["pending_checks"],
-            "confirmed_hallucinations": hallucination_metrics["confirmed_hallucinations"],
-            "evidence_gaps": hallucination_metrics["evidence_gaps"],
-            "has_sufficient_sample": hallucination_metrics["has_sufficient_sample"],
+            "hallucination_rate": hallucination_result.get("value"),
+            "total_checks": hallucination_metadata.get("total_checks", 0),
+            "evaluated_checks": hallucination_metadata.get("evaluated_checks", 0),
+            "pending_checks": hallucination_metadata.get("pending_checks", 0),
+            "confirmed_hallucinations": hallucination_metadata.get("confirmed_hallucinations", 0),
+            "evidence_gaps": hallucination_metadata.get("evidence_gaps", 0),
+            "state_counts": hallucination_metadata.get("state_counts", {}),
+            "invalid_records": hallucination_metadata.get("invalid_records", 0),
+            "high_risk_checks": hallucination_metadata.get("high_risk_checks", 0),
+            "high_risk_reviewed": hallucination_metadata.get("high_risk_reviewed", 0),
+            "high_risk_review_coverage": hallucination_metadata.get("high_risk_review_coverage"),
+            "has_sufficient_sample": hallucination_result.get("status") == "ready",
+            "minimum_sample_size": hallucination_result.get("minimum_sample_size", 10),
+            "formal_minimum_sample_size": hallucination_metadata.get("formal_minimum_sample_size", 60),
+            "target_percent": hallucination_metadata.get("target_percent", 5.0),
+            "operator": hallucination_metadata.get("operator", "<"),
+            "policy_version": hallucination_metadata.get("policy_version", "hallucination-rate-v1"),
+            "rolling_30d": hallucination_metadata.get("rolling_30d"),
             "resource_match_accuracy": standard_by_id.get("resource_match_score", {}).get("value"),
             "resource_match_score": standard_by_id.get("resource_match_score", {}).get("value"),
             "resource_match_effectiveness": standard_by_id.get("resource_match_effectiveness", {}).get("value"),

@@ -347,8 +347,36 @@ class MetricCalculator:
             db,
             learner_id=scope_id if scope == "learner" else None,
         )
+        rolling = MetricsUtil.calculate_hallucination_metrics(
+            db,
+            learner_id=scope_id if scope == "learner" else None,
+            window_days=MetricsUtil.RECENT_WINDOW_DAYS,
+        )
         evaluated = details["evaluated_checks"]
         total_checks = details["total_checks"]
+        metadata = {
+            key: details[key]
+            for key in (
+                "total_checks",
+                "evaluated_checks",
+                "pending_checks",
+                "confirmed_hallucinations",
+                "evidence_gaps",
+                "invalid_records",
+                "state_counts",
+                "high_risk_checks",
+                "high_risk_reviewed",
+                "high_risk_review_coverage",
+                "pass_rate",
+                "policy_version",
+                "formal_minimum_sample_size",
+                "target_percent",
+            )
+        }
+        metadata.update({
+            "operator": "<",
+            "rolling_30d": rolling,
+        })
         return {
             "numerator": details["confirmed_hallucinations"],
             "denominator": evaluated,
@@ -358,14 +386,7 @@ class MetricCalculator:
             "message": "Evidence reviews are still below the minimum sample size"
             if total_checks > 0 and evaluated < details["minimum_sample_size"]
             else None,
-            "metadata": {
-                "total_checks": total_checks,
-                "evaluated_checks": evaluated,
-                "pending_checks": details["pending_checks"],
-                "confirmed_hallucinations": details["confirmed_hallucinations"],
-                "evidence_gaps": details["evidence_gaps"],
-                "pass_rate": details["pass_rate"],
-            },
+            "metadata": metadata,
         }
 
     @classmethod

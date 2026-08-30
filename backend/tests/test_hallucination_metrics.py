@@ -159,6 +159,21 @@ def test_hallucination_endpoint_exposes_pending_and_evidence_counts(
     assert data["has_sufficient_sample"] is False
 
 
+def test_hallucination_endpoint_exposes_policy_and_exclusive_state_counts(
+    client, auth_headers
+):
+    response = client.get(
+        "/api/v1/agent/metrics/hallucination", headers=auth_headers
+    )
+
+    assert response.status_code == 200
+    data = response.json()["data"]
+    assert sum(data["state_counts"].values()) == data["total_checks"]
+    assert data["policy_version"] == "hallucination-rate-v1"
+    assert data["operator"] == "<"
+    assert "rolling_30d" in data
+
+
 def test_report_metrics_uses_the_same_evidence_aware_source(
     client, sample_agent_task, db_session
 ):
