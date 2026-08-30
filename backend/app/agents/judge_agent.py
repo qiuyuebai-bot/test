@@ -93,14 +93,6 @@ class JudgeAgent(BaseAgent):
                 "details": knowledge_gap,
             })
 
-        if is_hallucination and hallucination_info.get("detected_keywords"):
-            issues.append({
-                "type": "hallucination_keyword",
-                "severity": "high",
-                "description": "检测到疑似幻觉关键词",
-                "details": hallucination_info["detected_keywords"],
-            })
-        
         issues.extend(consistency_result["issues"])
         issues.extend(standard_result["issues"])
         
@@ -120,6 +112,18 @@ class JudgeAgent(BaseAgent):
         
         # 7. 辩论结果记录
         has_knowledge_gap = bool(knowledge_gap.get("present"))
+        review_outcome = hallucination_info.get("review_outcome")
+        if review_outcome not in {"clean", "hallucination", "pending"}:
+            review_outcome = (
+                "hallucination" if is_hallucination
+                else "pending" if has_knowledge_gap or not reference_knowledge
+                else "clean"
+            )
+        evidence_status = hallucination_info.get("evidence_status")
+        if evidence_status not in {"sufficient", "gap"}:
+            evidence_status = "gap" if has_knowledge_gap or not reference_knowledge else "sufficient"
+        review_source = hallucination_info.get("review_source", "knowledge_grounded")
+        risk_flags = hallucination_info.get("risk_flags", [])
         decision = (
             "needs_revision" if has_knowledge_gap
             else "approved" if total_score >= 85
@@ -133,6 +137,10 @@ class JudgeAgent(BaseAgent):
                 "issues": issues,
                 "score": total_score,
                 "decision": decision,
+                "evidence_status": evidence_status,
+                "review_outcome": review_outcome,
+                "review_source": review_source,
+                "risk_flags": risk_flags,
             },
             "corrections": correction_suggestions,
         }
@@ -143,6 +151,10 @@ class JudgeAgent(BaseAgent):
             "issue_count": len(issues),
             "hallucination_detected": is_hallucination,
             "hallucination_score": hallucination_info.get("score", 0),
+            "evidence_status": evidence_status,
+            "review_outcome": review_outcome,
+            "review_source": review_source,
+            "risk_flags": risk_flags,
             "credibility": hallucination_info.get("credibility", "no_evidence"),
             "evidence_coverage": hallucination_info.get("evidence_coverage", 0.0),
             "citations": hallucination_info.get("citations", []),
@@ -221,6 +233,11 @@ class JudgeAgent(BaseAgent):
             "judge_standpoint": audit_result["debate_record"]["judge_view"],
             "generation_counterargument": generation_response,
             "final_decision": llm_round.get("final_decision") if llm_round else audit_result["debate_record"]["judge_view"]["decision"],
+            "evidence_status": audit_result.get("evidence_status", "gap"),
+            "review_outcome": audit_result.get("review_outcome", "pending"),
+            "review_source": audit_result.get("review_source", "unknown"),
+            "risk_flags": audit_result.get("risk_flags", []),
+            "citations": audit_result.get("citations", []),
             "corrections": corrections,
             "conflict_points": [i for i in merged_issues if i["severity"] in ("high", "medium")],
             "confidence": (

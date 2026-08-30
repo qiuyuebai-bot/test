@@ -67,6 +67,10 @@ class HallucinationUtil:
                 "credibility": "no_evidence",
                 "evidence_coverage": 0.0,
                 "method": "knowledge_gap",
+                "evidence_status": "gap",
+                "review_outcome": "pending",
+                "review_source": "none",
+                "risk_flags": [],
                 "claims": [],
                 "citations": [],
                 "knowledge_gap": HallucinationUtil._knowledge_gap([], []),
@@ -87,7 +91,7 @@ class HallucinationUtil:
         rule_score = keyword_score + contradiction_score + tech_score
         
         layer1_result = {
-            "is_hallucination": rule_score >= threshold,
+            "is_hallucination": False,
             "score": rule_score,
             "threshold": threshold,
             "keyword_score": keyword_score,
@@ -96,6 +100,10 @@ class HallucinationUtil:
             "detected_keywords": detected_keywords,
             "contradictions": contradictions,
             "tech_issues": tech_issues,
+            "evidence_status": "sufficient" if reference_content else "gap",
+            "review_outcome": "pending",
+            "review_source": "rules_fallback",
+            "risk_flags": [*contradictions, *tech_issues],
             "layer": "rule",
         }
         
@@ -125,9 +133,17 @@ class HallucinationUtil:
             layer1_result["deep_check"] = deep_result
             layer1_result["layer"] = "rule+llm"
         
-        is_hallucination = final_score >= threshold
+        is_hallucination = bool(
+            contradictions
+            or (
+                reference_content
+                and deep_result
+                and deep_result.get("has_hallucination", False)
+            )
+        )
         layer1_result["score"] = round(final_score, 2)
         layer1_result["is_hallucination"] = is_hallucination
+        layer1_result["review_outcome"] = "hallucination" if is_hallucination else "pending"
         
         if is_hallucination:
             logger.warning(
@@ -177,17 +193,101 @@ class HallucinationUtil:
         return [entity for entity in entities if entity.lower() in haystack]
 
     @staticmethod
-    def _claim_conflict(claim: str, candidate: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-        reference = str(candidate.get("content", ""))
-        claim_versions = set(re.findall(r"v?\d+\.\d+(?:\.\d+)?", claim, flags=re.I))
-        reference_versions = set(re.findall(r"v?\d+\.\d+(?:\.\d+)?", reference, flags=re.I))
-        if claim_versions and reference_versions and claim_versions != reference_versions:
-            return {"type": "version_conflict", "claim_value": sorted(claim_versions)[0], "reference_value": sorted(reference_versions)[0]}
+    def _normalize_numeric_facts(text: str) -> List[Dict[str, Any]]:
+        """Extract numbers with a light-weight entity and relation context."""
+        relation_terms = {
+            "released": "release",
+            "release": "release",
+            "published": "release",
+            "founded": "founded",
+            "introduced": "introduced",
+            "version": "version",
+            "版本": "version",
+            "发布": "release",
+            "上线": "release",
+            "成立": "founded",
+            "引入": "introduced",
+        }
+        value_pattern = re.compile(r"(?P<raw>v?\d+(?:\.\d+){0,2})(?P<unit>%|kg|千克|公斤|mm|毫米|μm|微米)?", re.I)
+        entities = HallucinationUtil._extract_entities(text)
+        facts = []
+        for match in value_pattern.finditer(str(text or "")):
+            raw = match.group("raw")
+            unit = (match.group("unit") or "").lower()
+            normalized_raw = raw.lstrip("vV")
+            parts = normalized_raw.split(".")
+            if len(parts) >= 2 and raw.lower().startswith("v"):
+                kind = "version"
+            elif len(parts) >= 2 and 1900 <= float(normalized_raw) <= 2099:
+                kind = "year"
+            elif len(parts) >= 2 and "版本" in str(text[max(0, match.start() - 8):match.end() + 8]):
+                kind = "version"
+            elif len(parts) >= 2 and len(parts) <= 3 and any(
+                term in str(text[max(0, match.start() - 16):match.end() + 16]).lower()
+                for term in ("python", "api", "协议", "型号")
+            ):
+                kind = "version"
+            elif len(parts) == 1 and 1900 <= float(normalized_raw) <= 2099:
+                kind = "year"
+            else:
+                kind = "number"
 
-        claim_years = set(re.findall(r"\b(?:19|20)\d{2}\b", claim))
-        reference_years = set(re.findall(r"\b(?:19|20)\d{2}\b", reference))
-        if claim_years and reference_years and claim_years.isdisjoint(reference_years):
-            return {"type": "numeric_conflict", "claim_value": sorted(claim_years)[0], "reference_value": sorted(reference_years)[0]}
+            window = str(text[max(0, match.start() - 32):match.end() + 32]).lower()
+            relation = next(
+                (normalized for term, normalized in relation_terms.items() if term in window),
+                "",
+            )
+            nearby_entities = [
+                entity
+                for entity in entities
+                if entity.lower() != raw.lower()
+                and entity.lower() in window
+                and not re.fullmatch(r"v?\d+(?:\.\d+){0,2}%?", entity, flags=re.I)
+            ]
+            try:
+                value = float(normalized_raw)
+            except ValueError:
+                continue
+            facts.append({
+                "value": value,
+                "raw": raw,
+                "kind": kind,
+                "unit": unit,
+                "relation": relation,
+                "entities": nearby_entities,
+            })
+        return facts
+
+    @staticmethod
+    def _claim_conflict(claim: str, candidate: Dict[str, Any]) -> Optional[Dict[str, Any]]:
+        """Detect a conflict only when both numbers describe the same fact."""
+        reference = str(candidate.get("content", ""))
+        claim_facts = HallucinationUtil._normalize_numeric_facts(claim)
+        reference_facts = HallucinationUtil._normalize_numeric_facts(reference)
+        for claim_fact in claim_facts:
+            for reference_fact in reference_facts:
+                if claim_fact["kind"] != reference_fact["kind"]:
+                    continue
+                if claim_fact["unit"] != reference_fact["unit"]:
+                    continue
+                shared_entities = set(entity.lower() for entity in claim_fact["entities"]) & set(
+                    entity.lower() for entity in reference_fact["entities"]
+                )
+                same_relation = (
+                    claim_fact["relation"]
+                    and reference_fact["relation"]
+                    and claim_fact["relation"] == reference_fact["relation"]
+                )
+                if not shared_entities and not same_relation:
+                    continue
+                if claim_fact["value"] == reference_fact["value"]:
+                    continue
+                conflict_type = "version_conflict" if claim_fact["kind"] == "version" else "numeric_conflict"
+                return {
+                    "type": conflict_type,
+                    "claim_value": claim_fact["raw"],
+                    "reference_value": reference_fact["raw"],
+                }
         return None
 
     @staticmethod
@@ -296,10 +396,22 @@ class HallucinationUtil:
             item for item in industry_result["issues"] if item.get("severity") == "high"
         ]
         detected = bool(contradictions or industry_high_risk)
+        risk_flags = [
+            {**item, "severity": item.get("severity", "high")}
+            for item in contradictions
+        ] + list(industry_result["issues"])
         industry_score = sum(
             {"high": 60, "medium": 15, "low": 5}.get(item.get("severity", "low"), 5)
             for item in industry_result["issues"]
         )
+        review_outcome = (
+            "hallucination"
+            if detected
+            else "pending"
+            if gaps or has_weak or not strong
+            else "clean"
+        )
+        evidence_status = "sufficient" if claim_results and not gaps and not has_weak else "gap"
         info = {
             "is_hallucination": detected,
             "score": round(min(100.0, len(contradictions) * 80.0 + len(gaps) * 10.0 + industry_score), 2),
@@ -308,6 +420,10 @@ class HallucinationUtil:
             "credibility": credibility,
             "evidence_coverage": round(evidence_coverage, 3),
             "method": "knowledge_grounded" if candidates else "knowledge_gap",
+            "evidence_status": evidence_status,
+            "review_outcome": review_outcome,
+            "review_source": "knowledge_grounded" if candidates else "knowledge_gap",
+            "risk_flags": risk_flags,
             "claims": claim_results,
             "citations": citations,
             "knowledge_gap": HallucinationUtil._knowledge_gap(gaps, gap_entities),

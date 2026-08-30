@@ -46,6 +46,20 @@ def test_negated_absolute_words_do_not_trigger_hallucination():
     assert result["hallucination_detected"] is False
 
 
+def test_keyword_only_language_is_not_a_decisive_issue():
+    result = JudgeAgent().execute({
+        "generated_content": "这个结论可能需要进一步核实。",
+        "reference_knowledge": [{
+            "title": "Notes",
+            "content": "结论需要核实。",
+            "similarity": 0.86,
+        }],
+    })
+
+    assert result["hallucination_detected"] is False
+    assert all(issue["type"] != "hallucination_keyword" for issue in result["issues"])
+
+
 def test_teaching_context_terms_do_not_trigger_hallucination():
     content = """
     绝对值用于表示数的大小，Transformer 的绝对位置编码和相对位置编码是两种不同方案。

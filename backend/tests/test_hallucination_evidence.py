@@ -58,6 +58,28 @@ def test_explicit_numeric_conflict_is_an_evidence_issue():
     assert any(issue["type"] == "hallucination_evidence" for issue in result["issues"])
 
 
+def test_unrelated_years_do_not_create_a_conflict():
+    assert HallucinationUtil._claim_conflict(
+        "Python 3.12 was released in 2023.",
+        {"content": "The project was founded in 2018.", "similarity": 0.91},
+    ) is None
+
+
+def test_judge_marks_weak_evidence_as_pending_not_hallucination():
+    result = JudgeAgent().execute({
+        "generated_content": "The Aurora protocol supports seven recovery modes.",
+        "reference_knowledge": [{
+            "title": "Unrelated Notes",
+            "content": "A database history.",
+            "similarity": 0.21,
+        }],
+    })
+
+    assert result["hallucination_detected"] is False
+    assert result["review_outcome"] == "pending"
+    assert result["evidence_status"] == "gap"
+
+
 def test_judge_flexibly_rejects_a_knowledge_gap():
     result = JudgeAgent().execute({
         "generated_content": "The Aurora protocol supports seven recovery modes.",
