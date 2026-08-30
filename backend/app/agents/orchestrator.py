@@ -205,6 +205,11 @@ class AgentOrchestrator:
                         "conflict_points": final_audit.get("issues", []),
                         "corrections": final_audit.get("corrections", []),
                         "confidence": final_audit.get("overall_score", 0) / 100,
+                        "evidence_status": final_audit.get("evidence_status", "gap"),
+                        "review_outcome": final_audit.get("review_outcome", "pending"),
+                        "review_source": final_audit.get("review_source", "unknown"),
+                        "risk_flags": final_audit.get("risk_flags", []),
+                        "citations": final_audit.get("citations", []),
                     },
                     final_review=True,
                 )
