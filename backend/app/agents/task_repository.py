@@ -4,6 +4,7 @@
 封装 AgentTask 相关的数据库操作：创建、状态更新、日志、指标、辩论记录、资源保存。
 将持久化逻辑与编排逻辑分离，便于单测与后续替换存储层。
 """
+import hashlib
 import json
 import time
 from datetime import datetime
@@ -26,6 +27,7 @@ from app.utils.resource_content import (
     validate_match_score,
     validate_resource_title,
 )
+from app.utils.metrics import MetricsUtil
 
 
 class TaskRepository:
@@ -41,6 +43,12 @@ class TaskRepository:
         "init", "diagnosis", "knowledge_retrieval", "generation",
         "judge_first", "debate", "final_revision", "complete",
     ]
+
+    @staticmethod
+    def _audit_key(task_id: int, round_num: int, original_content: str) -> str:
+        """Build a stable identity for one auditable content review."""
+        payload = f"{int(task_id)}:{int(round_num)}:{original_content or ''}"
+        return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
     def create_task(
         self,
@@ -222,12 +230,87 @@ class TaskRepository:
         debate_data: Dict[str, Any],
         final_review: bool = False,
     ) -> None:
-        """保存辩论记录到数据库"""
+        """保存辩论记录，并对同一最终审查执行幂等更新。"""
         with get_db_context() as db:
             if not db.query(AgentTask.id).filter(AgentTask.id == task_id).first():
                 logger.warning(f"[TaskRepo] 跳过无效任务的辩论记录: task_id={task_id}")
                 return
-            record = DebateRecord(
+
+            debate_data = dict(debate_data or {})
+            original_content = str(debate_data.get("original_content") or "")
+            judge_standpoint = debate_data.get("judge_standpoint", {})
+            if not isinstance(judge_standpoint, dict):
+                judge_standpoint = {}
+            stored_metadata = judge_standpoint.get("audit_metadata")
+            if not isinstance(stored_metadata, dict):
+                stored_metadata = {}
+
+            conflict_points = debate_data.get("conflict_points") or []
+            if not isinstance(conflict_points, list):
+                conflict_points = list(conflict_points) if isinstance(conflict_points, (tuple, set)) else []
+            corrections = debate_data.get("corrections") or []
+            if not isinstance(corrections, list):
+                corrections = list(corrections) if isinstance(corrections, (tuple, set)) else []
+            decision = str(debate_data.get("final_decision") or "").lower()
+            hallucination_from_points = any(
+                isinstance(point, dict) and point.get("type") == "hallucination_evidence"
+                for point in conflict_points
+            )
+            review_outcome = str(
+                debate_data.get("review_outcome")
+                or judge_standpoint.get("review_outcome")
+                or stored_metadata.get("review_outcome")
+                or (
+                    "hallucination"
+                    if debate_data.get("hallucination_detected") or hallucination_from_points
+                    else "clean"
+                    if decision in {"approved", "confirmed"}
+                    else "pending"
+                )
+            ).lower()
+            evidence_status = str(
+                debate_data.get("evidence_status")
+                or judge_standpoint.get("evidence_status")
+                or stored_metadata.get("evidence_status")
+                or ("gap" if review_outcome == "pending" else "sufficient")
+            ).lower()
+            review_source = str(
+                debate_data.get("review_source")
+                or judge_standpoint.get("review_source")
+                or stored_metadata.get("review_source")
+                or "unknown"
+            )
+            risk_flags = debate_data.get("risk_flags")
+            if risk_flags is None:
+                risk_flags = judge_standpoint.get("risk_flags", stored_metadata.get("risk_flags", []))
+            if not isinstance(risk_flags, list):
+                risk_flags = list(risk_flags) if isinstance(risk_flags, (tuple, set)) else [risk_flags]
+            policy_version = str(
+                debate_data.get("policy_version")
+                or stored_metadata.get("policy_version")
+                or MetricsUtil.HALLUCINATION_POLICY_VERSION
+            )
+            audit_key = self._audit_key(task_id, round_num, original_content)
+            audit_metadata = {
+                "audit_key": audit_key,
+                "evidence_status": evidence_status,
+                "review_outcome": review_outcome,
+                "review_source": review_source,
+                "policy_version": policy_version,
+                "is_final_review": bool(final_review),
+                "risk_flags": risk_flags,
+            }
+            judge_view = dict(judge_standpoint)
+            judge_view["audit_metadata"] = audit_metadata
+            is_hallucination = bool(
+                debate_data.get("hallucination_detected")
+                or hallucination_from_points
+                or review_outcome in {"hallucination", "reviewed_hallucination"}
+            )
+            is_resolved = bool(final_review) and decision in {
+                "approved", "rejected", "confirmed", "resolved"
+            }
+            record_values = dict(
                 task_id=task_id,
                 debate_round=round_num,
                 debate_type="cross_validation",
@@ -238,58 +321,95 @@ class TaskRepository:
                     default=str,
                 ),
                 agent_judge_view=json.dumps(
-                    debate_data.get("judge_standpoint", {}),
+                    judge_view,
                     ensure_ascii=False,
                     default=str,
                 ),
-                original_content=debate_data.get("original_content", ""),
+                original_content=original_content,
                 reference_content=debate_data.get("reference_content", ""),
                 comparison_summary=json.dumps(
-                    debate_data.get("conflict_points", []),
+                    conflict_points,
                     ensure_ascii=False,
                     default=str,
                 ),
-                has_conflict=len(debate_data.get("conflict_points", [])) > 0,
-                conflict_type="content_audit" if debate_data.get("conflict_points") else "none",
+                has_conflict=len(conflict_points) > 0,
+                conflict_type="content_audit" if conflict_points else "none",
                 conflict_severity="high" if any(
-                    p.get("severity") == "high"
-                    for p in debate_data.get("conflict_points", [])
+                    isinstance(point, dict) and point.get("severity") in {"high", "critical"}
+                    for point in conflict_points
                 ) else "medium",
                 conflict_description=json.dumps(
-                    debate_data.get("conflict_points", []),
+                    conflict_points,
                     ensure_ascii=False,
                     default=str,
                 ),
-                is_hallucination=any(
-                    p.get("type") == "hallucination_evidence"
-                    for p in debate_data.get("conflict_points", [])
-                ),
-                resolution_status=(
-                    "resolved"
-                    if final_review
-                    or debate_data.get("final_decision") in {"approved", "rejected"}
-                    else "unresolved"
-                ),
+                is_hallucination=is_hallucination,
+                resolution_status="resolved" if is_resolved else "unresolved",
                 corrected_content=debate_data.get("corrected_content", ""),
                 correction_reason=json.dumps(
-                    [c.get("description", "") for c in debate_data.get("corrections", [])],
+                    [
+                        point.get("description", "")
+                        for point in corrections
+                        if isinstance(point, dict)
+                    ],
                     ensure_ascii=False,
                 ),
                 judge_decision=debate_data.get("final_decision", ""),
                 judge_confidence=debate_data.get("confidence", 0.0),
                 judge_notes=json.dumps(
-                    debate_data.get("corrections", []),
+                    corrections,
                     ensure_ascii=False,
                     default=str,
                 ),
-                resolved_at=datetime.now()
-                if (
-                    final_review
-                    or debate_data.get("final_decision") in {"approved", "rejected"}
-                )
-                else None,
+                resolved_at=datetime.now() if is_resolved else None,
             )
-            db.add(record)
+
+            existing_records = db.query(DebateRecord).filter(
+                DebateRecord.task_id == task_id,
+                DebateRecord.debate_round == round_num,
+            ).order_by(DebateRecord.id.desc()).all()
+            for existing in existing_records:
+                try:
+                    existing_view = json.loads(existing.agent_judge_view or "{}")
+                except (TypeError, ValueError, json.JSONDecodeError):
+                    existing_view = {}
+                existing_metadata = (
+                    existing_view.get("audit_metadata", {})
+                    if isinstance(existing_view, dict)
+                    else {}
+                )
+                if not isinstance(existing_metadata, dict):
+                    continue
+                if existing_metadata.get("audit_key") != audit_key:
+                    continue
+                if existing_metadata.get("policy_version") != policy_version:
+                    continue
+                existing_is_final = bool(existing_metadata.get("is_final_review"))
+                if existing_is_final and not final_review:
+                    return
+                for field in (
+                    "agent_diagnosis_view",
+                    "agent_generation_view",
+                    "agent_judge_view",
+                    "comparison_summary",
+                    "has_conflict",
+                    "conflict_type",
+                    "conflict_severity",
+                    "conflict_description",
+                    "is_hallucination",
+                    "resolution_status",
+                    "corrected_content",
+                    "correction_reason",
+                    "judge_decision",
+                    "judge_confidence",
+                    "judge_notes",
+                    "resolved_at",
+                ):
+                    setattr(existing, field, record_values[field])
+                db.commit()
+                return
+
+            db.add(DebateRecord(**record_values))
             db.commit()
 
     def save_resource_and_complete(
