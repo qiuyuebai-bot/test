@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync } from "node:fs";
+import { cpSync, copyFileSync, existsSync, mkdirSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { app, BrowserWindow, dialog, session, shell } from "electron";
@@ -59,6 +59,21 @@ function getUserDirectories() {
   mkdirSync(dataDir, { recursive: true });
   mkdirSync(logsDir, { recursive: true });
   return { userData, dataDir, logsDir };
+}
+
+function initializeDemoData(dataDir) {
+  if (existsSync(join(dataDir, "app.db"))) return false;
+  const demoDir = resourcePath("demo-data");
+  const demoDatabase = join(demoDir, "app.db");
+  if (!existsSync(demoDatabase)) return false;
+
+  mkdirSync(dataDir, { recursive: true });
+  copyFileSync(demoDatabase, join(dataDir, "app.db"));
+  for (const directory of ["knowledge_docs", "resources", "uploads"]) {
+    const source = join(demoDir, directory);
+    if (existsSync(source)) cpSync(source, join(dataDir, directory), { recursive: true });
+  }
+  return true;
 }
 
 function configureSession() {
@@ -169,6 +184,8 @@ function backendEnvironment() {
 }
 
 async function startBackend() {
+  const { dataDir } = getUserDirectories();
+  initializeDemoData(dataDir);
   const executable = backendExecutablePath();
   if (!existsSync(executable)) {
     throw new Error(`未找到桌面后端：${executable}`);

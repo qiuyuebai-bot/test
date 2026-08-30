@@ -67,6 +67,11 @@ backend/data/.secret_key
 *.db-shm
 *.db-wal
 *.db-journal
+
+# The desktop installer ships this explicitly sanitized demo database.
+!desktop/demo-data/app.db
+!desktop/demo-data/
+!desktop/demo-data/**
 *.sqlite
 *.sqlite3
 backend/data/chroma_db/

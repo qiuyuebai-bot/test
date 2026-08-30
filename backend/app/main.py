@@ -29,6 +29,7 @@ from app.seed_data import (
     init_default_admin,
     init_learner_seed_data,
     init_knowledge_seed_data,
+    normalize_demo_data_paths,
 )
 
 
@@ -41,6 +42,7 @@ async def lifespan(app: FastAPI):
         init_database()
         logger.info("数据库初始化完成")
         if settings.is_desktop:
+            normalize_demo_data_paths()
             logger.info("桌面模式跳过默认管理员和演示数据，等待本机首次初始化")
         elif settings.SEED_ON_STARTUP:
             init_default_admin()

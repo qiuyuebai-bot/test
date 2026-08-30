@@ -107,6 +107,31 @@ def init_metrics_seed_data():
         db.close()
 
 
+def normalize_demo_data_paths():
+    """Resolve filesystem placeholders in the bundled demo database."""
+    if not settings.is_desktop:
+        return
+    from app.domains.knowledge.models import KnowledgeDoc
+
+    token = "__DEMO_DATA_DIR__"
+    data_dir = Path(settings.APP_DATA_DIR).resolve()
+    db = SessionLocal()
+    try:
+        changed = 0
+        for document in db.query(KnowledgeDoc).filter(KnowledgeDoc.file_path.like(f"{token}%")):
+            suffix = str(document.file_path)[len(token):].lstrip("/\\")
+            document.file_path = str(data_dir / suffix)
+            changed += 1
+        if changed:
+            db.commit()
+            logger.info("桌面演示数据文件路径已解析: {} 条", changed)
+    except Exception as e:
+        logger.warning(f"解析演示数据文件路径失败: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+
 def init_knowledge_seed_data():
     """初始化默认知识库文档和数据库切片。
 

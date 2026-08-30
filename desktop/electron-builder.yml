@@ -16,6 +16,8 @@ files:
 extraResources:
   - from: desktop/out/backend
     to: backend
+  - from: desktop/demo-data
+    to: demo-data
   - from: dist
     to: web
 asar: true

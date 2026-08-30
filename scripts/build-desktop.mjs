@@ -11,6 +11,9 @@ const isWindows = process.platform === "win32";
 const unpacked = process.argv.includes("--dir");
 const packageOnly = process.argv.includes("--package-only");
 const npm = isWindows ? "npm.cmd" : "npm";
+const python = isWindows
+  ? join(ROOT, "backend", "venv", "Scripts", "python.exe")
+  : join(ROOT, "backend", "venv", "bin", "python");
 const builder = isWindows
   ? join(ROOT, "node_modules", ".bin", "electron-builder.cmd")
   : join(ROOT, "node_modules", ".bin", "electron-builder");
@@ -41,6 +44,10 @@ if (!packageOnly) {
   await run(npm, ["run", "desktop:backend"]);
   await run(process.execPath, [join(ROOT, "scripts", "desktop-smoke.mjs")]);
 }
+
+// Refresh the sanitized payload from the current local business data before
+// packaging. It contains no administrator credentials or AI configuration.
+await run(python, [join(ROOT, "scripts", "create-demo-data-package.py")]);
 
 // 受限环境可能跳过 Electron 的 postinstall，此处在打包前补齐本机运行时。
 if (!existsSync(electronExecutable)) {
