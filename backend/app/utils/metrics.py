@@ -4,7 +4,7 @@
 """
 import json
 from typing import Dict, Any, Optional
-from datetime import datetime
+from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from loguru import logger
@@ -14,7 +14,18 @@ from app.utils.datetime import utcnow_naive
 class MetricsUtil:
     """指标自动计算工具类"""
     
-    MIN_HALLUCINATION_SAMPLE = 5
+    HALLUCINATION_POLICY_VERSION = "hallucination-rate-v1"
+    MIN_HALLUCINATION_SAMPLE = 10
+    FORMAL_MIN_HALLUCINATION_SAMPLE = 60
+    HALLUCINATION_TARGET_PERCENT = 5.0
+    RECENT_WINDOW_DAYS = 30
+    HALLUCINATION_STATES = (
+        "reviewed_clean",
+        "reviewed_hallucination",
+        "evidence_gap",
+        "pending_review",
+        "invalid_record",
+    )
     EVIDENCE_GAP_MARKERS = {
         "knowledge_gap",
         "no_reference",
@@ -51,7 +62,55 @@ class MetricsUtil:
         }
 
     @classmethod
+    def _audit_metadata(cls, record: Any) -> Dict[str, Any]:
+        """Read the standardized audit metadata while supporting legacy JSON."""
+        value = getattr(record, "agent_judge_view", None)
+        if isinstance(value, str):
+            raw = value.strip()
+            if not raw:
+                return {}
+            try:
+                value = json.loads(raw)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return {}
+        if not isinstance(value, dict):
+            return {}
+        metadata = value.get("audit_metadata")
+        return metadata if isinstance(metadata, dict) else {}
+
+    @classmethod
+    def _is_invalid_record(cls, record: Any) -> bool:
+        """Reject records that cannot be audited without guessing."""
+        original_content = getattr(record, "original_content", None)
+        if not isinstance(original_content, str) or not original_content.strip():
+            return True
+
+        json_fields = (
+            "agent_judge_view",
+            "agent_generation_view",
+            "comparison_summary",
+            "conflict_description",
+            "judge_notes",
+        )
+        for field_name in json_fields:
+            value = getattr(record, field_name, None)
+            if not isinstance(value, str) or not value.strip():
+                continue
+            raw = value.strip()
+            if raw[0] not in "[{":
+                continue
+            try:
+                json.loads(raw)
+            except (TypeError, ValueError, json.JSONDecodeError):
+                return True
+        return False
+
+    @classmethod
     def _is_evidence_gap_record(cls, record: Any) -> bool:
+        metadata = cls._audit_metadata(record)
+        evidence_status = str(metadata.get("evidence_status", "") or "").lower()
+        if evidence_status in {"gap", "evidence_gap", "insufficient_evidence"}:
+            return True
         fields = (
             getattr(record, "hallucination_type", None),
             getattr(record, "hallucination_keywords", None),
@@ -62,15 +121,78 @@ class MetricsUtil:
         return any(cls._contains_evidence_gap(field) for field in fields)
 
     @classmethod
+    def _is_high_risk_record(cls, record: Any) -> bool:
+        severity = str(getattr(record, "conflict_severity", "") or "").lower()
+        if severity in {"high", "critical"}:
+            return True
+        metadata = cls._audit_metadata(record)
+        risk_flags = metadata.get("risk_flags", [])
+        if isinstance(risk_flags, dict):
+            risk_flags = [risk_flags]
+        if not isinstance(risk_flags, (list, tuple, set)):
+            risk_flags = [risk_flags]
+        for flag in risk_flags:
+            if isinstance(flag, dict):
+                flag_type = str(flag.get("type", "") or "").lower()
+                flag_severity = str(flag.get("severity", "") or "").lower()
+                if flag_type in {"safety", "regulatory", "security"}:
+                    return True
+                if flag_severity in {"high", "critical"}:
+                    return True
+            elif str(flag or "").lower() in {"safety", "regulatory", "security"}:
+                return True
+        return False
+
+    @classmethod
+    def classify_debate_record(cls, record: Any) -> str:
+        """Classify one record into the mutually exclusive metric states."""
+        if cls._is_invalid_record(record):
+            return "invalid_record"
+
+        metadata = cls._audit_metadata(record)
+        evidence_status = str(metadata.get("evidence_status", "") or "").lower()
+        review_outcome = str(metadata.get("review_outcome", "") or "").lower()
+        if evidence_status in {"gap", "evidence_gap", "insufficient_evidence"}:
+            return "evidence_gap"
+        if review_outcome in {"pending", "pending_review", "needs_review"}:
+            return "pending_review"
+        if cls._is_evidence_gap_record(record):
+            return "evidence_gap"
+        if not cls._is_reviewed_record(record):
+            return "pending_review"
+        if review_outcome in {"hallucination", "reviewed_hallucination"}:
+            return "reviewed_hallucination"
+        if review_outcome in {"clean", "reviewed_clean"}:
+            return "reviewed_clean"
+        return "reviewed_hallucination" if bool(getattr(record, "is_hallucination", False)) else "reviewed_clean"
+
+    @classmethod
     def calculate_hallucination_metrics(
         cls,
         db: Session,
         start_date: Optional[datetime] = None,
         end_date: Optional[datetime] = None,
         learner_id: Optional[int] = None,
+        minimum_sample_size: Optional[int] = None,
+        window_days: Optional[int] = None,
     ) -> Dict[str, Any]:
         """Calculate a rate from reviewed, evidence-backed records only."""
         from app.models import AgentTask, DebateRecord
+
+        if start_date is not None and window_days is not None:
+            raise ValueError("start_date and window_days cannot be used together")
+        if window_days is not None:
+            if not isinstance(window_days, int) or window_days <= 0:
+                raise ValueError("window_days must be a positive integer")
+            start_date = utcnow_naive() - timedelta(days=window_days)
+
+        effective_minimum = (
+            cls.MIN_HALLUCINATION_SAMPLE
+            if minimum_sample_size is None
+            else int(minimum_sample_size)
+        )
+        if effective_minimum < 0:
+            raise ValueError("minimum_sample_size cannot be negative")
 
         query = db.query(DebateRecord)
         if learner_id is not None:
@@ -83,24 +205,23 @@ class MetricsUtil:
             query = query.filter(DebateRecord.created_at <= end_date)
 
         records = query.all()
+        state_counts = {state: 0 for state in cls.HALLUCINATION_STATES}
+        high_risk_checks = 0
+        high_risk_reviewed = 0
+        for record in records:
+            state = cls.classify_debate_record(record)
+            state_counts[state] += 1
+            if cls._is_high_risk_record(record):
+                high_risk_checks += 1
+                if state in {"reviewed_clean", "reviewed_hallucination"}:
+                    high_risk_reviewed += 1
+
         total_checks = len(records)
-        evidence_gap_records = [
-            record for record in records if cls._is_evidence_gap_record(record)
-        ]
-        reviewed_records = [
-            record
-            for record in records
-            if cls._is_reviewed_record(record)
-            and record not in evidence_gap_records
-        ]
-        pending_checks = sum(
-            1 for record in records if not cls._is_reviewed_record(record)
-        )
-        evaluated_checks = len(reviewed_records)
-        confirmed_hallucinations = sum(
-            1 for record in reviewed_records if bool(record.is_hallucination)
-        )
-        has_sufficient_sample = evaluated_checks >= cls.MIN_HALLUCINATION_SAMPLE
+        evidence_gap_count = state_counts["evidence_gap"]
+        pending_checks = state_counts["pending_review"]
+        evaluated_checks = state_counts["reviewed_clean"] + state_counts["reviewed_hallucination"]
+        confirmed_hallucinations = state_counts["reviewed_hallucination"]
+        has_sufficient_sample = evaluated_checks >= effective_minimum
         hallucination_rate = (
             round(confirmed_hallucinations / evaluated_checks * 100, 2)
             if has_sufficient_sample
@@ -111,6 +232,11 @@ class MetricsUtil:
             if has_sufficient_sample
             else None
         )
+        high_risk_review_coverage = (
+            round(high_risk_reviewed / high_risk_checks * 100, 2)
+            if high_risk_checks
+            else 100.0
+        )
 
         return {
             "total_checks": total_checks,
@@ -119,11 +245,24 @@ class MetricsUtil:
             "pending_checks": pending_checks,
             "confirmed_hallucinations": confirmed_hallucinations,
             "hallucination_count": confirmed_hallucinations,
-            "evidence_gaps": len(evidence_gap_records),
+            "evidence_gaps": evidence_gap_count,
+            "invalid_records": state_counts["invalid_record"],
+            "state_counts": state_counts,
+            "high_risk_checks": high_risk_checks,
+            "high_risk_reviewed": high_risk_reviewed,
+            "high_risk_review_coverage": high_risk_review_coverage,
             "hallucination_rate": hallucination_rate,
             "pass_rate": pass_rate,
             "has_sufficient_sample": has_sufficient_sample,
-            "minimum_sample_size": cls.MIN_HALLUCINATION_SAMPLE,
+            "minimum_sample_size": effective_minimum,
+            "formal_minimum_sample_size": cls.FORMAL_MIN_HALLUCINATION_SAMPLE,
+            "target_percent": cls.HALLUCINATION_TARGET_PERCENT,
+            "policy_version": cls.HALLUCINATION_POLICY_VERSION,
+            "window": {
+                "start": start_date.isoformat() if start_date else None,
+                "end": end_date.isoformat() if end_date else None,
+                "days": window_days,
+            },
             "unit": "%",
         }
 

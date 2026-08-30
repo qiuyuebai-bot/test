@@ -30,7 +30,7 @@ def _add_record(
     return record
 
 
-def test_unresolved_evidence_gaps_are_pending_not_hallucinations(
+def test_evidence_gaps_are_separate_from_pending_reviews(
     db_session, sample_agent_task
 ):
     for _ in range(3):
@@ -45,17 +45,73 @@ def test_unresolved_evidence_gaps_are_pending_not_hallucinations(
 
     assert metrics["total_checks"] == 3
     assert metrics["evaluated_checks"] == 0
-    assert metrics["pending_checks"] == 3
+    assert metrics["pending_checks"] == 0
     assert metrics["confirmed_hallucinations"] == 0
     assert metrics["evidence_gaps"] == 3
+    assert metrics["state_counts"]["evidence_gap"] == 3
+    assert metrics["state_counts"]["pending_review"] == 0
     assert metrics["hallucination_rate"] is None
     assert metrics["has_sufficient_sample"] is False
+
+
+def test_record_states_are_mutually_exclusive(db_session, sample_agent_task):
+    gap = _add_record(
+        db_session,
+        sample_agent_task.id,
+        is_hallucination=True,
+        conflict_points=[{"type": "knowledge_gap"}],
+    )
+    pending = _add_record(db_session, sample_agent_task.id, is_hallucination=False)
+    clean = _add_record(
+        db_session,
+        sample_agent_task.id,
+        is_hallucination=False,
+        resolution_status="resolved",
+        judge_decision="approved",
+    )
+    hallucination = _add_record(
+        db_session,
+        sample_agent_task.id,
+        is_hallucination=True,
+        resolution_status="resolved",
+        judge_decision="rejected",
+        conflict_points=[{"type": "hallucination_evidence"}],
+    )
+
+    assert MetricsUtil.classify_debate_record(gap) == "evidence_gap"
+    assert MetricsUtil.classify_debate_record(pending) == "pending_review"
+    assert MetricsUtil.classify_debate_record(clean) == "reviewed_clean"
+    assert MetricsUtil.classify_debate_record(hallucination) == "reviewed_hallucination"
+
+
+def test_strict_target_requires_61_records_when_h_is_three(
+    db_session, sample_agent_task
+):
+    for index in range(61):
+        _add_record(
+            db_session,
+            sample_agent_task.id,
+            is_hallucination=index < 3,
+            resolution_status="resolved",
+            judge_decision="rejected" if index < 3 else "approved",
+            conflict_points=(
+                [{"type": "hallucination_evidence"}] if index < 3 else []
+            ),
+        )
+
+    metrics = MetricsUtil.calculate_hallucination_metrics(
+        db_session, minimum_sample_size=60
+    )
+
+    assert metrics["hallucination_rate"] == 4.92
+    assert metrics["evaluated_checks"] == 61
+    assert metrics["state_counts"]["reviewed_hallucination"] == 3
 
 
 def test_resolved_records_produce_rate_only_after_minimum_sample(
     db_session, sample_agent_task
 ):
-    for index in range(6):
+    for index in range(10):
         _add_record(
             db_session,
             sample_agent_task.id,
@@ -71,12 +127,12 @@ def test_resolved_records_produce_rate_only_after_minimum_sample(
 
     metrics = MetricsUtil.calculate_hallucination_metrics(db_session)
 
-    assert metrics["total_checks"] == 6
-    assert metrics["evaluated_checks"] == 6
+    assert metrics["total_checks"] == 10
+    assert metrics["evaluated_checks"] == 10
     assert metrics["pending_checks"] == 0
     assert metrics["confirmed_hallucinations"] == 2
     assert metrics["evidence_gaps"] == 0
-    assert metrics["hallucination_rate"] == 33.33
+    assert metrics["hallucination_rate"] == 20.0
     assert metrics["has_sufficient_sample"] is True
 
 
@@ -97,7 +153,7 @@ def test_hallucination_endpoint_exposes_pending_and_evidence_counts(
     data = response.json()["data"]
     assert data["total_checks"] == 1
     assert data["evaluated_checks"] == 0
-    assert data["pending_checks"] == 1
+    assert data["pending_checks"] == 0
     assert data["evidence_gaps"] == 1
     assert data["hallucination_rate"] is None
     assert data["has_sufficient_sample"] is False
@@ -117,7 +173,7 @@ def test_report_metrics_uses_the_same_evidence_aware_source(
 
     assert response.status_code == 200
     data = response.json()["data"]
-    assert data["pending_checks"] == 1
+    assert data["pending_checks"] == 0
     assert data["evidence_gaps"] == 1
     assert data["hallucination_rate"] is None
     assert data["has_sufficient_sample"] is False

@@ -79,7 +79,7 @@ METRIC_REGISTRY: Dict[str, MetricDefinition] = {
         unit="%",
         formula="confirmed hallucination reviews / completed evidence reviews",
         source=("debate_records.is_hallucination", "debate_records.resolution_status"),
-        minimum_sample_size=5,
+        minimum_sample_size=10,
     ),
 }
 
