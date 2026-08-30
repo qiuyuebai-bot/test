@@ -38,6 +38,39 @@ def test_zero_is_a_ready_metric_value(db_session, sample_learning_resource):
     assert result["denominator"] == 1
 
 
+def test_resource_match_score_excludes_disabled_resources(
+    db_session, sample_learning_resource
+):
+    from app.models import LearningResource
+
+    sample_learning_resource.match_score = 80.0
+    db_session.add(
+        LearningResource(
+            learner_id=sample_learning_resource.learner_id,
+            title="已归档资源",
+            resource_type="guide",
+            content="历史内容",
+            match_score=0.0,
+            is_enabled=False,
+            status="archived",
+        )
+    )
+    db_session.commit()
+
+    result = _by_id(
+        MetricService.calculate_metrics(
+            db_session,
+            scope="learner",
+            scope_id=sample_learning_resource.learner_id,
+            metric_ids=["resource_match_score"],
+        )
+    )["resource_match_score"]
+
+    assert result["value"] == 80.0
+    assert result["numerator"] == 80.0
+    assert result["denominator"] == 1
+
+
 def _add_answer_record(db, user_id, learner_id, *, result, session_id, next_resource_id=None):
     from app.models import AnswerRecord
 

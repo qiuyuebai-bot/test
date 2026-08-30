@@ -7,7 +7,7 @@
     -> 每答一题取 result.next_question_difficulty 生成下一题
     答错 -> simplify -> 难度降级；答对 -> advance/consolidate -> 升/平。
 
-  round：每轮批量出题（difficulty=None 走诊断推荐），作为补充样本。
+  round：每轮批量出题；可用 --question-difficulty 固定评估难度。
 
 作答模拟规则（透明可复现，固定随机种子）：
   - 主题相关维度能力分 ability（无映射维度时用六维均值）
@@ -23,6 +23,7 @@
   python -m scripts.generate_answer_samples                  # 全量（adaptive 会话）
 """
 import argparse
+import hashlib
 import random
 import sys
 import time
@@ -118,6 +119,9 @@ def answer_one(
     difficulty: Optional[int],
     rng: random.Random,
     stats: Dict[str, int],
+    *,
+    session_id: Optional[str] = None,
+    sequence_index: Optional[int] = None,
 ) -> Optional[int]:
     """生成并作答一道题；返回服务端给出的下一题难度（闭环信号）。"""
     questions = AdaptiveTutoringService.generate_dynamic_questions(
@@ -127,6 +131,7 @@ def answer_one(
         difficulty=difficulty,  # None -> 诊断推荐难度；否则严格按指定难度
         question_count=1,
         replace_pending=True,
+        session_id=session_id,
     )
     if not questions or not str(questions[0].get("id", "")).isdigit():
         print(f"  [warn] 未生成题目: learner={learner.id} topic={topic}", flush=True)
@@ -151,6 +156,8 @@ def answer_one(
         user_answer=",".join(submit),
         time_spent_ms=rng.randint(15000, 90000),
         hints_used=0,
+        session_id=session_id,
+        sequence_index=sequence_index,
     )
     dur = time.time() - t0
     if not result.get("success"):
@@ -183,11 +190,21 @@ def run_adaptive_session(
     session_len: int,
     rng: random.Random,
     stats: Dict[str, int],
+    session_id: str,
 ) -> None:
     """复刻前端自适应会话：首题走诊断推荐，之后逐题消费 next_question_difficulty。"""
     next_difficulty: Optional[int] = None
-    for _ in range(session_len):
-        next_difficulty = answer_one(db, learner, topic, next_difficulty, rng, stats)
+    for sequence_index in range(1, session_len + 1):
+        next_difficulty = answer_one(
+            db,
+            learner,
+            topic,
+            next_difficulty,
+            rng,
+            stats,
+            session_id=session_id,
+            sequence_index=sequence_index,
+        )
         if next_difficulty is None:
             break
 
@@ -199,14 +216,39 @@ def run_round(
     per_round: int,
     rng: random.Random,
     stats: Dict[str, int],
+    session_id: Optional[str] = None,
+    question_difficulty: Optional[int] = None,
 ) -> None:
-    """批量出题一轮（difficulty=None 走诊断推荐难度）。"""
-    for _ in range(per_round):
-        if answer_one(db, learner, topic, None, rng, stats) is None:
+    """批量出题一轮；未指定难度时走诊断推荐难度。"""
+    for sequence_index in range(1, per_round + 1):
+        if answer_one(
+            db,
+            learner,
+            topic,
+            question_difficulty,
+            rng,
+            stats,
+            session_id=session_id,
+            sequence_index=sequence_index,
+        ) is None:
             break
 
 
-def run_learner(db, learner: LearnerProfile, mode: str, session_len: int, max_topics: int, rng: random.Random) -> Dict[str, int]:
+def _session_id(mode: str, learner_id: int, topic: str, seed: int) -> str:
+    topic_key = hashlib.sha1(topic.encode("utf-8")).hexdigest()[:10]
+    return f"sample_{mode}_s{seed}_l{learner_id}_t{topic_key}"
+
+
+def run_learner(
+    db,
+    learner: LearnerProfile,
+    mode: str,
+    session_len: int,
+    max_topics: int,
+    rng: random.Random,
+    seed: int,
+    question_difficulty: Optional[int] = None,
+) -> Dict[str, int]:
     label = learner.display_name or learner.real_name or f"learner_{learner.id}"
     low_res = (
         db.query(LearningResource)
@@ -223,10 +265,27 @@ def run_learner(db, learner: LearnerProfile, mode: str, session_len: int, max_to
     for topic in topics:
         db.refresh(learner)
         print(f"  -- 会话 topic={topic} 能力={topic_ability(learner, topic):.0f}", flush=True)
+        session_id = _session_id(mode, learner.id, topic, seed)
+        existing_count = db.query(AnswerRecord).filter(
+            AnswerRecord.learner_id == learner.id,
+            AnswerRecord.session_id == session_id,
+        ).count()
+        if existing_count:
+            print(f"  [skip] 会话已存在 {session_id}（答题记录={existing_count}）", flush=True)
+            continue
         if mode == "adaptive":
-            run_adaptive_session(db, learner, topic, session_len, rng, stats)
+            run_adaptive_session(db, learner, topic, session_len, rng, stats, session_id)
         else:
-            run_round(db, learner, topic, session_len, rng, stats)
+            run_round(
+                db,
+                learner,
+                topic,
+                session_len,
+                rng,
+                stats,
+                session_id,
+                question_difficulty,
+            )
     return stats
 
 
@@ -236,6 +295,13 @@ def main() -> int:
     parser.add_argument("--mode", choices=["adaptive", "round"], default="adaptive", help="adaptive=前端自适应会话（默认），round=批量轮次")
     parser.add_argument("--topics", type=int, default=3, help="每学习者主题数")
     parser.add_argument("--session-len", type=int, default=6, help="adaptive: 每主题会话题数 / round: 每轮题数")
+    parser.add_argument(
+        "--question-difficulty",
+        type=int,
+        choices=range(1, 6),
+        default=None,
+        help="round 模式固定题目难度（不传则使用画像推荐难度）",
+    )
     parser.add_argument("--seed", type=int, default=20260825, help="随机种子（可复现）")
     parser.add_argument("--smoke", action="store_true", help="冒烟模式：1 学习者 1 主题 2 题")
     args = parser.parse_args()
@@ -252,7 +318,11 @@ def main() -> int:
         before_total = db.query(AnswerRecord).count()
         before_res = db.query(AnswerRecord).filter(AnswerRecord.next_resource_id.isnot(None)).count()
         print(f"运行前: 答题记录={before_total}, next_resource_id非空={before_res}")
-        print(f"参数: mode={args.mode} learners={learner_ids} topics={args.topics} session_len={args.session_len} seed={args.seed}")
+        print(
+            f"参数: mode={args.mode} learners={learner_ids} topics={args.topics} "
+            f"session_len={args.session_len} question_difficulty={args.question_difficulty} "
+            f"seed={args.seed}"
+        )
 
         totals = {"answered": 0, "correct": 0, "with_resource": 0, "intent_match": 0, "failed": 0}
         start = time.time()
@@ -261,7 +331,16 @@ def main() -> int:
             if not learner:
                 print(f"[warn] learner={learner_id} 不存在，跳过")
                 continue
-            stats = run_learner(db, learner, args.mode, args.session_len, args.topics, rng)
+            stats = run_learner(
+                db,
+                learner,
+                args.mode,
+                args.session_len,
+                args.topics,
+                rng,
+                args.seed,
+                args.question_difficulty,
+            )
             for key in totals:
                 totals[key] += stats[key]
 

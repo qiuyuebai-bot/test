@@ -67,7 +67,8 @@ class MetricCalculator:
         cls, db: Session, scope: str, scope_id: int | None
     ) -> Dict[str, Any]:
         query = db.query(LearningResource.match_score).filter(
-            LearningResource.match_score.isnot(None)
+            LearningResource.match_score.isnot(None),
+            LearningResource.is_enabled.is_(True),
         )
         learner_id = cls._scope_learner_id(scope, scope_id)
         if learner_id is not None:

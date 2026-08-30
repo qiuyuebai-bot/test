@@ -323,6 +323,100 @@ class TestDecisionSpecificFeedback:
         assert advance["recommendation"] != simplify["recommendation"]
 
 
+class TestSuggestedResources:
+    """Recommendations must point to usable resources for the current topic."""
+
+    @staticmethod
+    def _resource(
+        db_session,
+        learner_id,
+        *,
+        topic,
+        status="ready",
+        enabled=True,
+        score=90.0,
+        difficulty=3,
+    ):
+        resource = LearningResource(
+            learner_id=learner_id,
+            title=f"{topic or '通用'}资源",
+            resource_type="guide",
+            knowledge_topic=topic,
+            content="资源内容",
+            status=status,
+            is_enabled=enabled,
+            validation_passed=True,
+            difficulty_level=difficulty,
+            match_score=score,
+        )
+        db_session.add(resource)
+        db_session.commit()
+        return resource
+
+    def test_prefers_topic_and_excludes_failed_resources(
+        self, db_session, sample_learner_profile
+    ):
+        unrelated = self._resource(
+            db_session,
+            sample_learner_profile.id,
+            topic="数据分析",
+            score=100.0,
+        )
+        failed_topic = self._resource(
+            db_session,
+            sample_learner_profile.id,
+            topic="反向传播算法",
+            status="failed",
+            score=100.0,
+        )
+        usable_topic = self._resource(
+            db_session,
+            sample_learner_profile.id,
+            topic="反向传播算法从概念到实践",
+            score=85.0,
+        )
+
+        selected = AdaptiveTutoringService._select_suggested_resources(
+            learner_id=sample_learner_profile.id,
+            question_topic="算法设计",
+            target_difficulty=2,
+        )
+
+        selected_ids = [item["resource_id"] for item in selected]
+        assert usable_topic.id in selected_ids
+        assert unrelated.id not in selected_ids
+        assert failed_topic.id not in selected_ids
+
+    def test_uses_untagged_resource_only_as_generic_fallback(
+        self, db_session, sample_learner_profile
+    ):
+        generic = self._resource(db_session, sample_learner_profile.id, topic=None)
+
+        selected = AdaptiveTutoringService._select_suggested_resources(
+            learner_id=sample_learner_profile.id,
+            question_topic="量子计算",
+            target_difficulty=3,
+        )
+
+        assert [item["resource_id"] for item in selected] == [generic.id]
+
+    def test_matches_concrete_platform_architecture_resource(self, db_session, sample_learner_profile):
+        resource = self._resource(
+            db_session,
+            sample_learner_profile.id,
+            topic="工业互联网平台架构",
+            score=95.0,
+        )
+
+        selected = AdaptiveTutoringService._select_suggested_resources(
+            learner_id=sample_learner_profile.id,
+            question_topic="系统架构",
+            target_difficulty=3,
+        )
+
+        assert selected[0]["resource_id"] == resource.id
+
+
 class TestMultipleQuestionGrading:
     def test_requires_all_correct_options_without_extras(
         self, db_session, sample_learner_profile, sample_user, monkeypatch

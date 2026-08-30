@@ -598,7 +598,7 @@ helm upgrade knowledge-system ./deploy/helm \
 ```bash
 kubectl create secret generic knowledge-system-prod-secrets \
   --from-literal=SECRET_KEY=$(openssl rand -hex 32) \
-  --from-literal=OPENAI_API_KEY=sk-xxx \
+  --from-literal=OPENAI_API_KEY=<YOUR_OPENAI_API_KEY> \
   --from-literal=DEFAULT_ADMIN_PASSWORD=$(openssl rand -base64 16) \
   --from-literal=POSTGRES_PASSWORD=$(openssl rand -hex 16) \
   -n knowledge-prod

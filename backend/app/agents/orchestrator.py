@@ -350,14 +350,41 @@ class AgentOrchestrator:
         )
         if not result.get("_meta", {}).get("success", False):
             raise Exception(f"知识检索失败: {result.get('error')}")
+
+        results = result.get("results", [])
+        # Broad architecture labels frequently match unrelated generated
+        # resources that merely mention the word "架构".  A focused platform
+        # query gives the generator a coherent evidence set; keep it only when
+        # the retrieved slice/document title explicitly names that topic.
+        topic_text = str(target_topic or "").casefold()
+        if "架构" in topic_text or "architecture" in topic_text:
+            focused = self.knowledge_agent.run(
+                task_id=task_id or 0,
+                input_data={
+                    "query": "平台架构",
+                    "industry": None,
+                    "top_k": 8,
+                },
+            )
+            if focused.get("_meta", {}).get("success", False):
+                focused_results = [
+                    item
+                    for item in focused.get("results", [])
+                    if "平台架构" in " ".join(
+                        str(item.get(field, ""))
+                        for field in ("title", "doc_title", "docTitle")
+                    )
+                ]
+                if focused_results:
+                    results = focused_results
         if task_id:
             self.task_repo.update_output_data(
                 task_id,
                 "knowledge_retrieval",
-                result,
+                {**result, "results": results, "knowledge_results": results},
                 agent_type="knowledge",
             )
-        return result.get("results", [])
+        return results
 
     def _run_generation(
         self, task_id: int, learner_id: int, diagnosis_result: Dict[str, Any],

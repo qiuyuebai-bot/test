@@ -153,7 +153,7 @@ minikube tunnel
 # 生产环境必须使用 existingSecret，禁止在 values.yaml 明文存储
 kubectl create secret generic knowledge-system-prod-secrets \
   --from-literal=SECRET_KEY=$(openssl rand -hex 32) \
-  --from-literal=OPENAI_API_KEY=sk-your-real-api-key \
+  --from-literal=OPENAI_API_KEY=<YOUR_OPENAI_API_KEY> \
   --from-literal=DEFAULT_ADMIN_PASSWORD=$(openssl rand -base64 16) \
   --from-literal=POSTGRES_PASSWORD=$(openssl rand -hex 16) \
   --from-literal=REDIS_PASSWORD=$(openssl rand -hex 16) \

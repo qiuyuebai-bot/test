@@ -1,7 +1,7 @@
 {
   "report_version": "evidence-report-v2",
-  "generated_at": "2026-08-29T15:58:11.087097+00:00",
-  "git_revision": "7712c907b33531798ad577976c85e88c66854843",
+  "generated_at": "2026-08-30T02:13:32.639886+00:00",
+  "git_revision": "dd70298a002722b50518c68c2334aa2c2cceb521",
   "working_tree_dirty": true,
   "report_kind": "development_validation",
   "acceptance_eligible": false,
@@ -17,6 +17,9 @@
   "formal_evidence_policy": {
     "minimum_sample_size": 10,
     "target_percent": 85.0,
+    "hallucination_minimum_sample_size": 60,
+    "hallucination_target_percent": 5.0,
+    "metric_policy_version": "hallucination-rate-v1",
     "status_values": [
       "passed",
       "failed",
@@ -61,21 +64,70 @@
       "numerator": 3,
       "denominator": 53,
       "sample_count": 53,
-      "minimum_sample_size": 5,
+      "minimum_sample_size": 10,
       "formula": "confirmed hallucination reviews / completed evidence reviews",
       "source": [
         "debate_records.is_hallucination",
         "debate_records.resolution_status"
       ],
-      "calculated_at": "2026-08-29T15:58:10.455029",
+      "calculated_at": "2026-08-30T02:13:31.959797",
       "message": null,
       "metadata": {
         "total_checks": 180,
         "evaluated_checks": 53,
-        "pending_checks": 88,
+        "pending_checks": 4,
         "confirmed_hallucinations": 3,
-        "evidence_gaps": 123,
-        "pass_rate": 94.34
+        "evidence_gaps": 120,
+        "invalid_records": 3,
+        "state_counts": {
+          "reviewed_clean": 50,
+          "reviewed_hallucination": 3,
+          "evidence_gap": 120,
+          "pending_review": 4,
+          "invalid_record": 3
+        },
+        "high_risk_checks": 7,
+        "high_risk_reviewed": 3,
+        "high_risk_review_coverage": 42.86,
+        "pass_rate": 94.34,
+        "policy_version": "hallucination-rate-v1",
+        "formal_minimum_sample_size": 60,
+        "target_percent": 5.0,
+        "operator": "<",
+        "rolling_30d": {
+          "total_checks": 180,
+          "total_count": 180,
+          "evaluated_checks": 53,
+          "pending_checks": 4,
+          "confirmed_hallucinations": 3,
+          "hallucination_count": 3,
+          "evidence_gaps": 120,
+          "invalid_records": 3,
+          "state_counts": {
+            "reviewed_clean": 50,
+            "reviewed_hallucination": 3,
+            "evidence_gap": 120,
+            "pending_review": 4,
+            "invalid_record": 3
+          },
+          "high_risk_checks": 7,
+          "high_risk_reviewed": 3,
+          "high_risk_review_coverage": 42.86,
+          "hallucination_rate": 5.66,
+          "pass_rate": 94.34,
+          "has_sufficient_sample": true,
+          "minimum_sample_size": 10,
+          "formal_minimum_sample_size": 60,
+          "target_percent": 5.0,
+          "operator": "<",
+          "policy_version": "hallucination-rate-v1",
+          "window": {
+            "start": "2026-07-31T02:13:32.121484",
+            "end": null,
+            "days": 30
+          },
+          "unit": "%"
+        }
       }
     },
     {
@@ -94,7 +146,7 @@
       "source": [
         "learning_resources.match_score"
       ],
-      "calculated_at": "2026-08-29T15:58:10.455029",
+      "calculated_at": "2026-08-30T02:13:31.959797",
       "message": null,
       "metadata": null
     },
@@ -115,7 +167,7 @@
         "answer_records.result",
         "answer_records.next_resource_id"
       ],
-      "calculated_at": "2026-08-29T15:58:10.455029",
+      "calculated_at": "2026-08-30T02:13:31.959797",
       "message": null,
       "metadata": null
     },
@@ -135,7 +187,7 @@
       "source": [
         "answer_records.result"
       ],
-      "calculated_at": "2026-08-29T15:58:10.455029",
+      "calculated_at": "2026-08-30T02:13:31.959797",
       "message": null,
       "metadata": null
     },
@@ -155,7 +207,7 @@
       "source": [
         "knowledge_slices.is_indexed"
       ],
-      "calculated_at": "2026-08-29T15:58:10.455029",
+      "calculated_at": "2026-08-30T02:13:31.959797",
       "message": null,
       "metadata": {
         "coverage_type": "index",
@@ -183,7 +235,7 @@
         "knowledge_slices.title",
         "knowledge_slices.content"
       ],
-      "calculated_at": "2026-08-29T15:58:10.455029",
+      "calculated_at": "2026-08-30T02:13:31.959797",
       "message": null,
       "metadata": {
         "coverage_type": "generated_content",
@@ -195,6 +247,20 @@
   ],
   "evidence": {
     "claims": {
+      "hallucination_rate": {
+        "metric_id": "hallucination_rate",
+        "display_name": "幻觉率",
+        "value": 5.66,
+        "target": 5.0,
+        "operator": "<",
+        "numerator": 3,
+        "denominator": 53,
+        "sample_count": 53,
+        "minimum_sample_size": 60,
+        "status": "insufficient_evidence",
+        "reason": "高风险审查覆盖率缺失或存在无效记录，无法完成正式幻觉率验收",
+        "metric_status": "ready"
+      },
       "resource_match_score": {
         "metric_id": "resource_match_score",
         "display_name": "资源匹配分",
@@ -243,7 +309,83 @@
       "numerator": 3,
       "denominator": 53,
       "sample_count": 53,
-      "status": "ready"
+      "status": "ready",
+      "claim": {
+        "metric_id": "hallucination_rate",
+        "display_name": "幻觉率",
+        "value": 5.66,
+        "target": 5.0,
+        "operator": "<",
+        "numerator": 3,
+        "denominator": 53,
+        "sample_count": 53,
+        "minimum_sample_size": 60,
+        "status": "insufficient_evidence",
+        "reason": "高风险审查覆盖率缺失或存在无效记录，无法完成正式幻觉率验收",
+        "metric_status": "ready"
+      },
+      "rolling_claim": {
+        "metric_id": "hallucination_rate_rolling_30d",
+        "display_name": "30天滚动幻觉率",
+        "value": 5.66,
+        "target": 5.0,
+        "operator": "<",
+        "numerator": 0,
+        "denominator": 53,
+        "sample_count": 53,
+        "minimum_sample_size": 30,
+        "status": "insufficient_evidence",
+        "reason": "30天窗口高风险审查覆盖率缺失或未达到100%",
+        "metric_status": null
+      },
+      "state_counts": {
+        "reviewed_clean": 50,
+        "reviewed_hallucination": 3,
+        "evidence_gap": 120,
+        "pending_review": 4,
+        "invalid_record": 3
+      },
+      "invalid_records": 3,
+      "high_risk_checks": 7,
+      "high_risk_reviewed": 3,
+      "high_risk_review_coverage": 42.86,
+      "rolling_30d": {
+        "total_checks": 180,
+        "total_count": 180,
+        "evaluated_checks": 53,
+        "pending_checks": 4,
+        "confirmed_hallucinations": 3,
+        "hallucination_count": 3,
+        "evidence_gaps": 120,
+        "invalid_records": 3,
+        "state_counts": {
+          "reviewed_clean": 50,
+          "reviewed_hallucination": 3,
+          "evidence_gap": 120,
+          "pending_review": 4,
+          "invalid_record": 3
+        },
+        "high_risk_checks": 7,
+        "high_risk_reviewed": 3,
+        "high_risk_review_coverage": 42.86,
+        "hallucination_rate": 5.66,
+        "pass_rate": 94.34,
+        "has_sufficient_sample": true,
+        "minimum_sample_size": 10,
+        "formal_minimum_sample_size": 60,
+        "target_percent": 5.0,
+        "operator": "<",
+        "policy_version": "hallucination-rate-v1",
+        "window": {
+          "start": "2026-07-31T02:13:32.121484",
+          "end": null,
+          "days": 30
+        },
+        "unit": "%"
+      },
+      "policy_version": "hallucination-rate-v1",
+      "metric_policy_version": "hallucination-rate-v1",
+      "required_additional_reviews": 8
     },
     "adaptation": {
       "resource_match_score": {
@@ -262,7 +404,7 @@
         "source": [
           "learning_resources.match_score"
         ],
-        "calculated_at": "2026-08-29T15:58:10.455029",
+        "calculated_at": "2026-08-30T02:13:31.959797",
         "message": null,
         "metadata": {
           "source_filter": [
@@ -289,7 +431,7 @@
           "answer_records.result",
           "answer_records.next_resource_id"
         ],
-        "calculated_at": "2026-08-29T15:58:10.455029",
+        "calculated_at": "2026-08-30T02:13:31.959797",
         "message": null,
         "metadata": null
       },
@@ -347,7 +489,7 @@
         "source": [
           "knowledge_slices.is_indexed"
         ],
-        "calculated_at": "2026-08-29T15:58:10.455029",
+        "calculated_at": "2026-08-30T02:13:31.959797",
         "message": null,
         "metadata": {
           "coverage_type": "index",
@@ -375,7 +517,7 @@
           "knowledge_slices.title",
           "knowledge_slices.content"
         ],
-        "calculated_at": "2026-08-29T15:58:10.455029",
+        "calculated_at": "2026-08-30T02:13:31.959797",
         "message": null,
         "metadata": {
           "coverage_type": "generated_content",

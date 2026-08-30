@@ -1,0 +1,17 @@
+fix(dashboard): 修复答完诊断题后引导阶段死锁在"开始首次诊断"
+
+仪表盘 has_diagnosis 只统计 AgentTask 表的 learner_diagnosis/
+full_pipeline 完成任务，但向导的六维能力诊断走 DiagnosticSession
+答题路径，全程不产生 AgentTask。诊断答完后 diagnostic_status 与
+会话状态均已更新，仪表盘却不看这两个信号，导致学习者答完题
+引导仍停留在"开始首次诊断"，重复做题也无法推进。
+
+diagnosis_count 改为三信号任一满足即认定完成：
+1. AgentTask 诊断类任务 completed（原有路径）
+2. learner.diagnostic_status == completed（答题诊断主信号）
+3. 存在 completed 状态的 DiagnosticSession（画像字段滞后兜底）
+
+未完成诊断（active 会话）仍停留在 diagnosis 阶段，不跳步。
+
+测试：新增 3 用例（diagnostic_status 推进/会话兜底推进/
+未完成不跳步），全量回归 655 passed。

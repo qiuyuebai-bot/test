@@ -171,7 +171,132 @@ class AdaptiveTutoringService(BaseService):
     def _topic_matches(cls, requested_topic: str, candidate_topic: str) -> bool:
         requested = cls._normalize_topic(requested_topic).casefold()
         candidate = cls._normalize_topic(candidate_topic).casefold()
-        return bool(requested and candidate and (requested == candidate or requested in candidate or candidate in requested))
+        if not requested or not candidate:
+            return False
+        if requested == candidate or requested in candidate or candidate in requested:
+            return True
+
+        # Architecture resources are commonly named by their concrete platform
+        # (for example, "工业互联网平台架构") while learner profiles use the
+        # broader "系统架构" label. Treat the shared architecture concept as
+        # equivalent without broadening unrelated topic matches.
+        architecture_terms = ("系统架构", "平台架构", "架构设计", "架构")
+        if "架构" in requested and "架构" in candidate:
+            requested_family = any(term in requested for term in architecture_terms)
+            candidate_family = any(term in candidate for term in architecture_terms)
+            if requested_family and candidate_family:
+                return True
+
+        # Broad Chinese topic labels often add a category suffix (e.g. "设计"
+        # or "基础") while generated resources name the concrete concept.
+        suffixes = ("设计", "基础", "原理", "实践", "应用", "开发", "分析", "治理", "技术", "概念", "入门", "方法", "题")
+        stems = {requested}
+        stem = requested
+        changed = True
+        while changed and len(stem) > 2:
+            changed = False
+            for suffix in suffixes:
+                if stem.endswith(suffix) and len(stem) - len(suffix) >= 2:
+                    stem = stem[: -len(suffix)]
+                    stems.add(stem)
+                    changed = True
+                    break
+        return any(len(stem) >= 2 and stem in candidate for stem in stems)
+
+    @classmethod
+    def _select_suggested_resources(
+        cls,
+        learner_id: int,
+        question_topic: str,
+        target_difficulty: int,
+        *,
+        preferred_types: tuple[str, ...] = (),
+        limit: int = 3,
+    ) -> List[Dict[str, Any]]:
+        """Select enabled, validated resources relevant to the current question.
+
+        Topic relevance is a hard preference: explicitly unrelated resources are
+        never used when a generic (untagged) resource is unavailable.  Difficulty
+        and generation-time match score then provide deterministic tie-breakers.
+        """
+        try:
+            target = max(1, min(MAX_DIFFICULTY, int(target_difficulty)))
+        except (TypeError, ValueError):
+            target = 3
+        limit = max(1, min(10, int(limit or 3)))
+        requested_topic = cls._normalize_topic(question_topic)
+
+        with get_db_context() as db:
+            resources = (
+                db.query(LearningResource)
+                .filter(
+                    LearningResource.learner_id == learner_id,
+                    LearningResource.is_enabled.is_(True),
+                    LearningResource.status == "ready",
+                    LearningResource.validation_passed.is_(True),
+                )
+                .all()
+            )
+            learner_industry = db.query(LearnerProfile.target_industry).filter(
+                LearnerProfile.id == learner_id
+            ).scalar()
+
+            topical = [
+                resource
+                for resource in resources
+                if cls._topic_matches(requested_topic, resource.knowledge_topic)
+            ]
+            # Untagged resources are acceptable as a last-resort generic aid;
+            # resources tagged for another topic are not.
+            candidates = topical or [
+                resource for resource in resources if not str(resource.knowledge_topic or "").strip()
+            ]
+
+            preferred_type_order = {
+                resource_type: len(preferred_types) - index
+                for index, resource_type in enumerate(preferred_types)
+            }
+
+            def normalized_match_score(resource: LearningResource) -> float:
+                try:
+                    score = float(resource.match_score)
+                except (TypeError, ValueError):
+                    return 0.0
+                return score * 100 if 0 <= score <= 1 else max(0.0, min(100.0, score))
+
+            def rank(resource: LearningResource) -> tuple:
+                candidate_topic = cls._normalize_topic(resource.knowledge_topic)
+                topic_rank = 2 if requested_topic and candidate_topic == requested_topic else 1 if candidate_topic else 0
+                candidate_industry = str(resource.industry or "").strip()
+                industry_rank = (
+                    2
+                    if learner_industry and candidate_industry == str(learner_industry).strip()
+                    else 1
+                    if candidate_industry in {"", "通用"}
+                    else 0
+                )
+                difficulty_gap = abs((resource.difficulty_level or 3) - target)
+                type_rank = preferred_type_order.get(resource.resource_type, 0)
+                return (
+                    topic_rank,
+                    industry_rank,
+                    -difficulty_gap,
+                    normalized_match_score(resource),
+                    type_rank,
+                    resource.id or 0,
+                )
+
+            selected = sorted(candidates, key=rank, reverse=True)[:limit]
+            return [
+                {
+                    "resource_id": resource.id,
+                    "title": ResourceServiceHelper.safe_resource_title(resource),
+                    "type": resource.resource_type,
+                    "match_score": resource.match_score,
+                    "difficulty_level": resource.difficulty_level,
+                }
+                for resource in selected
+            ]
 
     @staticmethod
     def _question_signature(question: Any) -> str:
@@ -542,35 +667,40 @@ class AdaptiveTutoringService(BaseService):
         # 知识库派生兜底：LLM 不可用或出题失败时，优先基于知识库内容出题，
         # 保证题目具备主题针对性，而不是直接落入通用模板。
         if len(generated) < question_count and knowledge:
-            from app.utils.knowledge_questions import derive_questions
-
-            needed = question_count - len(generated)
-            multiple_indexes = tuple(
-                len(generated) + offset
-                for offset in range(needed + 2)
-                if (len(generated) + offset + 1) % 3 == 0
-            )
-            derived = derive_questions(
-                knowledge,
-                normalized_topic,
-                effective_difficulty,
-                needed + 2,
-                multiple_indexes=multiple_indexes,
-                variation_seed=f"{learner_id}-{normalized_topic}",
-            )
-            for question in derived:
-                if len(generated) >= question_count:
-                    break
-                if int(question.get("difficulty", effective_difficulty)) != effective_difficulty:
-                    continue
-                expected_multiple = (len(generated) + 1) % 3 == 0
-                if (question.get("type") == "multiple") != expected_multiple:
-                    continue
-                if not cls._is_duplicate_question(question, seen_signatures, seen_token_sets):
-                    seen_signatures.add(cls._question_signature(question))
-                    seen_token_sets.append(cls._question_tokens(question))
-                    question["difficulty"] = effective_difficulty
-                    generated.append(question)
+            try:
+                from app.utils.knowledge_questions import derive_questions
+            except ImportError:
+                logger.warning(
+                    "[自适应导学] 知识库派生题目模块不可用，继续使用静态题库兜底"
+                )
+            else:
+                needed = question_count - len(generated)
+                multiple_indexes = tuple(
+                    len(generated) + offset
+                    for offset in range(needed + 2)
+                    if (len(generated) + offset + 1) % 3 == 0
+                )
+                derived = derive_questions(
+                    knowledge,
+                    normalized_topic,
+                    effective_difficulty,
+                    needed + 2,
+                    multiple_indexes=multiple_indexes,
+                    variation_seed=f"{learner_id}-{normalized_topic}",
+                )
+                for question in derived:
+                    if len(generated) >= question_count:
+                        break
+                    if int(question.get("difficulty", effective_difficulty)) != effective_difficulty:
+                        continue
+                    expected_multiple = (len(generated) + 1) % 3 == 0
+                    if (question.get("type") == "multiple") != expected_multiple:
+                        continue
+                    if not cls._is_duplicate_question(question, seen_signatures, seen_token_sets):
+                        seen_signatures.add(cls._question_signature(question))
+                        seen_token_sets.append(cls._question_tokens(question))
+                        question["difficulty"] = effective_difficulty
+                        generated.append(question)
 
         fallback = sorted(
             (
@@ -776,6 +906,7 @@ class AdaptiveTutoringService(BaseService):
                 user_answer,
                 correct_answer,
                 decision=next_action,
+                current_difficulty=question_difficulty,
             )
             generated_content["knowledge_expansion"] = cls._generate_knowledge_expansion(
                 learner,
@@ -1228,6 +1359,7 @@ class AdaptiveTutoringService(BaseService):
         user_answer: str,
         correct_answer: str,
         decision: str = "simplify",
+        current_difficulty: int = 3,
     ) -> Dict[str, Any]:
         """Generate decision-specific feedback with a deterministic fallback."""
         learning_style = learner.learning_style or "visual"
@@ -1316,25 +1448,12 @@ class AdaptiveTutoringService(BaseService):
             key_points = cls._extract_key_points(question_topic)
 
         # 4. 查找相关资源
-        suggested_resources = []
-        with get_db_context() as db:
-            resources = (
-                db.query(LearningResource)
-                .filter(
-                    LearningResource.learner_id == learner.id,
-                    LearningResource.difficulty_level <= 2,
-                )
-                .order_by(LearningResource.match_score.desc())
-                .limit(3)
-                .all()
-            )
-            for r in resources:
-                suggested_resources.append({
-                    "resource_id": r.id,
-                    "title": ResourceServiceHelper.safe_resource_title(r),
-                    "type": r.resource_type,
-                    "match_score": r.match_score,
-                })
+        suggested_resources = cls._select_suggested_resources(
+            learner_id=learner.id,
+            question_topic=question_topic,
+            target_difficulty=max(1, int(current_difficulty or 3) - 1),
+            preferred_types=("lecture", "guide", "exercise"),
+        )
 
         try:
             ai_content = AIContentService.generate(
@@ -1558,16 +1677,12 @@ class AdaptiveTutoringService(BaseService):
                 if contents:
                     knowledge_source = "knowledge_base"
 
-            resources = (
-                db.query(LearningResource)
-                .filter(
-                    LearningResource.learner_id == learner.id,
-                    LearningResource.difficulty_level >= max(1, current_difficulty - 1),
-                )
-                .order_by(LearningResource.match_score.desc())
-                .limit(3)
-                .all()
-            )
+        resources = cls._select_suggested_resources(
+            learner_id=learner.id,
+            question_topic=question_topic,
+            target_difficulty=max(1, current_difficulty),
+            preferred_types=("lecture", "guide", "exercise"),
+        )
 
         return {
             "type": "knowledge_expansion",
@@ -1583,15 +1698,7 @@ class AdaptiveTutoringService(BaseService):
                 "不要只看结论是否熟悉，还要核对结论成立的前提和适用边界。",
                 "面对相近选项时，应比较关键条件，而不是依赖关键词或选项位置。",
             ],
-            "suggested_resources": [
-                {
-                    "resource_id": resource.id,
-                    "title": ResourceServiceHelper.safe_resource_title(resource),
-                    "type": resource.resource_type,
-                    "difficulty_level": resource.difficulty_level,
-                }
-                for resource in resources
-            ],
+            "suggested_resources": resources,
             "knowledge_source": knowledge_source,
         }
     
@@ -1661,25 +1768,12 @@ class AdaptiveTutoringService(BaseService):
             "knowledge_source": "knowledge_base" if kb_results else "template",
         }
 
-        # 查找高阶资源
-        with get_db_context() as db:
-            resources = (
-                db.query(LearningResource)
-                .filter(
-                    LearningResource.learner_id == learner.id,
-                    LearningResource.difficulty_level >= 3,
-                )
-                .order_by(LearningResource.difficulty_level.desc())
-                .limit(3)
-                .all()
-            )
-            for r in resources:
-                challenge["suggested_resources"].append({
-                    "resource_id": r.id,
-                    "title": ResourceServiceHelper.safe_resource_title(r),
-                    "type": r.resource_type,
-                    "difficulty_level": r.difficulty_level,
-                })
+        challenge["suggested_resources"] = cls._select_suggested_resources(
+            learner_id=learner.id,
+            question_topic=question_topic,
+            target_difficulty=advanced_difficulty,
+            preferred_types=("guide", "exercise", "lecture"),
+        )
 
         try:
             ai_content = AIContentService.generate(

@@ -1,0 +1,14 @@
+feat(metrics): 术语级关键词提取与发布话术剥离，生成内容覆盖率 76.27%→98.85%
+
+- _fallback_source_keywords 重写为术语优先策略：markdown 强调结构术语 →
+  英文技术词 → 高频 3-4 字中文 n-gram（长文本）/ 整体+前缀窗口（短标题），
+  消除 8 字滑窗碎片导致的覆盖率误判
+- strip_fallback_disclosure 升级为句式级正则：覆盖声明并入首句、藏于行中、
+  带列表前缀三种变体，只删句子本身，其余正文原样保留
+- 发布路径（publication_service）发布前剥离运维话术；process_doc 切片时
+  补齐 keywords，新发布文档不再依赖读取时回退链
+- 存量清理脚本 cleanup_generated_lecture_slices.py：回填 187 个空关键词
+  切片、补清 9 个句式变体残留切片与 9 个文档文件，Chroma 按 vector_id
+  原地 upsert（slice ID 不变，引用与溯源不受影响）
+- 全库终态 0 话术残留；新增 12 个单测，全量 563 passed；指标重算复核
+  覆盖率 98.85%（429/434）维持；验收文档披露两轮清理与口径变更

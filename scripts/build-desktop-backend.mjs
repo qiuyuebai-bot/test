@@ -29,7 +29,9 @@ if (!existsSync(python)) {
 const pyInstallerCheck = spawnSync(python, ["-c", "import PyInstaller"], { stdio: "ignore" });
 if (pyInstallerCheck.status !== 0) {
   console.log("首次桌面构建：正在安装 PyInstaller 构建依赖...");
-  await run(python, ["-m", "pip", "install", "-r", join(BACKEND, "requirements-desktop-build.txt")]);
+  // requirements files are UTF-8; force Python's UTF-8 mode on Windows locales
+  // whose default GBK decoder otherwise fails before pip can parse them.
+  await run(python, ["-X", "utf8", "-m", "pip", "install", "-r", join(BACKEND, "requirements-desktop-build.txt")]);
 }
 await rm(join(OUTPUT, "backend"), { recursive: true, force: true });
 await rm(join(OUTPUT, ".pyinstaller"), { recursive: true, force: true });
