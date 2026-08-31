@@ -112,7 +112,7 @@ function App() {
             <Route
               path="career-training"
               element={
-                <ProtectedRoute roles={['admin']}>
+                <ProtectedRoute roles={['admin', 'teacher', 'learner']}>
                   <CareerTraining />
                 </ProtectedRoute>
               }
@@ -120,7 +120,7 @@ function App() {
             <Route
               path="career-training/:tab"
               element={
-                <ProtectedRoute roles={['admin']}>
+                <ProtectedRoute roles={['admin', 'teacher', 'learner']}>
                   <CareerTraining />
                 </ProtectedRoute>
               }

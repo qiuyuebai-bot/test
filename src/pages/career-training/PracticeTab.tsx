@@ -30,9 +30,8 @@ export default function PracticeTab() {
 
   useEffect(() => {
     void fetchPositions()
-    if (user?.role === 'admin' || user?.role === 'teacher') {
-      void fetchLearners()
-    }
+    // Learners load their own profile; staff may select a learner from the list.
+    void fetchLearners()
   }, [fetchPositions, fetchLearners, user?.role])
 
   useEffect(() => {

@@ -8,10 +8,12 @@ from sqlalchemy.orm import Session
 
 from app.domains.training.models import (
     TrainingProject, TrainingEnrollment, TrainingPlan,
+    TrainingTaskPackage, TrainingTaskRubric, TrainingSubmission, TrainingSubmissionScore,
     ProjectStatusEnum, EnrollmentStatusEnum, PlanStatusEnum,
 )
 from app.domains.training.schemas import (
-    TrainingProjectCreate, TrainingProjectUpdate,
+    TrainingProjectCreate, TrainingProjectUpdate, TaskPackageCreate, TaskPackageUpdate,
+    SubmissionCreate, SubmissionReview,
 )
 from app.domains.position.models import Position, Competency, PositionCompetency
 from app.domains.learner.models import LearnerProfile
@@ -432,6 +434,198 @@ class TrainingService:
         return success(data=TrainingService._enrollment_to_response(enrollment), message="培训已完成")
 
     # ===========================================
+    # 培训任务包与实操提交
+    # ===========================================
+
+    @staticmethod
+    def list_task_packages(db: Session, project_id: int, is_staff: bool = False) -> Dict[str, Any]:
+        project = db.query(TrainingProject).filter(TrainingProject.id == project_id).first()
+        if not project or (project.status != ProjectStatusEnum.ACTIVE.value and not is_staff):
+            return not_found(message="培训项目不存在")
+        packages = db.query(TrainingTaskPackage).filter(
+            TrainingTaskPackage.project_id == project_id,
+        )
+        if not is_staff:
+            packages = packages.filter(TrainingTaskPackage.status == "active")
+        items = packages.order_by(TrainingTaskPackage.sequence.asc(), TrainingTaskPackage.id.asc()).all()
+        return success(data=[TrainingService._task_package_to_response(item) for item in items])
+
+    @staticmethod
+    def create_task_package(db: Session, project_id: int, data: TaskPackageCreate, user_id: int) -> Dict[str, Any]:
+        project = db.query(TrainingProject).filter(TrainingProject.id == project_id).first()
+        if not project:
+            return not_found(message="培训项目不存在")
+        package = TrainingTaskPackage(
+            project_id=project_id,
+            name=data.name,
+            description=data.description,
+            sequence=data.sequence,
+            task_type=data.task_type,
+            key_task_code=data.key_task_code,
+            learning_objectives=data.learning_objectives,
+            resources=data.resources,
+            submission_required=data.submission_required,
+            passing_score=data.passing_score,
+            is_mandatory=data.is_mandatory,
+            status=data.status,
+            created_by=user_id,
+        )
+        db.add(package)
+        db.flush()
+        TrainingService._replace_rubrics(db, package, data.rubrics)
+        db.commit()
+        db.refresh(package)
+        return success(data=TrainingService._task_package_to_response(package), message="任务包创建成功")
+
+    @staticmethod
+    def update_task_package(db: Session, package_id: int, data: TaskPackageUpdate) -> Dict[str, Any]:
+        package = db.query(TrainingTaskPackage).filter(TrainingTaskPackage.id == package_id).first()
+        if not package:
+            return not_found(message="任务包不存在")
+        values = data.model_dump(exclude_unset=True)
+        rubrics = values.pop("rubrics", None)
+        for key, value in values.items():
+            setattr(package, key, value)
+        if rubrics is not None:
+            TrainingService._replace_rubrics(db, package, rubrics)
+        db.commit()
+        db.refresh(package)
+        return success(data=TrainingService._task_package_to_response(package), message="任务包已更新")
+
+    @staticmethod
+    def delete_task_package(db: Session, package_id: int) -> Dict[str, Any]:
+        package = db.query(TrainingTaskPackage).filter(TrainingTaskPackage.id == package_id).first()
+        if not package:
+            return not_found(message="任务包不存在")
+        if db.query(TrainingSubmission).filter(TrainingSubmission.task_package_id == package_id).first():
+            package.status = "archived"
+            db.commit()
+            return success(message="任务包已有提交记录，已归档")
+        db.delete(package)
+        db.commit()
+        return success(message="任务包已删除")
+
+    @staticmethod
+    def create_submission(db: Session, package_id: int, enrollment_id: int, user_id: int, data: SubmissionCreate, is_staff: bool = False) -> Dict[str, Any]:
+        package = db.query(TrainingTaskPackage).filter(TrainingTaskPackage.id == package_id).first()
+        enrollment = db.query(TrainingEnrollment).filter(TrainingEnrollment.id == enrollment_id).first()
+        if not package or not enrollment or package.project_id != enrollment.project_id:
+            return not_found(message="任务包或报名记录不存在")
+        if enrollment.user_id != user_id and not is_staff:
+            return bad_request(message="只能提交本人的培训任务")
+        if enrollment.status in (EnrollmentStatusEnum.WITHDRAWN.value, EnrollmentStatusEnum.FAILED.value):
+            return bad_request(message="当前报名状态不能提交任务")
+        latest_attempt = db.query(TrainingSubmission).filter(
+            TrainingSubmission.task_package_id == package_id,
+            TrainingSubmission.enrollment_id == enrollment_id,
+        ).order_by(TrainingSubmission.attempt_number.desc()).first()
+        submission = TrainingSubmission(
+            task_package_id=package_id,
+            enrollment_id=enrollment_id,
+            learner_id=enrollment.learner_id,
+            user_id=enrollment.user_id,
+            attempt_number=(latest_attempt.attempt_number + 1) if latest_attempt else 1,
+            content=data.content,
+            attachments=data.attachments,
+            demo_url=data.demo_url,
+            status="submitted",
+        )
+        db.add(submission)
+        enrollment.status = EnrollmentStatusEnum.IN_PROGRESS.value
+        db.commit()
+        db.refresh(submission)
+        return success(data=TrainingService._submission_to_response(submission), message="实操任务已提交")
+
+    @staticmethod
+    def list_submissions(db: Session, package_id: int, enrollment_id: Optional[int], user_id: int, is_staff: bool = False) -> Dict[str, Any]:
+        package = db.query(TrainingTaskPackage).filter(TrainingTaskPackage.id == package_id).first()
+        if not package:
+            return not_found(message="任务包不存在")
+        query = db.query(TrainingSubmission).filter(TrainingSubmission.task_package_id == package_id)
+        if enrollment_id:
+            query = query.filter(TrainingSubmission.enrollment_id == enrollment_id)
+        if not is_staff:
+            query = query.filter(TrainingSubmission.user_id == user_id)
+        submissions = query.order_by(TrainingSubmission.attempt_number.desc()).all()
+        return success(data=[TrainingService._submission_to_response(item) for item in submissions])
+
+    @staticmethod
+    def review_submission(db: Session, submission_id: int, reviewer_id: int, data: SubmissionReview) -> Dict[str, Any]:
+        submission = db.query(TrainingSubmission).filter(TrainingSubmission.id == submission_id).first()
+        if not submission:
+            return not_found(message="提交记录不存在")
+        package = db.query(TrainingTaskPackage).filter(TrainingTaskPackage.id == submission.task_package_id).first()
+        rubric_map = {rubric.id: rubric for rubric in (package.rubrics if package else [])}
+        db.query(TrainingSubmissionScore).filter(TrainingSubmissionScore.submission_id == submission_id).delete(synchronize_session=False)
+        total_weight = 0.0
+        weighted_score = 0.0
+        score_items = []
+        for item in data.scores:
+            try:
+                rubric_id = int(item.get("rubric_id", item.get("rubricId")))
+                score = float(item.get("score", 0))
+            except (TypeError, ValueError):
+                continue
+            rubric = rubric_map.get(rubric_id)
+            if rubric is None:
+                continue
+            score = max(0.0, min(score, rubric.max_score or 100.0))
+            db.add(TrainingSubmissionScore(submission_id=submission_id, rubric_id=rubric.id, score=score, comment=item.get("comment")))
+            weight = rubric.weight or 1.0
+            total_weight += weight
+            weighted_score += (score / (rubric.max_score or 100.0) * 100.0) * weight
+            score_items.append({"rubric_id": rubric.id, "score": score, "comment": item.get("comment")})
+        submission.overall_score = round(weighted_score / total_weight, 1) if total_weight else None
+        submission.status = data.status
+        submission.teacher_comment = data.teacher_comment
+        submission.reviewed_by = reviewer_id
+        submission.reviewed_at = datetime.now()
+        db.commit()
+        db.refresh(submission)
+        return success(data=TrainingService._submission_to_response(submission), message="提交已评分")
+
+    @staticmethod
+    def dashboard_overview(db: Session, user_id: int, is_staff: bool = False) -> Dict[str, Any]:
+        projects = db.query(TrainingProject).filter(TrainingProject.status.in_(["active", "completed"])).all()
+        enrollments = db.query(TrainingEnrollment)
+        if not is_staff:
+            enrollments = enrollments.filter(TrainingEnrollment.user_id == user_id)
+        enrollment_rows = enrollments.all()
+        project_ids = {item.project_id for item in enrollment_rows}
+        if not is_staff:
+            projects = [item for item in projects if item.id in project_ids]
+        package_counts = {project.id: db.query(TrainingTaskPackage).filter(TrainingTaskPackage.project_id == project.id, TrainingTaskPackage.status == "active").count() for project in projects}
+        submission_query = db.query(TrainingSubmission)
+        if not is_staff:
+            submission_query = submission_query.filter(TrainingSubmission.user_id == user_id)
+        submissions = submission_query.all()
+        passed = [item for item in submissions if item.status == "passed"]
+        avg_score = round(sum(item.overall_score for item in passed if item.overall_score is not None) / len([item for item in passed if item.overall_score is not None]), 1) if any(item.overall_score is not None for item in passed) else None
+        project_rows = []
+        for project in projects:
+            project_enrollments = [item for item in enrollment_rows if item.project_id == project.id] if not is_staff else db.query(TrainingEnrollment).filter(TrainingEnrollment.project_id == project.id).all()
+            project_submissions = [item for item in submissions if item.task_package and item.task_package.project_id == project.id] if not is_staff else db.query(TrainingSubmission).join(TrainingTaskPackage).filter(TrainingTaskPackage.project_id == project.id).all()
+            project_rows.append({
+                "project_id": project.id,
+                "project_name": project.name,
+                "enrollment_count": len(project_enrollments),
+                "completed_count": sum(1 for item in project_enrollments if item.status == EnrollmentStatusEnum.COMPLETED.value),
+                "package_count": package_counts.get(project.id, 0),
+                "submission_count": len(project_submissions),
+                "passed_submission_count": sum(1 for item in project_submissions if item.status == "passed"),
+                "average_score": round(sum(item.overall_score for item in project_submissions if item.overall_score is not None) / len([item for item in project_submissions if item.overall_score is not None]), 1) if any(item.overall_score is not None for item in project_submissions) else None,
+            })
+        return success(data={
+            "project_count": len(projects),
+            "enrollment_count": len(enrollment_rows),
+            "completed_count": sum(1 for item in enrollment_rows if item.status == EnrollmentStatusEnum.COMPLETED.value),
+            "submission_count": len(submissions),
+            "passed_submission_count": len(passed),
+            "average_score": avg_score,
+            "projects": project_rows,
+        })
+
+    # ===========================================
     # AI 计划生成（私有）
     # ===========================================
 
@@ -590,4 +784,81 @@ class TrainingService:
             "generated_by_ai": plan.generated_by_ai,
             "created_at": plan.created_at.isoformat() if plan.created_at else None,
             "updated_at": plan.updated_at.isoformat() if plan.updated_at else None,
+        }
+
+    @staticmethod
+    def _replace_rubrics(db: Session, package: TrainingTaskPackage, rubrics: List[Dict[str, Any]]) -> None:
+        package.rubrics[:] = []
+        for index, item in enumerate(rubrics or [], 1):
+            criterion = str(item.get("criterion", "")).strip()
+            if not criterion:
+                continue
+            package.rubrics.append(TrainingTaskRubric(
+                criterion=criterion,
+                description=item.get("description"),
+                max_score=float(item.get("max_score", item.get("maxScore", 100)) or 100),
+                weight=float(item.get("weight", 1) or 1),
+                sequence=int(item.get("sequence", index) or index),
+            ))
+
+    @staticmethod
+    def _task_package_to_response(package: TrainingTaskPackage) -> Dict[str, Any]:
+        return {
+            "id": package.id,
+            "project_id": package.project_id,
+            "name": package.name,
+            "description": package.description,
+            "sequence": package.sequence,
+            "task_type": package.task_type,
+            "key_task_code": package.key_task_code,
+            "learning_objectives": package.learning_objectives or [],
+            "resources": package.resources or [],
+            "submission_required": package.submission_required,
+            "passing_score": package.passing_score,
+            "is_mandatory": package.is_mandatory,
+            "status": package.status,
+            "created_by": package.created_by,
+            "created_at": package.created_at.isoformat() if package.created_at else None,
+            "updated_at": package.updated_at.isoformat() if package.updated_at else None,
+            "rubrics": [
+                {
+                    "id": rubric.id,
+                    "task_package_id": rubric.task_package_id,
+                    "criterion": rubric.criterion,
+                    "description": rubric.description,
+                    "max_score": rubric.max_score,
+                    "weight": rubric.weight,
+                    "sequence": rubric.sequence,
+                }
+                for rubric in package.rubrics
+            ],
+        }
+
+    @staticmethod
+    def _submission_to_response(submission: TrainingSubmission) -> Dict[str, Any]:
+        return {
+            "id": submission.id,
+            "task_package_id": submission.task_package_id,
+            "enrollment_id": submission.enrollment_id,
+            "learner_id": submission.learner_id,
+            "user_id": submission.user_id,
+            "attempt_number": submission.attempt_number,
+            "content": submission.content,
+            "attachments": submission.attachments or [],
+            "demo_url": submission.demo_url,
+            "status": submission.status,
+            "overall_score": submission.overall_score,
+            "teacher_comment": submission.teacher_comment,
+            "reviewed_by": submission.reviewed_by,
+            "submitted_at": submission.submitted_at.isoformat() if submission.submitted_at else None,
+            "reviewed_at": submission.reviewed_at.isoformat() if submission.reviewed_at else None,
+            "scores": [
+                {
+                    "id": score.id,
+                    "rubric_id": score.rubric_id,
+                    "score": score.score,
+                    "comment": score.comment,
+                }
+                for score in submission.scores
+            ],
         }

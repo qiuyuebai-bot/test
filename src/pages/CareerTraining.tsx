@@ -8,8 +8,9 @@ const AssessmentTab = lazy(() => import('./career-training/AssessmentTab'))
 const LearningPlanTab = lazy(() => import('./career-training/LearningPlanTab'))
 const PracticeTab = lazy(() => import('./career-training/PracticeTab'))
 const CertificationTab = lazy(() => import('./career-training/CertificationTab'))
+const TrainingDashboardTab = lazy(() => import('./career-training/TrainingDashboardTab'))
 
-type TabKey = 'position' | 'assessment' | 'plan' | 'practice' | 'certification'
+type TabKey = 'position' | 'assessment' | 'plan' | 'practice' | 'certification' | 'dashboard'
 
 const TABS: { key: TabKey; label: string }[] = [
   { key: 'position', label: '岗位与胜任力' },
@@ -17,6 +18,7 @@ const TABS: { key: TabKey; label: string }[] = [
   { key: 'plan', label: '学习计划' },
   { key: 'practice', label: '学习与练习' },
   { key: 'certification', label: '认证发证' },
+  { key: 'dashboard', label: '培训效果' },
 ]
 
 export default function CareerTraining() {
@@ -68,6 +70,7 @@ export default function CareerTraining() {
           {currentTab === 'plan' && <LearningPlanTab />}
           {currentTab === 'practice' && <PracticeTab />}
           {currentTab === 'certification' && <CertificationTab />}
+          {currentTab === 'dashboard' && <TrainingDashboardTab />}
         </Suspense>
       </div>
     </div>

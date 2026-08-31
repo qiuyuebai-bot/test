@@ -26,12 +26,14 @@ import { clsx } from 'clsx'
 import { useState, useEffect, useRef } from 'react'
 import { prefetchRoute } from '@/lib/routePrefetch'
 import DesktopAIConfigGate from './DesktopAIConfigGate'
+import type { UserRole } from '@/types'
 
 type NavigationItem = {
   name: string
   href: string
   icon: LucideIcon
   adminOnly?: boolean
+  roles?: UserRole[]
 }
 
 type NavigationGroup = {
@@ -57,7 +59,7 @@ const navigationGroups: NavigationGroup[] = [
       { name: '自适应导学', href: '/guidance', icon: GraduationCap },
       { name: '资源生成', href: '/resources', icon: FileText },
       { name: '学情报告', href: '/report', icon: BarChart3 },
-      { name: '就业培训', href: '/career-training/position', icon: Briefcase, adminOnly: true },
+      { name: '就业培训', href: '/career-training/position', icon: Briefcase, roles: ['admin', 'teacher', 'learner'] },
     ],
   },
   {
@@ -159,7 +161,10 @@ export default function Layout() {
             )}
             <div className="space-y-1">
               {group.items
-                .filter((item) => !item.adminOnly || user?.role === 'admin')
+                .filter((item) => {
+                  if (item.roles) return Boolean(user?.role && item.roles.includes(user.role))
+                  return !item.adminOnly || user?.role === 'admin'
+                })
                 .map((item) => {
                   const isActive = location.pathname === item.href
                   return (

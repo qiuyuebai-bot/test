@@ -128,6 +128,7 @@ class PositionService:
             level=data.level,
             description=data.description,
             responsibilities=data.responsibilities or [],
+            key_tasks=data.key_tasks or [],
             prerequisites=data.prerequisites or [],
             career_path=data.career_path or [],
         )
@@ -284,6 +285,7 @@ class PositionService:
             "level": pos.level,
             "description": pos.description,
             "responsibilities": pos.responsibilities,
+            "key_tasks": pos.key_tasks or [],
             "prerequisites": pos.prerequisites,
             "career_path": pos.career_path,
             "is_active": pos.is_active,

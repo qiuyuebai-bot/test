@@ -16,6 +16,7 @@ import LoadingState from '@/components/LoadingState'
 import type {
   Certification, CertificationDetail, CertificationRecordDetail, CertificationRule,
   AssessmentRecord, CertificationVerification, Position,
+  CertificationEligibility,
 } from '@/types/training'
 
 const STATUS_LABEL: Record<string, string> = {
@@ -58,6 +59,7 @@ export default function CertificationTab() {
   const [editingCertification, setEditingCertification] = useState<CertificationDetail | null>(null)
   const [rulesCertification, setRulesCertification] = useState<CertificationDetail | null>(null)
   const [recordDetail, setRecordDetail] = useState<CertificationRecordDetail | null>(null)
+  const [eligibility, setEligibility] = useState<CertificationEligibility | null>(null)
   const canReview = user?.role === 'admin' || user?.role === 'teacher'
   const learnerId = canReview ? selectedLearnerId : currentLearner?.id
 
@@ -73,6 +75,18 @@ export default function CertificationTab() {
       void fetchAssessmentRecords(learnerId ? { learnerId } : undefined)
     }
   }, [canReview, learnerId, fetchCertificationRecords, fetchAssessmentRecords])
+
+  useEffect(() => {
+    if (!applyTarget || !learnerId) {
+      setEligibility(null)
+      return
+    }
+    let active = true
+    trainingApi.getCertificationEligibility(applyTarget.id, learnerId, selectedRecord?.id)
+      .then((result) => { if (active) setEligibility(result) })
+      .catch(() => { if (active) setEligibility(null) })
+    return () => { active = false }
+  }, [applyTarget, learnerId, selectedRecord])
 
   const eligibleAssessmentRecords = assessmentRecords.filter((record) => {
     const recordLearnerId = record.learner_id ?? record.learnerId
@@ -341,9 +355,15 @@ export default function CertificationTab() {
                 </div>
               </div>
             ))}
+            {eligibility && (
+              <div className="rounded-input bg-bg-secondary p-3 text-sm">
+                <div className="flex items-center justify-between"><span>认证条件</span><Badge variant={eligibility.eligible ? 'success' : 'error'}>{eligibility.eligible ? '已满足' : '未满足'}</Badge></div>
+                <div className="mt-2 space-y-1 text-xs text-text-secondary">{eligibility.details.map((detail) => <p key={detail.ruleId ?? detail.rule_id}>{detail.passed ? '✓' : '×'} {detail.message}</p>)}</div>
+              </div>
+            )}
             <div className="flex justify-end gap-2 pt-2">
               <Button variant="ghost" onClick={() => setApplyTarget(null)}>取消</Button>
-              <Button onClick={handleApply} loading={submitting} disabled={!selectedRecord || !learnerId}>提交申请</Button>
+              <Button onClick={handleApply} loading={submitting} disabled={!selectedRecord || !learnerId || eligibility?.eligible === false}>提交申请</Button>
             </div>
           </div>
         </div>
@@ -517,6 +537,7 @@ function CertificationRulesModal({ certification, onClose, onChanged }: {
   const [ruleType, setRuleType] = useState('overall_score')
   const [minScore, setMinScore] = useState('60')
   const [allowGap, setAllowGap] = useState('0')
+  const [minCompletion, setMinCompletion] = useState('100')
   const [submitting, setSubmitting] = useState(false)
 
   const handleAdd = async () => {
@@ -527,7 +548,8 @@ function CertificationRulesModal({ certification, onClose, onChanged }: {
         rule_type: ruleType,
         rule_config: ruleType === 'overall_score'
           ? { min_score: Number(minScore) }
-          : { allow_gap: Number(allowGap) },
+          : ruleType === 'training_completion' ? { min_completion: Number(minCompletion) }
+            : { allow_gap: Number(allowGap) },
       })
       setRules(await trainingApi.listCertificationRules(certification.id))
       onChanged()
@@ -571,11 +593,16 @@ function CertificationRulesModal({ certification, onClose, onChanged }: {
           <select value={ruleType} onChange={(event) => setRuleType(event.target.value)} className="w-full h-10 px-3 bg-bg-secondary border border-border rounded-input text-text-primary">
             <option value="overall_score">综合成绩达标</option>
             <option value="all_mandatory_met">所有必修能力达标</option>
+            <option value="training_completion">培训任务包完成度</option>
           </select>
         </FormField>
         {ruleType === 'overall_score' ? (
           <FormField label="最低综合成绩" required>
             <Input type="number" min="0" max="100" value={minScore} onChange={(event) => setMinScore(event.target.value)} />
+          </FormField>
+        ) : ruleType === 'training_completion' ? (
+          <FormField label="最低完成度（%）" required>
+            <Input type="number" min="0" max="100" value={minCompletion} onChange={(event) => setMinCompletion(event.target.value)} />
           </FormField>
         ) : (
           <FormField label="允许未达标必修能力数" required>
@@ -598,7 +625,7 @@ function CreateCertificationModal({ positions, onClose, onCreated }: {
 }) {
   const [form, setForm] = useState({
     positionId: '', name: '', code: '', level: 'junior', description: '',
-    validityMonths: '0', issuer: '', ruleType: 'overall_score', minScore: '60', allowGap: '0',
+    validityMonths: '0', issuer: '', ruleType: 'overall_score', minScore: '60', allowGap: '0', minCompletion: '100',
   })
   const [submitting, setSubmitting] = useState(false)
 
@@ -620,7 +647,8 @@ function CreateCertificationModal({ positions, onClose, onCreated }: {
         rule_type: form.ruleType,
         rule_config: form.ruleType === 'overall_score'
           ? { min_score: Number(form.minScore) }
-          : { allow_gap: Number(form.allowGap) },
+          : form.ruleType === 'training_completion' ? { min_completion: Number(form.minCompletion) }
+            : { allow_gap: Number(form.allowGap) },
       })
       onCreated()
     } catch (err) {
@@ -676,11 +704,16 @@ function CreateCertificationModal({ positions, onClose, onCreated }: {
             <select aria-label="规则类型" value={form.ruleType} onChange={(event) => setForm({ ...form, ruleType: event.target.value })} className={selectClassName}>
               <option value="overall_score">综合成绩达标</option>
               <option value="all_mandatory_met">所有必修能力达标</option>
+              <option value="training_completion">培训任务包完成度</option>
             </select>
           </FormField>
           {form.ruleType === 'overall_score' ? (
             <FormField label="最低综合成绩" required>
               <Input aria-label="最低综合成绩" type="number" min="0" max="100" value={form.minScore} onChange={(event) => setForm({ ...form, minScore: event.target.value })} />
+            </FormField>
+          ) : form.ruleType === 'training_completion' ? (
+            <FormField label="最低完成度（%）">
+              <Input aria-label="最低完成度（%）" type="number" min="0" max="100" value={form.minCompletion} onChange={(event) => setForm({ ...form, minCompletion: event.target.value })} />
             </FormField>
           ) : (
             <FormField label="允许未达标必修能力数量">

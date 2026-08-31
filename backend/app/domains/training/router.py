@@ -10,6 +10,7 @@ from app.schemas.response import BaseResponse
 from app.domains.training.schemas import (
     TrainingProjectCreate, TrainingProjectUpdate,
     EnrollRequest, GeneratePlanRequest, UpdateProgressRequest,
+    TaskPackageCreate, TaskPackageUpdate, SubmissionCreate, SubmissionReview,
 )
 from app.domains.training.service import TrainingService
 from app.models.user import UserRoleEnum
@@ -151,3 +152,92 @@ def complete_enrollment(
 ) -> BaseResponse:
     is_staff = current_user.role in (UserRoleEnum.ADMIN.value, UserRoleEnum.TEACHER.value)
     return TrainingService.complete_enrollment(db, enrollment_id, current_user.user_id, is_staff=is_staff)
+
+
+# ===========================================
+# 任务包、实操提交与效果看板
+# ===========================================
+
+@router.get("/training-projects/{project_id}/task-packages", summary="培训任务包列表")
+def list_task_packages(
+    project_id: int,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> BaseResponse:
+    is_staff = current_user.role in (UserRoleEnum.ADMIN.value, UserRoleEnum.TEACHER.value)
+    return TrainingService.list_task_packages(db, project_id, is_staff=is_staff)
+
+
+@router.post("/training-projects/{project_id}/task-packages", summary="创建培训任务包")
+def create_task_package(
+    project_id: int,
+    data: TaskPackageCreate,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_teacher),
+) -> BaseResponse:
+    return TrainingService.create_task_package(db, project_id, data, current_user.user_id)
+
+
+@router.put("/training-task-packages/{package_id}", summary="更新培训任务包")
+def update_task_package(
+    package_id: int,
+    data: TaskPackageUpdate,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_teacher),
+) -> BaseResponse:
+    return TrainingService.update_task_package(db, package_id, data)
+
+
+@router.delete("/training-task-packages/{package_id}", summary="删除培训任务包")
+def delete_task_package(
+    package_id: int,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_teacher),
+) -> BaseResponse:
+    return TrainingService.delete_task_package(db, package_id)
+
+
+@router.get("/training-task-packages/{package_id}/submissions", summary="任务包提交记录")
+def list_submissions(
+    package_id: int,
+    enrollment_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> BaseResponse:
+    is_staff = current_user.role in (UserRoleEnum.ADMIN.value, UserRoleEnum.TEACHER.value)
+    return TrainingService.list_submissions(db, package_id, enrollment_id, current_user.user_id, is_staff=is_staff)
+
+
+@router.post("/training-task-packages/{package_id}/submissions", summary="提交实操任务")
+def create_submission(
+    package_id: int,
+    data: SubmissionCreate,
+    enrollment_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> BaseResponse:
+    is_staff = current_user.role in (UserRoleEnum.ADMIN.value, UserRoleEnum.TEACHER.value)
+    resolved_enrollment_id = enrollment_id or data.enrollment_id
+    if not resolved_enrollment_id:
+        from app.schemas.response import bad_request
+        return bad_request(message="请提供报名记录ID")
+    return TrainingService.create_submission(db, package_id, resolved_enrollment_id, current_user.user_id, data, is_staff=is_staff)
+
+
+@router.post("/training-submissions/{submission_id}/review", summary="教师评分实操提交")
+def review_submission(
+    submission_id: int,
+    data: SubmissionReview,
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(require_teacher),
+) -> BaseResponse:
+    return TrainingService.review_submission(db, submission_id, current_user.user_id, data)
+
+
+@router.get("/training-dashboard/overview", summary="培训效果看板")
+def dashboard_overview(
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> BaseResponse:
+    is_staff = current_user.role in (UserRoleEnum.ADMIN.value, UserRoleEnum.TEACHER.value)
+    return TrainingService.dashboard_overview(db, current_user.user_id, is_staff=is_staff)

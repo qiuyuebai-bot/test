@@ -176,6 +176,27 @@ export default function PositionTab() {
             {selected.description && (
               <div className="text-sm text-text-secondary">{selected.description}</div>
             )}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <h4 className="text-sm font-medium text-text-primary mb-2">岗位职责</h4>
+                <ul className="list-disc pl-5 space-y-1 text-sm text-text-secondary">
+                  {(selected.responsibilities ?? []).map((item, index) => (
+                    <li key={index}>{typeof item === 'string' ? item : String(item.description ?? item.name ?? JSON.stringify(item))}</li>
+                  ))}
+                </ul>
+              </div>
+              <div>
+                <h4 className="text-sm font-medium text-text-primary mb-2">关键任务</h4>
+                <div className="space-y-2">
+                  {(selected.keyTasks ?? selected.key_tasks ?? []).map((task, index) => (
+                    <div key={task.code ?? index} className="rounded-input border border-border p-2 text-sm">
+                      <p className="font-medium text-text-primary">{task.name}</p>
+                      {task.deliverables?.length ? <p className="text-xs text-text-secondary mt-1">产出：{task.deliverables.join('、')}</p> : null}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
             <div>
               <div className="flex items-center justify-between mb-2">
                 <h4 className="text-sm font-medium text-text-primary">胜任力矩阵</h4>
@@ -402,6 +423,8 @@ function EditPositionModal({ position, onClose, onSaved }: {
     level: position.level ?? '',
     industry: position.industry ?? '',
     description: position.description ?? '',
+    responsibilities: (position.responsibilities ?? []).map((item) => typeof item === 'string' ? item : String(item.name ?? item.description ?? '')).join('\n'),
+    keyTasks: JSON.stringify(position.keyTasks ?? position.key_tasks ?? [], null, 2),
   })
   const [submitting, setSubmitting] = useState(false)
 
@@ -415,6 +438,8 @@ function EditPositionModal({ position, onClose, onSaved }: {
         level: form.level || undefined,
         industry: form.industry || undefined,
         description: form.description || undefined,
+        responsibilities: form.responsibilities.split('\n').map((item) => item.trim()).filter(Boolean),
+        key_tasks: (() => { try { return JSON.parse(form.keyTasks) } catch { return undefined } })(),
       })
       onSaved(updated)
     } catch (err) {
@@ -445,6 +470,12 @@ function EditPositionModal({ position, onClose, onSaved }: {
         </FormField>
         <FormField label="描述">
           <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={3} />
+        </FormField>
+        <FormField label="岗位职责" description="每行一项">
+          <Textarea value={form.responsibilities} onChange={(e) => setForm({ ...form, responsibilities: e.target.value })} rows={4} />
+        </FormField>
+        <FormField label="关键任务（JSON）" description="每项可包含 name、deliverables、acceptance_criteria">
+          <Textarea value={form.keyTasks} onChange={(e) => setForm({ ...form, keyTasks: e.target.value })} rows={5} />
         </FormField>
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="ghost" onClick={onClose}>取消</Button>

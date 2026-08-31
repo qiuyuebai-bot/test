@@ -44,7 +44,21 @@ export interface Position {
   industry?: string
   level?: string
   description?: string
-  responsibilities?: string[]
+  responsibilities?: Array<string | Record<string, unknown>>
+  key_tasks?: Array<{
+    code?: string
+    name: string
+    description?: string
+    deliverables?: string[]
+    acceptance_criteria?: string[]
+  }>
+  keyTasks?: Array<{
+    code?: string
+    name: string
+    description?: string
+    deliverables?: string[]
+    acceptance_criteria?: string[]
+  }>
   prerequisites?: string[]
   career_path?: string[]
   is_active: boolean
@@ -406,4 +420,114 @@ export interface TrainingPlan {
   generatedByAi?: boolean
   createdAt?: string
   updatedAt?: string
+}
+
+export interface TrainingTaskRubric {
+  id: number
+  task_package_id: number
+  criterion: string
+  description?: string
+  max_score: number
+  weight: number
+  sequence: number
+  rubricId?: number
+  taskPackageId?: number
+  maxScore?: number
+}
+
+export interface TrainingTaskPackage {
+  id: number
+  project_id: number
+  name: string
+  description?: string
+  sequence: number
+  task_type: string
+  key_task_code?: string
+  learning_objectives: unknown[]
+  resources: unknown[]
+  submission_required: boolean
+  passing_score: number
+  is_mandatory: boolean
+  status: string
+  rubrics: TrainingTaskRubric[]
+  projectId?: number
+  keyTaskCode?: string
+  learningObjectives?: unknown[]
+  submissionRequired?: boolean
+  passingScore?: number
+  isMandatory?: boolean
+}
+
+export interface TrainingSubmission {
+  id: number
+  task_package_id: number
+  enrollment_id: number
+  learner_id?: number
+  user_id: number
+  attempt_number: number
+  content?: string
+  attachments: Array<Record<string, unknown>>
+  demo_url?: string
+  status: string
+  overall_score?: number
+  teacher_comment?: string
+  reviewed_by?: number
+  submitted_at?: string
+  reviewed_at?: string
+  scores: Array<{ rubric_id: number; score: number; comment?: string }>
+  taskPackageId?: number
+  enrollmentId?: number
+  attemptNumber?: number
+  demoUrl?: string
+  overallScore?: number
+  teacherComment?: string
+  learnerId?: number
+  userId?: number
+  reviewedBy?: number
+  submittedAt?: string
+  reviewedAt?: string
+  // camelCase compatibility for HTTP response
+  scoreItems?: Array<{ rubricId?: number; rubric_id?: number; score: number; comment?: string }>
+}
+
+export interface TrainingDashboardOverview {
+  project_count: number
+  enrollment_count: number
+  completed_count: number
+  submission_count: number
+  passed_submission_count: number
+  average_score?: number
+  projects: Array<{
+    project_id: number
+    project_name: string
+    enrollment_count: number
+    completed_count: number
+    package_count: number
+    submission_count: number
+    passed_submission_count: number
+    average_score?: number
+    projectId?: number
+    projectName?: string
+    enrollmentCount?: number
+    completedCount?: number
+    packageCount?: number
+    submissionCount?: number
+    passedSubmissionCount?: number
+    averageScore?: number
+  }>
+  projectCount?: number
+  enrollmentCount?: number
+  completedCount?: number
+  submissionCount?: number
+  passedSubmissionCount?: number
+}
+
+export interface CertificationEligibility {
+  eligible: boolean
+  assessment_record_id?: number
+  assessment_score?: number
+  details: Array<{ rule_id: number; rule_type: string; passed: boolean; message: string; ruleId?: number; ruleType?: string }>
+  assessmentRecordId?: number
+  assessmentScore?: number
+  reason?: string
 }

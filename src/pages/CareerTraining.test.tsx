@@ -9,7 +9,7 @@ vi.mock('@/store', async () => {
 })
 
 describe('CareerTraining 聚合页', () => {
-  it('渲染 5 个 Tab 导航', () => {
+  it('渲染岗位培训 Tab 导航', () => {
     render(
       <MemoryRouter initialEntries={['/career-training']}>
         <Routes>
@@ -24,6 +24,7 @@ describe('CareerTraining 聚合页', () => {
     expect(screen.getByRole('tab', { name: '学习计划' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '学习与练习' })).toBeInTheDocument()
     expect(screen.getByRole('tab', { name: '认证发证' })).toBeInTheDocument()
+    expect(screen.getByRole('tab', { name: '培训效果' })).toBeInTheDocument()
   })
 
   it('URL tab 参数切换激活态', () => {

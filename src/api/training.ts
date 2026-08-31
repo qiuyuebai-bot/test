@@ -5,6 +5,7 @@ import type {
   Certification, CertificationDetail, CertificationRule, CertificationRecord,
   CertificationRecordDetail, CertificationVerification,
   TrainingProject, TrainingEnrollment, TrainingPlan,
+  TrainingTaskPackage, TrainingSubmission, TrainingDashboardOverview, CertificationEligibility,
 } from '../types/training'
 
 type ListParams = { page?: number; page_size?: number; keyword?: string }
@@ -24,6 +25,42 @@ export const trainingApi = {
 
   getPosition(id: number): Promise<PositionDetail> {
     return http.get<PositionDetail>(`/positions/${id}`)
+  },
+
+  listTaskPackages(projectId: number): Promise<TrainingTaskPackage[]> {
+    return http.get<TrainingTaskPackage[]>(`/training-projects/${projectId}/task-packages`)
+  },
+
+  createTaskPackage(projectId: number, data: {
+    name: string; description?: string; sequence?: number; task_type?: string; key_task_code?: string;
+    learning_objectives?: unknown[]; resources?: unknown[]; submission_required?: boolean;
+    passing_score?: number; is_mandatory?: boolean; rubrics?: Array<Record<string, unknown>>
+  }): Promise<TrainingTaskPackage> {
+    return http.post<TrainingTaskPackage>(`/training-projects/${projectId}/task-packages`, data)
+  },
+
+  updateTaskPackage(id: number, data: Partial<TrainingTaskPackage>): Promise<TrainingTaskPackage> {
+    return http.put<TrainingTaskPackage>(`/training-task-packages/${id}`, data)
+  },
+
+  deleteTaskPackage(id: number): Promise<void> {
+    return http.delete<void>(`/training-task-packages/${id}`)
+  },
+
+  listTaskSubmissions(packageId: number, enrollmentId?: number): Promise<TrainingSubmission[]> {
+    return http.get<TrainingSubmission[]>(`/training-task-packages/${packageId}/submissions`, { enrollment_id: enrollmentId })
+  },
+
+  submitTask(packageId: number, data: { enrollment_id: number; content?: string; attachments?: Array<Record<string, unknown>>; demo_url?: string }): Promise<TrainingSubmission> {
+    return http.post<TrainingSubmission>(`/training-task-packages/${packageId}/submissions`, data)
+  },
+
+  reviewTaskSubmission(id: number, data: { scores: Array<Record<string, unknown>>; teacher_comment?: string; status: 'passed' | 'revision_requested' | 'failed' }): Promise<TrainingSubmission> {
+    return http.post<TrainingSubmission>(`/training-submissions/${id}/review`, data)
+  },
+
+  getTrainingDashboard(): Promise<TrainingDashboardOverview> {
+    return http.get<TrainingDashboardOverview>('/training-dashboard/overview')
   },
 
   createPosition(data: Partial<Position> & { code: string; name: string }): Promise<Position> {
@@ -165,6 +202,13 @@ export const trainingApi = {
 
   getCertification(id: number): Promise<CertificationDetail> {
     return http.get<CertificationDetail>(`/certifications/${id}`)
+  },
+
+  getCertificationEligibility(certificationId: number, learnerId: number, assessmentRecordId?: number): Promise<CertificationEligibility> {
+    return http.get<CertificationEligibility>(`/certifications/${certificationId}/eligibility`, {
+      learner_id: learnerId,
+      assessment_record_id: assessmentRecordId,
+    })
   },
 
   updateCertification(id: number, data: {

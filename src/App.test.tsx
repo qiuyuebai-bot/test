@@ -52,8 +52,6 @@ describe('hidden legacy routes', () => {
     '/multi-agent',
     '/metrics',
     '/monitoring',
-    '/career-training',
-    '/career-training/position',
     '/enterprise',
   ])('redirects non-admin users away from %s', async (path) => {
     setMockStore({ user: { id: 2, username: 'learner', role: 'learner' } })
@@ -61,6 +59,14 @@ describe('hidden legacy routes', () => {
     render(<App />)
 
     await waitFor(() => expect(window.location.pathname).toBe('/dashboard'))
+  })
+
+  it('allows learners to access career training', async () => {
+    setMockStore({ user: { id: 2, username: 'learner', role: 'learner' } })
+    window.history.replaceState({}, '', '/career-training/position')
+    render(<App />)
+
+    await waitFor(() => expect(window.location.pathname).toBe('/career-training/position'))
   })
 
   it.each(['teacher', 'learner'])('allows %s users to access AI configuration', async (role) => {

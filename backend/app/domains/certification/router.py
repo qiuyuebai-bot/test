@@ -13,6 +13,7 @@ from app.domains.certification.schemas import (
     CertificationReviewRequest,
 )
 from app.domains.certification.service import CertificationService
+from app.domains.learner.models import LearnerProfile
 from app.models.user import UserRoleEnum
 from app.utils.auth import get_current_user, CurrentUser, require_teacher
 
@@ -51,6 +52,23 @@ def get_certification_detail(
     current_user: CurrentUser = Depends(get_current_user),
 ) -> BaseResponse:
     return CertificationService.get_certification_by_id(db, cert_id)
+
+
+@router.get("/{cert_id}/eligibility", summary="查询认证资格")
+def get_eligibility(
+    cert_id: int,
+    learner_id: int = Query(...),
+    assessment_record_id: Optional[int] = Query(None),
+    db: Session = Depends(get_db),
+    current_user: CurrentUser = Depends(get_current_user),
+) -> BaseResponse:
+    is_staff = current_user.role in (UserRoleEnum.ADMIN.value, UserRoleEnum.TEACHER.value)
+    if not is_staff:
+        learner = db.query(LearnerProfile).filter_by(id=learner_id).first()
+        if not learner or learner.user_id != current_user.user_id:
+            from app.schemas.response import forbidden
+            return forbidden(message="只能查看本人的认证资格")
+    return CertificationService.get_eligibility(db, cert_id, learner_id, assessment_record_id)
 
 
 @router.put("/{cert_id}", summary="更新认证")

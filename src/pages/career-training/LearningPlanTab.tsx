@@ -15,7 +15,7 @@ import Textarea from '@/components/Textarea'
 import EmptyState from '@/components/EmptyState'
 import LoadingState from '@/components/LoadingState'
 import PlanTimeline from '@/components/career-training/PlanTimeline'
-import type { TrainingProject, AssessmentRecord, TrainingPlan, TrainingEnrollment, Position, Certification } from '@/types/training'
+import type { TrainingProject, AssessmentRecord, TrainingPlan, TrainingEnrollment, Position, Certification, TrainingTaskPackage, TrainingSubmission } from '@/types/training'
 
 const PROJECT_STATUS_LABEL: Record<string, string> = {
   draft: '草稿', active: '进行中', completed: '已完成', archived: '已归档',
@@ -55,6 +55,7 @@ export default function LearningPlanTab() {
   const [projectEnrollmentCount, setProjectEnrollmentCount] = useState<number | null>(null)
   const [selectedAssessmentRecord, setSelectedAssessmentRecord] = useState<AssessmentRecord | null>(null)
   const [selectedStageNumber, setSelectedStageNumber] = useState(1)
+  const [taskPackages, setTaskPackages] = useState<TrainingTaskPackage[]>([])
   const canEdit = user?.role === 'admin' || user?.role === 'teacher'
   const learnerId = currentLearner?.id
   const currentUserId = user?.userId ?? (user as { id?: number } | null)?.id
@@ -76,6 +77,7 @@ export default function LearningPlanTab() {
     setSelectedAssessmentRecord(null)
     setSelectedStageNumber(1)
     setProjectEnrollmentCount(null)
+    setTaskPackages([])
     clearTrainingContext()
     let project = p
     if (canEdit) {
@@ -87,6 +89,11 @@ export default function LearningPlanTab() {
       } catch (err) {
         reportError(err, { tags: { area: 'training_plan', action: 'get_project' } })
       }
+    }
+    try {
+      setTaskPackages(await trainingApi.listTaskPackages(project.id))
+    } catch (err) {
+      reportError(err, { tags: { area: 'training_tasks', action: 'list' } })
     }
     try {
       const existingEnrollment = await trainingApi.getEnrollment(project.id, learnerId)
@@ -406,6 +413,13 @@ export default function LearningPlanTab() {
               </div>
             </Card>
           )}
+          <TaskPackagePanel
+            projectId={selectedProject.id}
+            packages={taskPackages}
+            enrollment={enrollment}
+            canEdit={canEdit}
+            onChanged={async () => setTaskPackages(await trainingApi.listTaskPackages(selectedProject.id))}
+          />
         </div>
       )}
 
@@ -500,6 +514,144 @@ export default function LearningPlanTab() {
       )}
     </div>
   )
+}
+
+function TaskPackagePanel({ projectId, packages, enrollment, canEdit, onChanged }: {
+  projectId: number
+  packages: TrainingTaskPackage[]
+  enrollment: TrainingEnrollment | null
+  canEdit: boolean
+  onChanged: () => Promise<void>
+}) {
+  const [showCreate, setShowCreate] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [selectedPackage, setSelectedPackage] = useState<TrainingTaskPackage | null>(null)
+  const [submissions, setSubmissions] = useState<TrainingSubmission[]>([])
+  const [content, setContent] = useState('')
+  const [demoUrl, setDemoUrl] = useState('')
+  const [reviewScores, setReviewScores] = useState<Record<number, string>>({})
+  const [reviewComment, setReviewComment] = useState('')
+  const [reviewStatus, setReviewStatus] = useState<'passed' | 'revision_requested' | 'failed'>('passed')
+
+  const loadSubmissions = async (pkg: TrainingTaskPackage) => {
+    setSelectedPackage(pkg)
+    try {
+      setSubmissions(await trainingApi.listTaskSubmissions(pkg.id, enrollment?.id))
+    } catch {
+      setSubmissions([])
+    }
+  }
+
+  const submit = async () => {
+    if (!selectedPackage || !enrollment || !content.trim()) return
+    setSubmitting(true)
+    try {
+      await trainingApi.submitTask(selectedPackage.id, { enrollment_id: enrollment.id, content: content.trim(), demo_url: demoUrl.trim() || undefined })
+      setContent('')
+      setDemoUrl('')
+      await loadSubmissions(selectedPackage)
+      toast.success('实操任务已提交')
+    } catch (err) {
+      toast.error('提交失败', err instanceof ApiError ? err.message : '请稍后重试')
+    } finally { setSubmitting(false) }
+  }
+
+  const review = async (submission: TrainingSubmission) => {
+    if (!selectedPackage) return
+    setSubmitting(true)
+    try {
+      await trainingApi.reviewTaskSubmission(submission.id, {
+        scores: selectedPackage.rubrics.map((rubric) => ({ rubric_id: rubric.id, score: Number(reviewScores[rubric.id] ?? 0) })),
+        teacher_comment: reviewComment.trim() || undefined,
+        status: reviewStatus,
+      })
+      await loadSubmissions(selectedPackage)
+      toast.success('评分已保存')
+    } catch (err) {
+      toast.error('评分失败', err instanceof ApiError ? err.message : '请稍后重试')
+    } finally { setSubmitting(false) }
+  }
+
+  const archive = async (pkg: TrainingTaskPackage) => {
+    if (!confirm(`确定要归档任务包“${pkg.name}”吗？`)) return
+    try {
+      await trainingApi.deleteTaskPackage(pkg.id)
+      await onChanged()
+      if (selectedPackage?.id === pkg.id) setSelectedPackage(null)
+    } catch (err) {
+      toast.error('归档失败', err instanceof ApiError ? err.message : '请稍后重试')
+    }
+  }
+
+  return (
+    <Card>
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-sm font-medium text-text-primary">培训任务包</h4>
+        {canEdit && <Button size="sm" variant="secondary" onClick={() => setShowCreate((value) => !value)}>新增任务包</Button>}
+      </div>
+      {showCreate && canEdit && <CreateTaskPackageForm projectId={projectId} onCreated={async () => { setShowCreate(false); await onChanged() }} />}
+      {packages.length === 0 ? <p className="text-sm text-text-tertiary">暂无任务包</p> : (
+        <div className="space-y-2">
+          {packages.map((pkg) => (
+            <div key={pkg.id} className="border border-border rounded-input p-3">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <p className="text-sm font-medium text-text-primary">{pkg.sequence}. {pkg.name}</p>
+                  {pkg.description && <p className="text-xs text-text-secondary mt-1">{pkg.description}</p>}
+                  <p className="text-xs text-text-tertiary mt-1">{(pkg.isMandatory ?? pkg.is_mandatory) ? '必修' : '选修'} · 及格线 {pkg.passingScore ?? pkg.passing_score} 分 · 评分项 {pkg.rubrics.length}</p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button size="sm" variant="ghost" onClick={() => void loadSubmissions(pkg)}>查看提交</Button>
+                  {canEdit && <Button size="sm" variant="ghost" className="text-error hover:text-error-dark" onClick={() => void archive(pkg)}>归档</Button>}
+                </div>
+              </div>
+              {selectedPackage?.id === pkg.id && (
+                <div className="mt-3 pt-3 border-t border-border space-y-3">
+                  {!canEdit && enrollment && <>
+                    <Textarea value={content} onChange={(event) => setContent(event.target.value)} rows={3} placeholder="填写实操成果、过程说明或复盘" />
+                    <Input value={demoUrl} onChange={(event) => setDemoUrl(event.target.value)} placeholder="演示链接（可选）" />
+                    <div className="flex justify-end"><Button size="sm" onClick={() => void submit()} loading={submitting} disabled={!content.trim()}>提交实操成果</Button></div>
+                  </>}
+                  {submissions.length === 0 ? <p className="text-xs text-text-tertiary">暂无提交记录</p> : submissions.map((submission) => (
+                      <div key={submission.id} className="bg-bg-secondary rounded-input p-3 text-sm">
+                      <div className="flex justify-between"><span>第 {submission.attemptNumber ?? submission.attempt_number} 次提交</span><Badge variant={submission.status === 'passed' ? 'success' : submission.status === 'revision_requested' ? 'info' : 'default'}>{submission.status}</Badge></div>
+                      {submission.content && <p className="text-text-secondary mt-2 whitespace-pre-wrap">{submission.content}</p>}
+                      {(submission.overallScore ?? submission.overall_score) != null && <p className="text-text-secondary mt-1">得分：{submission.overallScore ?? submission.overall_score}</p>}
+                      {(submission.teacherComment ?? submission.teacher_comment) && <p className="text-text-tertiary mt-1">教师意见：{submission.teacherComment ?? submission.teacher_comment}</p>}
+                      {canEdit && submission.status === 'submitted' && <div className="mt-3 space-y-2">
+                        {pkg.rubrics.map((rubric) => <div key={rubric.id} className="flex items-center gap-2"><span className="text-xs flex-1">{rubric.criterion}</span><Input type="number" min="0" max={rubric.maxScore ?? rubric.max_score} value={reviewScores[rubric.id] ?? ''} onChange={(event) => setReviewScores((values) => ({ ...values, [rubric.id]: event.target.value }))} className="w-20" /></div>)}
+                        <Textarea value={reviewComment} onChange={(event) => setReviewComment(event.target.value)} rows={2} placeholder="教师评语" />
+                        <select value={reviewStatus} onChange={(event) => setReviewStatus(event.target.value as 'passed' | 'revision_requested' | 'failed')} className="w-full h-9 px-2 border border-border rounded-input bg-bg-secondary text-sm"><option value="passed">通过</option><option value="revision_requested">需修改</option><option value="failed">未通过</option></select>
+                        <div className="flex justify-end"><Button size="sm" onClick={() => void review(submission)} loading={submitting}>保存评分</Button></div>
+                      </div>}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  )
+}
+
+function CreateTaskPackageForm({ projectId, onCreated }: { projectId: number; onCreated: () => Promise<void> }) {
+  const [name, setName] = useState('')
+  const [objective, setObjective] = useState('')
+  const [criterion, setCriterion] = useState('成果质量')
+  const [busy, setBusy] = useState(false)
+  const submit = async () => {
+    if (!name.trim()) return
+    setBusy(true)
+    try {
+      await trainingApi.createTaskPackage(projectId, { name: name.trim(), learning_objectives: objective ? [objective.trim()] : [], rubrics: [{ criterion: criterion.trim(), weight: 1 }] })
+      await onCreated()
+    } catch (err) {
+      toast.error('创建任务包失败', err instanceof ApiError ? err.message : '请稍后重试')
+    } finally { setBusy(false) }
+  }
+  return <div className="border-b border-border pb-3 mb-3 space-y-2"><Input value={name} onChange={(event) => setName(event.target.value)} placeholder="任务包名称" /><Input value={objective} onChange={(event) => setObjective(event.target.value)} placeholder="学习目标（可选）" /><Input value={criterion} onChange={(event) => setCriterion(event.target.value)} placeholder="评分标准" /><div className="flex justify-end"><Button size="sm" onClick={() => void submit()} loading={busy} disabled={!name.trim()}>创建</Button></div></div>
 }
 
 const PROJECT_TYPE_OPTIONS = [

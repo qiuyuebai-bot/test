@@ -46,6 +46,7 @@ class Position(Base):
     level = Column(String(20), nullable=True, comment="岗位层级")
     description = Column(Text, nullable=True, comment="岗位描述")
     responsibilities = Column(JSON, default=list, comment="岗位职责列表")
+    key_tasks = Column(JSON, default=list, comment="关键任务列表，包含任务名称、产出物和验收标准")
     prerequisites = Column(JSON, default=list, comment="前置要求")
     career_path = Column(JSON, default=list, comment="职业发展路径")
     is_active = Column(Boolean, default=True, comment="是否启用")

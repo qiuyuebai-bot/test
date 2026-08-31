@@ -1,0 +1,336 @@
+{
+  "_meta": {
+    "description": "岗位培训模块演示种子数据",
+    "version": "1.0"
+  },
+  "competencies": [
+    {
+      "code": "AI-FUNDAMENTALS",
+      "name": "人工智能基础",
+      "category": "domain",
+      "description": "理解机器学习、深度学习和生成式人工智能的基本概念与应用边界。",
+      "level_descriptions": {
+        "1": "了解常见人工智能术语",
+        "2": "能够解释典型模型的基本原理",
+        "3": "能够结合业务场景选择合适的方法",
+        "4": "能够设计完整的算法方案",
+        "5": "能够制定技术路线并指导团队"
+      }
+    },
+    {
+      "code": "PYTHON-ENGINEERING",
+      "name": "Python工程实践",
+      "category": "technical",
+      "description": "使用Python完成数据处理、模型调用、接口开发和自动化测试。",
+      "level_descriptions": {
+        "1": "能够阅读并修改简单脚本",
+        "2": "能够独立完成常规数据处理",
+        "3": "能够开发可维护的业务模块",
+        "4": "能够设计服务化工程架构",
+        "5": "能够建立团队级工程规范"
+      }
+    },
+    {
+      "code": "MODEL-DEPLOYMENT",
+      "name": "模型部署与服务化",
+      "category": "engineering",
+      "description": "掌握模型上线、接口封装、监控和版本迭代等生产实践。",
+      "level_descriptions": {
+        "1": "了解模型部署流程",
+        "2": "能够完成单机模型部署",
+        "3": "能够开发稳定的模型服务",
+        "4": "能够设计高可用推理架构",
+        "5": "能够治理模型全生命周期"
+      }
+    },
+    {
+      "code": "DATA-ANALYSIS",
+      "name": "数据分析与可视化",
+      "category": "technical",
+      "description": "从业务问题出发完成数据清洗、分析、可视化和结论表达。",
+      "level_descriptions": {
+        "1": "能够理解基础统计指标",
+        "2": "能够完成常规数据清洗",
+        "3": "能够独立完成专题分析",
+        "4": "能够建立分析模型并验证结论",
+        "5": "能够搭建组织级数据分析体系"
+      }
+    },
+    {
+      "code": "SYSTEM-DESIGN",
+      "name": "系统架构设计",
+      "category": "engineering",
+      "description": "设计可靠、可扩展、可观测的智能应用和数据系统。",
+      "level_descriptions": {
+        "1": "了解常见系统组件",
+        "2": "能够完成简单模块设计",
+        "3": "能够设计中小型系统方案",
+        "4": "能够处理复杂系统的扩展性与稳定性",
+        "5": "能够制定平台级架构标准"
+      }
+    },
+    {
+      "code": "BUSINESS-SOLVING",
+      "name": "业务问题解决",
+      "category": "soft_skill",
+      "description": "将模糊业务需求拆解为可验证的问题、指标和交付方案。",
+      "level_descriptions": {
+        "1": "能够复述明确需求",
+        "2": "能够拆解常见问题",
+        "3": "能够提出并验证解决方案",
+        "4": "能够统筹复杂问题的闭环交付",
+        "5": "能够建立跨部门问题解决机制"
+      }
+    },
+    {
+      "code": "COLLABORATION",
+      "name": "协作与沟通",
+      "category": "soft_skill",
+      "description": "在多角色协作中清晰表达、同步风险并推动任务落地。",
+      "level_descriptions": {
+        "1": "能够按要求同步进度",
+        "2": "能够完成日常跨角色沟通",
+        "3": "能够推动小型项目协作",
+        "4": "能够协调复杂项目干系人",
+        "5": "能够建立高效协作机制"
+      }
+    },
+    {
+      "code": "AI-SAFETY",
+      "name": "人工智能安全与合规",
+      "category": "domain",
+      "description": "关注数据安全、隐私保护、模型风险和人工智能应用合规要求。",
+      "level_descriptions": {
+        "1": "了解基本安全规范",
+        "2": "能够识别常见风险",
+        "3": "能够落实项目安全控制",
+        "4": "能够设计风险评估方案",
+        "5": "能够建立组织级治理体系"
+      }
+    }
+  ],
+  "positions": [
+    {
+      "code": "AI-APPLICATION-ENGINEER",
+      "name": "AI应用工程师",
+      "category": "technical",
+      "industry": "人工智能",
+      "level": "mid",
+      "description": "负责将大模型与智能算法落地到可用、可维护的业务应用中。",
+      "responsibilities": [
+        "分析业务场景并设计智能应用方案",
+        "完成模型调用、服务接口和应用功能开发",
+        "跟踪线上效果并持续优化体验"
+      ],
+      "key_tasks": [
+        {"code": "AI-APP-REQUIREMENT", "name": "业务场景拆解", "deliverables": ["场景分析表", "方案评审记录"], "acceptance_criteria": ["明确输入输出", "给出可验证指标"]},
+        {"code": "AI-APP-SERVICE", "name": "智能应用服务化", "deliverables": ["可运行接口", "测试报告"], "acceptance_criteria": ["接口可调用", "关键路径有自动化测试"]},
+        {"code": "AI-APP-DELIVERY", "name": "上线交付与复盘", "deliverables": ["上线清单", "效果复盘报告"], "acceptance_criteria": ["监控指标齐全", "形成改进项"]}
+      ],
+      "prerequisites": ["具备基础编程能力", "了解机器学习基本概念"],
+      "career_path": ["初级AI应用开发", "AI应用工程师", "AI技术负责人"],
+      "competencies": [
+        {"code": "AI-FUNDAMENTALS", "required_level": 3, "weight": 1.2, "is_mandatory": true},
+        {"code": "PYTHON-ENGINEERING", "required_level": 3, "weight": 1.2, "is_mandatory": true},
+        {"code": "MODEL-DEPLOYMENT", "required_level": 3, "weight": 1.1, "is_mandatory": true},
+        {"code": "SYSTEM-DESIGN", "required_level": 2, "weight": 1.0, "is_mandatory": false},
+        {"code": "COLLABORATION", "required_level": 3, "weight": 0.8, "is_mandatory": true}
+      ]
+    },
+    {
+      "code": "DATA-ANALYST",
+      "name": "数据分析师",
+      "category": "technical",
+      "industry": "人工智能",
+      "level": "mid",
+      "description": "负责从数据中发现业务规律，为产品和运营决策提供可解释的分析结论。",
+      "responsibilities": [
+        "完成数据清洗、指标设计和专题分析",
+        "搭建可复用的数据看板与分析报告",
+        "与业务团队协作验证分析结论"
+      ],
+      "key_tasks": [
+        {"code": "DATA-CLEANING", "name": "业务数据清洗", "deliverables": ["清洗脚本", "数据质量报告"], "acceptance_criteria": ["缺失和异常有处理说明"]},
+        {"code": "DATA-DASHBOARD", "name": "指标看板建设", "deliverables": ["指标字典", "可视化看板"], "acceptance_criteria": ["指标口径一致", "支持关键筛选"]},
+        {"code": "DATA-INSIGHT", "name": "分析结论汇报", "deliverables": ["分析报告", "汇报材料"], "acceptance_criteria": ["结论有数据依据", "建议可执行"]}
+      ],
+      "prerequisites": ["具备统计学基础", "能够使用Python或SQL处理数据"],
+      "career_path": ["数据分析助理", "数据分析师", "高级数据分析师"],
+      "competencies": [
+        {"code": "DATA-ANALYSIS", "required_level": 4, "weight": 1.3, "is_mandatory": true},
+        {"code": "PYTHON-ENGINEERING", "required_level": 3, "weight": 1.0, "is_mandatory": true},
+        {"code": "BUSINESS-SOLVING", "required_level": 3, "weight": 1.2, "is_mandatory": true},
+        {"code": "AI-FUNDAMENTALS", "required_level": 2, "weight": 0.8, "is_mandatory": false},
+        {"code": "COLLABORATION", "required_level": 3, "weight": 0.8, "is_mandatory": true}
+      ]
+    },
+    {
+      "code": "SMART-MANUFACTURING-CONSULTANT",
+      "name": "智能制造解决方案顾问",
+      "category": "operation",
+      "industry": "智能制造",
+      "level": "senior",
+      "description": "连接制造业务与人工智能技术，负责智能化场景规划、方案设计和落地推进。",
+      "responsibilities": [
+        "调研生产流程并识别智能化机会",
+        "设计数据、算法和系统集成方案",
+        "协调客户、研发和交付团队完成项目落地"
+      ],
+      "key_tasks": [
+        {"code": "MFG-DIAGNOSIS", "name": "制造场景诊断", "deliverables": ["流程诊断报告", "机会清单"], "acceptance_criteria": ["覆盖关键工序", "机会有优先级"]},
+        {"code": "MFG-SOLUTION", "name": "解决方案设计", "deliverables": ["总体方案", "实施路线图"], "acceptance_criteria": ["技术与业务闭环", "风险有应对措施"]},
+        {"code": "MFG-DELIVERY", "name": "项目协同交付", "deliverables": ["交付计划", "复盘记录"], "acceptance_criteria": ["明确角色和里程碑", "问题按期闭环"]}
+      ],
+      "prerequisites": ["了解制造业务流程", "具备项目方案或技术交付经验"],
+      "career_path": ["行业解决方案专员", "智能制造解决方案顾问", "行业平台主管"],
+      "competencies": [
+        {"code": "BUSINESS-SOLVING", "required_level": 4, "weight": 1.3, "is_mandatory": true},
+        {"code": "SYSTEM-DESIGN", "required_level": 3, "weight": 1.1, "is_mandatory": true},
+        {"code": "DATA-ANALYSIS", "required_level": 3, "weight": 1.0, "is_mandatory": true},
+        {"code": "AI-SAFETY", "required_level": 3, "weight": 0.9, "is_mandatory": true},
+        {"code": "COLLABORATION", "required_level": 4, "weight": 1.2, "is_mandatory": true}
+      ]
+    }
+  ],
+  "assessment_templates": [
+    {
+      "position_code": "AI-APPLICATION-ENGINEER",
+      "name": "AI应用工程师综合能力评估",
+      "description": "覆盖人工智能基础、工程实践、模型服务和协作能力的入岗评估。",
+      "pass_threshold": 70,
+      "duration_minutes": 45,
+      "competencies": [
+        {"code": "AI-FUNDAMENTALS", "question_count": 8, "difficulty": 3, "assessment_method": "quiz"},
+        {"code": "PYTHON-ENGINEERING", "question_count": 8, "difficulty": 3, "assessment_method": "project"},
+        {"code": "MODEL-DEPLOYMENT", "question_count": 6, "difficulty": 3, "assessment_method": "quiz"},
+        {"code": "SYSTEM-DESIGN", "question_count": 5, "difficulty": 2, "assessment_method": "project"},
+        {"code": "COLLABORATION", "question_count": 5, "difficulty": 3, "assessment_method": "self_report"}
+      ]
+    },
+    {
+      "position_code": "DATA-ANALYST",
+      "name": "数据分析师岗位胜任力评估",
+      "description": "通过数据处理任务和业务案例评估分析师的关键能力。",
+      "pass_threshold": 70,
+      "duration_minutes": 50,
+      "competencies": [
+        {"code": "DATA-ANALYSIS", "question_count": 10, "difficulty": 4, "assessment_method": "project"},
+        {"code": "PYTHON-ENGINEERING", "question_count": 6, "difficulty": 3, "assessment_method": "quiz"},
+        {"code": "BUSINESS-SOLVING", "question_count": 6, "difficulty": 3, "assessment_method": "project"},
+        {"code": "AI-FUNDAMENTALS", "question_count": 4, "difficulty": 2, "assessment_method": "quiz"},
+        {"code": "COLLABORATION", "question_count": 4, "difficulty": 3, "assessment_method": "self_report"}
+      ]
+    },
+    {
+      "position_code": "SMART-MANUFACTURING-CONSULTANT",
+      "name": "智能制造解决方案顾问能力评估",
+      "description": "围绕制造场景分析、方案设计、安全治理和项目协作开展综合评估。",
+      "pass_threshold": 75,
+      "duration_minutes": 60,
+      "competencies": [
+        {"code": "BUSINESS-SOLVING", "question_count": 8, "difficulty": 4, "assessment_method": "project"},
+        {"code": "SYSTEM-DESIGN", "question_count": 6, "difficulty": 3, "assessment_method": "project"},
+        {"code": "DATA-ANALYSIS", "question_count": 6, "difficulty": 3, "assessment_method": "quiz"},
+        {"code": "AI-SAFETY", "question_count": 5, "difficulty": 3, "assessment_method": "quiz"},
+        {"code": "COLLABORATION", "question_count": 5, "difficulty": 4, "assessment_method": "self_report"}
+      ]
+    }
+  ],
+  "certifications": [
+    {
+      "position_code": "AI-APPLICATION-ENGINEER",
+      "code": "CERT-AI-APP-L2",
+      "name": "AI应用工程师（中级）",
+      "level": "mid",
+      "description": "证明持证人能够独立完成AI应用方案开发、模型服务接入与上线交付。",
+      "validity_period_months": 24,
+      "issuer": "知域引擎人才发展中心",
+      "rules": [
+        {"rule_type": "overall_score", "rule_config": {"min_score": 70}},
+        {"rule_type": "all_mandatory_met", "rule_config": {"allow_gap": 0}},
+        {"rule_type": "training_completion", "rule_config": {"min_completion": 100}}
+      ]
+    },
+    {
+      "position_code": "DATA-ANALYST",
+      "code": "CERT-DATA-ANALYST-L2",
+      "name": "数据分析师（中级）",
+      "level": "mid",
+      "description": "证明持证人能够独立完成数据分析项目并将结论转化为业务行动。",
+      "validity_period_months": 24,
+      "issuer": "知域引擎人才发展中心",
+      "rules": [
+        {"rule_type": "overall_score", "rule_config": {"min_score": 70}},
+        {"rule_type": "all_mandatory_met", "rule_config": {"allow_gap": 0}},
+        {"rule_type": "training_completion", "rule_config": {"min_completion": 100}}
+      ]
+    },
+    {
+      "position_code": "SMART-MANUFACTURING-CONSULTANT",
+      "code": "CERT-SMART-MFG-L3",
+      "name": "智能制造解决方案顾问（高级）",
+      "level": "senior",
+      "description": "证明持证人能够统筹智能制造场景规划、技术方案和项目交付。",
+      "validity_period_months": 36,
+      "issuer": "知域引擎人才发展中心",
+      "rules": [
+        {"rule_type": "overall_score", "rule_config": {"min_score": 75}},
+        {"rule_type": "all_mandatory_met", "rule_config": {"allow_gap": 0}},
+        {"rule_type": "training_completion", "rule_config": {"min_completion": 100}}
+      ]
+    }
+  ],
+  "training_projects": [
+    {
+      "position_code": "AI-APPLICATION-ENGINEER",
+      "certification_code": "CERT-AI-APP-L2",
+      "name": "AI应用工程师岗位进阶训练营",
+      "description": "从模型基础到服务化交付，帮助学习者完成一个可运行的智能应用项目。",
+      "project_type": "upskill",
+      "enterprise_name": "知域引擎示范企业",
+      "config": {
+        "estimated_hours": 32,
+        "modules": ["AI应用基础", "Python工程实践", "模型服务化", "项目交付演练"]
+      },
+      "task_packages": [
+        {"name": "智能应用需求与方案", "sequence": 1, "key_task_code": "AI-APP-REQUIREMENT", "learning_objectives": ["完成业务问题拆解", "输出可评审方案"], "rubrics": [{"criterion": "场景分析完整性", "weight": 1}, {"criterion": "方案可行性", "weight": 1}]},
+        {"name": "模型服务化实操", "sequence": 2, "key_task_code": "AI-APP-SERVICE", "learning_objectives": ["实现可调用服务", "完成测试与监控"], "rubrics": [{"criterion": "接口实现质量", "weight": 1}, {"criterion": "测试与稳定性", "weight": 1}]},
+        {"name": "上线交付复盘", "sequence": 3, "key_task_code": "AI-APP-DELIVERY", "learning_objectives": ["完成上线清单", "形成复盘改进项"], "rubrics": [{"criterion": "交付完整度", "weight": 1}, {"criterion": "复盘与改进", "weight": 1}]}
+      ]
+    },
+    {
+      "position_code": "DATA-ANALYST",
+      "certification_code": "CERT-DATA-ANALYST-L2",
+      "name": "数据分析师实战训练项目",
+      "description": "围绕真实业务案例完成数据清洗、指标分析、可视化和汇报表达。",
+      "project_type": "upskill",
+      "enterprise_name": "知域引擎示范企业",
+      "config": {
+        "estimated_hours": 28,
+        "modules": ["数据处理", "统计分析", "可视化表达", "业务案例答辩"]
+      },
+      "task_packages": [
+        {"name": "业务数据清洗", "sequence": 1, "key_task_code": "DATA-CLEANING", "learning_objectives": ["建立数据质量检查流程"], "rubrics": [{"criterion": "清洗逻辑正确性", "weight": 1}, {"criterion": "质量说明完整性", "weight": 1}]},
+        {"name": "指标看板建设", "sequence": 2, "key_task_code": "DATA-DASHBOARD", "learning_objectives": ["统一指标口径并完成看板"], "rubrics": [{"criterion": "指标口径", "weight": 1}, {"criterion": "看板可用性", "weight": 1}]},
+        {"name": "分析结论汇报", "sequence": 3, "key_task_code": "DATA-INSIGHT", "learning_objectives": ["将分析结论转化为行动建议"], "rubrics": [{"criterion": "证据与结论", "weight": 1}, {"criterion": "建议可执行性", "weight": 1}]}
+      ]
+    },
+    {
+      "position_code": "SMART-MANUFACTURING-CONSULTANT",
+      "certification_code": "CERT-SMART-MFG-L3",
+      "name": "智能制造解决方案顾问认证班",
+      "description": "通过制造场景拆解和方案设计，训练从需求调研到项目交付的完整能力。",
+      "project_type": "transfer",
+      "enterprise_name": "知域引擎示范企业",
+      "config": {
+        "estimated_hours": 40,
+        "modules": ["制造场景诊断", "系统方案设计", "安全与合规", "项目协同交付"]
+      },
+      "task_packages": [
+        {"name": "制造场景诊断", "sequence": 1, "key_task_code": "MFG-DIAGNOSIS", "learning_objectives": ["识别智能化机会"], "rubrics": [{"criterion": "场景覆盖度", "weight": 1}, {"criterion": "机会优先级", "weight": 1}]},
+        {"name": "解决方案设计", "sequence": 2, "key_task_code": "MFG-SOLUTION", "learning_objectives": ["完成技术与业务一体化方案"], "rubrics": [{"criterion": "方案完整性", "weight": 1}, {"criterion": "风险控制", "weight": 1}]},
+        {"name": "项目协同交付", "sequence": 3, "key_task_code": "MFG-DELIVERY", "learning_objectives": ["按里程碑推进交付并复盘"], "rubrics": [{"criterion": "协同计划", "weight": 1}, {"criterion": "问题闭环", "weight": 1}]}
+      ]
+    }
+  ]
+}

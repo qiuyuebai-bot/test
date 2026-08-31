@@ -28,6 +28,7 @@ from app.health import router as health_router
 from app.seed_data import (
     init_default_admin,
     init_learner_seed_data,
+    init_career_training_seed_data,
     init_knowledge_seed_data,
     normalize_demo_data_paths,
 )
@@ -47,6 +48,7 @@ async def lifespan(app: FastAPI):
         elif settings.SEED_ON_STARTUP:
             init_default_admin()
             init_learner_seed_data()
+            init_career_training_seed_data()
             init_knowledge_seed_data()
             logger.info("种子数据初始化完成（SEED_ON_STARTUP=true）")
         else:

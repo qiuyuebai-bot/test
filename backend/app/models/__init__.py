@@ -22,7 +22,7 @@ from app.domains.certification.models import Certification, CertificationRule, C
 from app.domains.certification.models import CertificationLevelEnum, RuleTypeEnum, CertificationStatusEnum
 
 # 培训项目相关模型
-from app.domains.training.models import TrainingProject, TrainingEnrollment, TrainingPlan
+from app.domains.training.models import TrainingProject, TrainingEnrollment, TrainingPlan, TrainingTaskPackage, TrainingTaskRubric, TrainingSubmission, TrainingSubmissionScore
 from app.domains.training.models import ProjectTypeEnum, ProjectStatusEnum, EnrollmentStatusEnum, PlanStatusEnum
 
 # 知识库相关模型
@@ -91,6 +91,10 @@ __all__ = [
     "TrainingProject",
     "TrainingEnrollment",
     "TrainingPlan",
+    "TrainingTaskPackage",
+    "TrainingTaskRubric",
+    "TrainingSubmission",
+    "TrainingSubmissionScore",
     "ProjectTypeEnum",
     "ProjectStatusEnum",
     "EnrollmentStatusEnum",

@@ -117,6 +117,32 @@ class CertificationService:
         return success(data=result)
 
     @staticmethod
+    def get_eligibility(db: Session, cert_id: int, learner_id: int, assessment_record_id: Optional[int] = None) -> Dict[str, Any]:
+        cert = db.query(Certification).filter(Certification.id == cert_id).first()
+        learner = db.query(LearnerProfile).filter(LearnerProfile.id == learner_id).first()
+        if not cert or not learner:
+            return not_found(message="认证或学习者不存在")
+        record = None
+        if assessment_record_id:
+            record = db.query(AssessmentRecord).filter(AssessmentRecord.id == assessment_record_id).first()
+        else:
+            record = db.query(AssessmentRecord).filter(
+                AssessmentRecord.learner_id == learner_id,
+                AssessmentRecord.position_id == cert.position_id,
+                AssessmentRecord.status == AssessmentStatusEnum.COMPLETED.value,
+            ).order_by(AssessmentRecord.completed_at.desc()).first()
+        if not record:
+            return success(data={"eligible": False, "assessment_record_id": None, "details": [], "reason": "暂无匹配的已完成能力评估"})
+        evaluation = CertificationService._evaluate_rules(db, cert_id, record.id, learner_id=learner_id)
+        return success(data={
+            "eligible": bool(evaluation.get("passed")),
+            "assessment_record_id": record.id,
+            "assessment_score": record.overall_score,
+            "details": evaluation.get("details", []),
+            "reason": evaluation.get("reason"),
+        })
+
+    @staticmethod
     def update_certification(db: Session, cert_id: int, data: CertificationUpdate) -> Dict[str, Any]:
         cert = db.query(Certification).filter(Certification.id == cert_id).first()
         if not cert:
@@ -268,7 +294,7 @@ class CertificationService:
             return bad_request(message="该学习者已有有效的认证证书")
 
         # 自动评估规则
-        evaluation = CertificationService._evaluate_rules(db, cert.id, record.id)
+        evaluation = CertificationService._evaluate_rules(db, cert.id, record.id, learner_id=learner.id)
         if not evaluation.get("passed", False):
             return bad_request(message="当前评估结果未满足认证规则，暂不具备申请资格", data=evaluation)
 
@@ -349,7 +375,7 @@ class CertificationService:
         if not assessment or assessment.status != AssessmentStatusEnum.COMPLETED.value:
             return bad_request(message="关联评估已不存在或尚未完成，无法批准")
         current_evaluation = CertificationService._evaluate_rules(
-            db, rec.certification_id, rec.assessment_record_id,
+            db, rec.certification_id, rec.assessment_record_id, learner_id=rec.learner_id,
         )
         if not current_evaluation.get("passed", False):
             return bad_request(message="当前评估结果已不满足发证规则，无法批准", data=current_evaluation)
@@ -442,7 +468,7 @@ class CertificationService:
     # ===========================================
 
     @staticmethod
-    def _evaluate_rules(db: Session, certification_id: int, assessment_record_id: int) -> Dict[str, Any]:
+    def _evaluate_rules(db: Session, certification_id: int, assessment_record_id: int, learner_id: Optional[int] = None) -> Dict[str, Any]:
         """评估所有规则是否满足"""
         rules = db.query(CertificationRule).filter(
             CertificationRule.certification_id == certification_id
@@ -460,7 +486,7 @@ class CertificationService:
         details = []
         all_passed = True
         for rule in rules:
-            result = CertificationService._evaluate_single_rule(db, rule, record)
+            result = CertificationService._evaluate_single_rule(db, rule, record, learner_id=learner_id or record.learner_id)
             details.append({
                 "rule_id": rule.id,
                 "rule_type": rule.rule_type,
@@ -478,7 +504,7 @@ class CertificationService:
         }
 
     @staticmethod
-    def _evaluate_single_rule(db: Session, rule: CertificationRule, record: AssessmentRecord) -> Dict[str, Any]:
+    def _evaluate_single_rule(db: Session, rule: CertificationRule, record: AssessmentRecord, learner_id: Optional[int] = None) -> Dict[str, Any]:
         """评估单条规则"""
         cfg = rule.rule_config or {}
 
@@ -530,6 +556,41 @@ class CertificationService:
                 "message": f"未达标胜任力 {unmet} 项，允许 {allow_gap} 项",
             }
 
+        elif rule.rule_type in (RuleTypeEnum.TRAINING_COMPLETION.value, RuleTypeEnum.MANDATORY_TASKS_PASSED.value, RuleTypeEnum.TASK_SCORE.value):
+            from app.domains.training.models import TrainingProject, TrainingEnrollment, TrainingTaskPackage, TrainingSubmission
+            project_id = cfg.get("project_id")
+            project_query = db.query(TrainingProject).filter(TrainingProject.position_id == record.position_id)
+            project = db.query(TrainingProject).filter(TrainingProject.id == project_id).first() if project_id else project_query.order_by(TrainingProject.id.asc()).first()
+            if not project or not learner_id:
+                return {"passed": False, "message": "未找到关联培训项目或学习者"}
+            enrollment = db.query(TrainingEnrollment).filter(
+                TrainingEnrollment.project_id == project.id,
+                (TrainingEnrollment.learner_id == learner_id) | (TrainingEnrollment.user_id == record.user_id),
+            ).order_by(TrainingEnrollment.id.desc()).first()
+            if not enrollment:
+                return {"passed": False, "message": "学习者尚未报名关联培训项目"}
+            packages = db.query(TrainingTaskPackage).filter(TrainingTaskPackage.project_id == project.id, TrainingTaskPackage.status == "active").all()
+            submissions = db.query(TrainingSubmission).filter(TrainingSubmission.enrollment_id == enrollment.id).all()
+            latest = {}
+            for submission in submissions:
+                if submission.task_package_id not in latest or submission.attempt_number > latest[submission.task_package_id].attempt_number:
+                    latest[submission.task_package_id] = submission
+            if rule.rule_type == RuleTypeEnum.TRAINING_COMPLETION.value:
+                required = cfg.get("min_completion", 100)
+                completed = sum(1 for package in packages if latest.get(package.id) and latest[package.id].status == "passed")
+                actual = round(completed / len(packages) * 100, 1) if packages else 0
+                return {"passed": actual >= required, "message": f"任务包完成度 {actual}% {'>=' if actual >= required else '<'} {required}%"}
+            if rule.rule_type == RuleTypeEnum.MANDATORY_TASKS_PASSED.value:
+                mandatory = [package for package in packages if package.is_mandatory]
+                passed = sum(1 for package in mandatory if latest.get(package.id) and latest[package.id].status == "passed")
+                required = cfg.get("min_passed", len(mandatory))
+                return {"passed": passed >= required, "message": f"必修任务通过 {passed} 项 {'>=' if passed >= required else '<'} {required} 项"}
+            package_id = cfg.get("task_package_id")
+            submission = latest.get(int(package_id)) if package_id is not None else None
+            min_score = cfg.get("min_score", 60)
+            actual = submission.overall_score if submission and submission.overall_score is not None else 0
+            return {"passed": actual >= min_score and bool(submission and submission.status == "passed"), "message": f"实操得分 {actual} {'>=' if actual >= min_score else '<'} {min_score}"}
+
         return {"passed": False, "message": f"未知规则类型: {rule.rule_type}"}
 
     @staticmethod
@@ -550,6 +611,17 @@ class CertificationService:
         elif rule_type == RuleTypeEnum.ALL_MANDATORY_MET.value:
             if "allow_gap" in config and config["allow_gap"] < 0:
                 return "allow_gap 不能为负数"
+        elif rule_type == RuleTypeEnum.TRAINING_COMPLETION.value:
+            if "min_completion" in config and not (0 <= config["min_completion"] <= 100):
+                return "min_completion 必须在 0-100 之间"
+        elif rule_type == RuleTypeEnum.MANDATORY_TASKS_PASSED.value:
+            if "min_passed" in config and config["min_passed"] < 0:
+                return "min_passed 不能为负数"
+        elif rule_type == RuleTypeEnum.TASK_SCORE.value:
+            if "task_package_id" not in config:
+                return "task_score 规则需要 task_package_id 参数"
+            if "min_score" in config and not (0 <= config["min_score"] <= 100):
+                return "min_score 必须在 0-100 之间"
         return None
 
     # ===========================================

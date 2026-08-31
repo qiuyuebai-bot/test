@@ -18,6 +18,7 @@ def test_desktop_token_and_first_admin_bootstrap(db_session, monkeypatch):
 
     app.dependency_overrides[get_db] = override_get_db
     monkeypatch.setattr(desktop_router_module, "init_learner_seed_data", lambda: None)
+    monkeypatch.setattr(desktop_router_module, "init_career_training_seed_data", lambda: None)
     monkeypatch.setattr(desktop_router_module, "init_knowledge_seed_data", lambda: None)
 
     with TestClient(app) as client:

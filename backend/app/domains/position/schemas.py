@@ -1,7 +1,7 @@
 """
 岗位与胜任力域 Pydantic Schemas
 """
-from typing import Optional, List
+from typing import Optional, List, Any
 from datetime import datetime
 from pydantic import BaseModel, Field
 
@@ -48,7 +48,8 @@ class PositionBase(BaseModel):
     industry: Optional[str] = None
     level: Optional[str] = None
     description: Optional[str] = None
-    responsibilities: Optional[List[str]] = Field(default_factory=list)
+    responsibilities: Optional[List[Any]] = Field(default_factory=list)
+    key_tasks: Optional[List[dict]] = Field(default_factory=list, description="关键任务")
     prerequisites: Optional[List[str]] = Field(default_factory=list)
     career_path: Optional[List[str]] = Field(default_factory=list)
 
@@ -61,7 +62,8 @@ class PositionUpdate(BaseModel):
     industry: Optional[str] = None
     level: Optional[str] = None
     description: Optional[str] = None
-    responsibilities: Optional[List[str]] = None
+    responsibilities: Optional[List[Any]] = None
+    key_tasks: Optional[List[dict]] = None
     prerequisites: Optional[List[str]] = None
     career_path: Optional[List[str]] = None
     is_active: Optional[bool] = None

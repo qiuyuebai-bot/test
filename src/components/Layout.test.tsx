@@ -69,7 +69,7 @@ describe('Layout navigation', () => {
     expect(navigation.queryByRole('link', { name: '多智能体' })).not.toBeInTheDocument()
     expect(navigation.queryByRole('link', { name: '量化指标' })).not.toBeInTheDocument()
     expect(navigation.queryByRole('link', { name: '运行监控' })).not.toBeInTheDocument()
-    expect(navigation.queryByRole('link', { name: '就业培训' })).not.toBeInTheDocument()
+    expect(navigation.getByRole('link', { name: '就业培训' })).toHaveAttribute('href', '/career-training/position')
     expect(navigation.getByRole('heading', { name: '系统设置' })).toBeInTheDocument()
     expect(navigation.getByRole('link', { name: 'AI 服务' })).toHaveAttribute('href', '/ai-config')
   })

@@ -21,6 +21,9 @@ class RuleTypeEnum(enum.Enum):
     OVERALL_SCORE = "overall_score"              # 综合得分达标
     COMPETENCY_LEVEL = "competency_level"        # 特定胜任力等级达标
     ALL_MANDATORY_MET = "all_mandatory_met"      # 所有必修项达标
+    TRAINING_COMPLETION = "training_completion"  # 培训项目完成度达标
+    MANDATORY_TASKS_PASSED = "mandatory_tasks_passed"  # 必修任务通过数
+    TASK_SCORE = "task_score"                    # 指定任务得分达标
 
 
 class CertificationStatusEnum(enum.Enum):

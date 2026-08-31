@@ -13,10 +13,11 @@ from app.domains.assessment.models import (
 from app.domains.certification.models import Certification
 from app.domains.training.models import (
     TrainingProject, TrainingEnrollment, TrainingPlan,
+    TrainingTaskPackage,
     ProjectStatusEnum, EnrollmentStatusEnum, PlanStatusEnum,
 )
 from app.domains.training.schemas import (
-    TrainingProjectCreate, TrainingProjectUpdate,
+    TrainingProjectCreate, TrainingProjectUpdate, TaskPackageCreate, SubmissionCreate, SubmissionReview,
 )
 from app.domains.training.service import TrainingService
 
@@ -321,3 +322,49 @@ class TestCompleteEnrollment:
         TrainingService.complete_enrollment(db, enrollment_id, user_id=1)
         result = TrainingService.complete_enrollment(db, enrollment_id, user_id=1)
         assert result["code"] == 400
+
+
+class TestTrainingTaskPackages:
+    def test_submit_and_review_task(self, db, active_project):
+        package = TrainingService.create_task_package(
+            db,
+            active_project,
+            TaskPackageCreate(
+                name="接口实操",
+                rubrics=[{"criterion": "功能完成度", "weight": 1}, {"criterion": "代码质量", "weight": 1}],
+            ),
+            user_id=9,
+        )["data"]
+        enrollment_id = TrainingService.enroll(db, active_project, user_id=1)["data"]["id"]
+        submission = TrainingService.create_submission(
+            db, package["id"], enrollment_id, user_id=1,
+            data=SubmissionCreate(content="已完成接口和测试"),
+        )["data"]
+        assert submission["status"] == "submitted"
+        result = TrainingService.review_submission(
+            db,
+            submission["id"],
+            reviewer_id=9,
+            data=SubmissionReview(
+                scores=[{"rubric_id": package["rubrics"][0]["id"], "score": 80}, {"rubric_id": package["rubrics"][1]["id"], "score": 100}],
+                status="passed",
+                teacher_comment="符合要求",
+            ),
+        )
+        assert result["code"] == 200
+        assert result["data"]["status"] == "passed"
+        assert result["data"]["overall_score"] == 90.0
+
+    def test_learner_cannot_submit_other_enrollment(self, db, active_project):
+        package = TrainingService.create_task_package(db, active_project, TaskPackageCreate(name="实操"), user_id=9)["data"]
+        enrollment_id = TrainingService.enroll(db, active_project, user_id=1)["data"]["id"]
+        result = TrainingService.create_submission(db, package["id"], enrollment_id, user_id=2, data=SubmissionCreate(content="越权"))
+        assert result["code"] == 400
+
+    def test_dashboard_scoped_to_learner(self, db, active_project):
+        package = TrainingService.create_task_package(db, active_project, TaskPackageCreate(name="实操"), user_id=9)["data"]
+        enrollment_id = TrainingService.enroll(db, active_project, user_id=1)["data"]["id"]
+        TrainingService.create_submission(db, package["id"], enrollment_id, user_id=1, data=SubmissionCreate(content="提交"))
+        learner = TrainingService.dashboard_overview(db, user_id=1, is_staff=False)["data"]
+        assert learner["enrollment_count"] == 1
+        assert learner["submission_count"] == 1

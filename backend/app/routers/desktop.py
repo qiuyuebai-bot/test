@@ -8,7 +8,7 @@ from app.database import get_db
 from app.models.user import User, UserRoleEnum
 from app.schemas.auth import DesktopBootstrapRequest
 from app.schemas.response import BaseResponse, success
-from app.seed_data import init_knowledge_seed_data, init_learner_seed_data
+from app.seed_data import init_career_training_seed_data, init_knowledge_seed_data, init_learner_seed_data
 from app.utils.auth import create_tokens_for_user, hash_password, set_auth_cookies
 from app.utils.datetime import utcnow_naive
 
@@ -48,6 +48,7 @@ def bootstrap_administrator(payload: DesktopBootstrapRequest, db: Session = Depe
 
     # 演示数据只在用户自主设置管理员后创建，避免分发固定管理员凭据。
     init_learner_seed_data()
+    init_career_training_seed_data()
     init_knowledge_seed_data()
     tokens = create_tokens_for_user(user)
     response = success(

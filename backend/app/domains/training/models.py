@@ -124,3 +124,91 @@ class TrainingPlan(Base):
 
     def __repr__(self) -> str:
         return f"<TrainingPlan(id={self.id}, enrollment_id={self.enrollment_id}, progress={self.progress})>"
+
+
+class TrainingTaskPackage(Base):
+    """培训项目中的可交付任务包。"""
+
+    __tablename__ = "training_task_packages"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    project_id = Column(Integer, ForeignKey("training_projects.id", ondelete="CASCADE"), nullable=False, index=True)
+    name = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    sequence = Column(Integer, default=1)
+    task_type = Column(String(30), default="practice")
+    key_task_code = Column(String(80), nullable=True)
+    learning_objectives = Column(JSON, default=list)
+    resources = Column(JSON, default=list)
+    submission_required = Column(Boolean, default=True)
+    passing_score = Column(Float, default=60.0)
+    is_mandatory = Column(Boolean, default=True)
+    status = Column(String(20), default="active")
+    created_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    project = relationship("TrainingProject", backref="task_packages")
+    rubrics = relationship("TrainingTaskRubric", back_populates="task_package", cascade="all, delete-orphan", order_by="TrainingTaskRubric.sequence")
+    submissions = relationship("TrainingSubmission", back_populates="task_package", cascade="all, delete-orphan")
+
+
+class TrainingTaskRubric(Base):
+    """任务包教师评分标准。"""
+
+    __tablename__ = "training_task_rubrics"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    task_package_id = Column(Integer, ForeignKey("training_task_packages.id", ondelete="CASCADE"), nullable=False, index=True)
+    criterion = Column(String(200), nullable=False)
+    description = Column(Text, nullable=True)
+    max_score = Column(Float, default=100.0)
+    weight = Column(Float, default=1.0)
+    sequence = Column(Integer, default=1)
+    created_at = Column(DateTime, server_default=func.now())
+
+    task_package = relationship("TrainingTaskPackage", back_populates="rubrics")
+
+
+class TrainingSubmission(Base):
+    """学员实操任务提交及教师评审结果。"""
+
+    __tablename__ = "training_submissions"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    task_package_id = Column(Integer, ForeignKey("training_task_packages.id", ondelete="CASCADE"), nullable=False, index=True)
+    enrollment_id = Column(Integer, ForeignKey("training_enrollments.id", ondelete="CASCADE"), nullable=False, index=True)
+    learner_id = Column(Integer, ForeignKey("learner_profiles.id", ondelete="SET NULL"), nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True)
+    attempt_number = Column(Integer, default=1)
+    content = Column(Text, nullable=True)
+    attachments = Column(JSON, default=list)
+    demo_url = Column(String(500), nullable=True)
+    status = Column(String(20), default="submitted")
+    overall_score = Column(Float, nullable=True)
+    teacher_comment = Column(Text, nullable=True)
+    reviewed_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
+    submitted_at = Column(DateTime, server_default=func.now())
+    reviewed_at = Column(DateTime, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
+
+    task_package = relationship("TrainingTaskPackage", back_populates="submissions")
+    enrollment = relationship("TrainingEnrollment", backref="submissions")
+    scores = relationship("TrainingSubmissionScore", back_populates="submission", cascade="all, delete-orphan")
+
+
+class TrainingSubmissionScore(Base):
+    """提交记录按评分标准拆分的得分。"""
+
+    __tablename__ = "training_submission_scores"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    submission_id = Column(Integer, ForeignKey("training_submissions.id", ondelete="CASCADE"), nullable=False, index=True)
+    rubric_id = Column(Integer, ForeignKey("training_task_rubrics.id", ondelete="CASCADE"), nullable=False, index=True)
+    score = Column(Float, nullable=False)
+    comment = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=func.now())
+
+    submission = relationship("TrainingSubmission", back_populates="scores")
+    rubric = relationship("TrainingTaskRubric")
