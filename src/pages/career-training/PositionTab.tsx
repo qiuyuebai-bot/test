@@ -31,6 +31,80 @@ const LEVEL_OPTIONS = [
 
 const selectClassName = 'w-full h-10 px-3 bg-bg-secondary border border-border rounded-input text-text-primary focus:outline-none focus:ring-2 focus:ring-primary/20 focus:border-primary'
 
+type EditableKeyTask = {
+  code: string
+  name: string
+  description: string
+  deliverables: string
+  acceptanceCriteria: string
+}
+
+type PositionKeyTask = NonNullable<Position['key_tasks']>[number]
+
+const EMPTY_KEY_TASK: EditableKeyTask = {
+  code: '',
+  name: '',
+  description: '',
+  deliverables: '',
+  acceptanceCriteria: '',
+}
+
+function asText(value: unknown): string {
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  return ''
+}
+
+function asLines(value: unknown): string {
+  if (Array.isArray(value)) return value.map(asText).filter(Boolean).join('\n')
+  return asText(value)
+}
+
+function normalizeKeyTasks(value: unknown): EditableKeyTask[] {
+  if (typeof value === 'string') {
+    try {
+      return normalizeKeyTasks(JSON.parse(value))
+    } catch {
+      return value.trim() ? [{ ...EMPTY_KEY_TASK, name: value.trim() }] : []
+    }
+  }
+  if (!Array.isArray(value)) return []
+
+  return value.flatMap((task) => {
+    if (typeof task === 'string') {
+      return task.trim() ? [{ ...EMPTY_KEY_TASK, name: task.trim() }] : []
+    }
+    if (!task || typeof task !== 'object') return []
+    const item = task as Record<string, unknown>
+    return [{
+      code: asText(item.code),
+      name: asText(item.name ?? item.title),
+      description: asText(item.description),
+      deliverables: asLines(item.deliverables),
+      acceptanceCriteria: asLines(item.acceptance_criteria ?? item.acceptanceCriteria),
+    }]
+  })
+}
+
+function linesToList(value: string): string[] {
+  return value.split(/\r?\n/).map((item) => item.trim()).filter(Boolean)
+}
+
+function serializeKeyTasks(tasks: EditableKeyTask[]): PositionKeyTask[] {
+  return tasks.flatMap((task) => {
+    const name = task.name.trim()
+    if (!name) return []
+    const result: PositionKeyTask = { name }
+    if (task.code.trim()) result.code = task.code.trim()
+    if (task.description.trim()) result.description = task.description.trim()
+    const deliverables = linesToList(task.deliverables)
+    const acceptanceCriteria = linesToList(task.acceptanceCriteria)
+    if (deliverables.length) result.deliverables = deliverables
+    if (acceptanceCriteria.length) result.acceptance_criteria = acceptanceCriteria
+    return [result]
+  })
+}
+
 export default function PositionTab() {
   const { positions, positionsLoading, fetchPositions, fetchCompetencies, competencies, user } = useStore(
     useShallow((s) => ({
@@ -188,10 +262,10 @@ export default function PositionTab() {
               <div>
                 <h4 className="text-sm font-medium text-text-primary mb-2">关键任务</h4>
                 <div className="space-y-2">
-                  {(selected.keyTasks ?? selected.key_tasks ?? []).map((task, index) => (
-                    <div key={task.code ?? index} className="rounded-input border border-border p-2 text-sm">
-                      <p className="font-medium text-text-primary">{task.name}</p>
-                      {task.deliverables?.length ? <p className="text-xs text-text-secondary mt-1">产出：{task.deliverables.join('、')}</p> : null}
+                  {normalizeKeyTasks(selected.keyTasks ?? selected.key_tasks).map((task, index) => (
+                    <div key={task.code || index} className="rounded-input border border-border p-2 text-sm">
+                      <p className="font-medium text-text-primary">{task.name || `关键任务 ${index + 1}`}</p>
+                      {task.deliverables ? <p className="text-xs text-text-secondary mt-1">产出：{task.deliverables.split(/\r?\n/).join('、')}</p> : null}
                     </div>
                   ))}
                 </div>
@@ -424,12 +498,25 @@ function EditPositionModal({ position, onClose, onSaved }: {
     industry: position.industry ?? '',
     description: position.description ?? '',
     responsibilities: (position.responsibilities ?? []).map((item) => typeof item === 'string' ? item : String(item.name ?? item.description ?? '')).join('\n'),
-    keyTasks: JSON.stringify(position.keyTasks ?? position.key_tasks ?? [], null, 2),
   })
+  const [keyTasks, setKeyTasks] = useState<EditableKeyTask[]>(() => normalizeKeyTasks(position.keyTasks ?? position.key_tasks))
   const [submitting, setSubmitting] = useState(false)
+
+  const updateKeyTask = (index: number, field: keyof EditableKeyTask, value: string) => {
+    setKeyTasks((current) => current.map((task, taskIndex) => (
+      taskIndex === index ? { ...task, [field]: value } : task
+    )))
+  }
 
   const handleSubmit = async () => {
     if (!form.name.trim()) return
+    const hasUnnamedTask = keyTasks.some((task) => (
+      !task.name.trim() && [task.code, task.description, task.deliverables, task.acceptanceCriteria].some((value) => value.trim())
+    ))
+    if (hasUnnamedTask) {
+      toast.error('关键任务信息不完整', '请填写任务名称，或删除未命名任务')
+      return
+    }
     setSubmitting(true)
     try {
       const updated = await trainingApi.updatePosition(position.id, {
@@ -439,7 +526,7 @@ function EditPositionModal({ position, onClose, onSaved }: {
         industry: form.industry || undefined,
         description: form.description || undefined,
         responsibilities: form.responsibilities.split('\n').map((item) => item.trim()).filter(Boolean),
-        key_tasks: (() => { try { return JSON.parse(form.keyTasks) } catch { return undefined } })(),
+        key_tasks: serializeKeyTasks(keyTasks),
       })
       onSaved(updated)
     } catch (err) {
@@ -450,7 +537,7 @@ function EditPositionModal({ position, onClose, onSaved }: {
   }
 
   return (
-    <Modal isOpen onClose={onClose} maxWidth="max-w-lg" className="p-6">
+    <Modal isOpen onClose={onClose} maxWidth="max-w-2xl" className="p-6 max-h-[90vh] overflow-y-auto">
       <h3 className="text-lg font-semibold text-text-primary mb-4 pr-8">编辑岗位</h3>
       <div className="space-y-3">
         <p className="text-xs text-text-tertiary">编码：{position.code}（编码不可修改）</p>
@@ -474,8 +561,51 @@ function EditPositionModal({ position, onClose, onSaved }: {
         <FormField label="岗位职责" description="每行一项">
           <Textarea value={form.responsibilities} onChange={(e) => setForm({ ...form, responsibilities: e.target.value })} rows={4} />
         </FormField>
-        <FormField label="关键任务（JSON）" description="每项可包含 name、deliverables、acceptance_criteria">
-          <Textarea value={form.keyTasks} onChange={(e) => setForm({ ...form, keyTasks: e.target.value })} rows={5} />
+        <FormField label="关键任务" description="每项填写任务名称；产出物和验收标准按行填写">
+          <div className="space-y-3">
+            {keyTasks.length === 0 && (
+              <p className="text-sm text-text-tertiary rounded-input border border-dashed border-border px-3 py-4 text-center">
+                暂无关键任务
+              </p>
+            )}
+            {keyTasks.map((task, index) => (
+              <div key={`${task.code}-${index}`} className="rounded-input border border-border p-3 space-y-3">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium text-text-primary">任务 {index + 1}</span>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => setKeyTasks((current) => current.filter((_, taskIndex) => taskIndex !== index))}
+                  >
+                    删除
+                  </Button>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <FormField label="任务名称" required>
+                    <Input value={task.name} onChange={(e) => updateKeyTask(index, 'name', e.target.value)} />
+                  </FormField>
+                  <FormField label="任务编码">
+                    <Input value={task.code} onChange={(e) => updateKeyTask(index, 'code', e.target.value)} />
+                  </FormField>
+                </div>
+                <FormField label="任务说明">
+                  <Textarea rows={2} value={task.description} onChange={(e) => updateKeyTask(index, 'description', e.target.value)} />
+                </FormField>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <FormField label="产出物" description="每行一项">
+                    <Textarea rows={3} value={task.deliverables} onChange={(e) => updateKeyTask(index, 'deliverables', e.target.value)} />
+                  </FormField>
+                  <FormField label="验收标准" description="每行一项">
+                    <Textarea rows={3} value={task.acceptanceCriteria} onChange={(e) => updateKeyTask(index, 'acceptanceCriteria', e.target.value)} />
+                  </FormField>
+                </div>
+              </div>
+            ))}
+            <Button type="button" variant="secondary" size="sm" onClick={() => setKeyTasks((current) => [...current, { ...EMPTY_KEY_TASK }])}>
+              新增关键任务
+            </Button>
+          </div>
         </FormField>
         <div className="flex justify-end gap-2 pt-2">
           <Button variant="ghost" onClick={onClose}>取消</Button>

@@ -90,6 +90,50 @@ describe('PositionTab', () => {
     })
   })
 
+  it('用结构化字段编辑关键任务并按列表格式保存', async () => {
+    vi.mocked(trainingApi.getPosition).mockResolvedValueOnce({
+      id: 1,
+      code: 'FE-001',
+      name: '前端工程师',
+      is_active: true,
+      created_at: '',
+      updated_at: '',
+      competencies: [],
+      key_tasks: [{
+        code: 'TASK-001',
+        name: '方案设计',
+        deliverables: ['方案文档'],
+        acceptance_criteria: ['可评审'],
+      }],
+    })
+    vi.mocked(trainingApi.updatePosition).mockResolvedValueOnce({
+      id: 1, code: 'FE-001', name: '前端工程师', is_active: true, created_at: '', updated_at: '',
+    })
+
+    render(<MemoryRouter><PositionTab /></MemoryRouter>)
+    await userEvent.click(screen.getByText('前端工程师'))
+    await userEvent.click((await screen.findAllByRole('button', { name: '编辑岗位' }))[0])
+
+    expect(screen.getByDisplayValue('方案设计')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('方案文档')).toBeInTheDocument()
+    expect(screen.getByDisplayValue('可评审')).toBeInTheDocument()
+    const taskNameInput = screen.getByDisplayValue('方案设计')
+    await userEvent.clear(taskNameInput)
+    await userEvent.type(taskNameInput, '接口设计')
+    await userEvent.click(screen.getByRole('button', { name: '保存' }))
+
+    await waitFor(() => {
+      expect(trainingApi.updatePosition).toHaveBeenCalledWith(1, expect.objectContaining({
+        key_tasks: [{
+          code: 'TASK-001',
+          name: '接口设计',
+          deliverables: ['方案文档'],
+          acceptance_criteria: ['可评审'],
+        }],
+      }))
+    })
+  })
+
   it('teacher can create a position from the empty state', async () => {
     setMockStore({
       positions: [],
