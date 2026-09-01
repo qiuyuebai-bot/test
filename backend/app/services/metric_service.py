@@ -20,7 +20,7 @@ from app.models import (
     LearningResource,
     TestMetrics,
 )
-from app.utils.datetime import utcnow_naive
+from app.utils.datetime import local_now_naive, utcnow_naive
 from app.utils.metrics import MetricsUtil
 from app.utils.resource_content import normalize_source_keywords
 
@@ -537,7 +537,7 @@ class MetricService:
 
     @classmethod
     def persist_daily_snapshot(cls, db: Session, results: list[dict]) -> TestMetrics:
-        now = utcnow_naive()
+        now = local_now_naive()
         day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         record = (
             db.query(TestMetrics)
