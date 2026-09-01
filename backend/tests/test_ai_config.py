@@ -1390,7 +1390,9 @@ def test_provider_options_expose_camel_case_default_model_and_verified_urls():
             LLMRuntimeConfig(
                 provider="perplexity",
                 protocol="openai_chat",
-                base_url="https://api.perplexity.ai",
+                # Use a stable public test host; this test uses MockTransport
+                # and should not depend on the provider's live DNS records.
+                base_url="https://example.com",
                 api_key="placeholder-key",
                 model="sonar",
             ),
