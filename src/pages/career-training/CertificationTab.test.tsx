@@ -23,7 +23,7 @@ vi.mock('@/api', () => ({
     rejectCertification: vi.fn(),
     revokeCertification: vi.fn(),
     verifyCertification: vi.fn(),
-    getCertificationEligibility: vi.fn().mockResolvedValue(null),
+    getCertificationEligibility: vi.fn().mockResolvedValue({ eligible: true, details: [] }),
   },
 }))
 
@@ -35,7 +35,7 @@ describe('CertificationTab', () => {
   beforeEach(() => {
     resetMockStore()
     vi.clearAllMocks()
-    vi.mocked(trainingApi.getCertificationEligibility).mockResolvedValue(null)
+    vi.mocked(trainingApi.getCertificationEligibility).mockResolvedValue({ eligible: true, details: [] })
     setMockStore({
       certifications: [
         { id: 1, position_id: 1, name: '前端初级认证', code: 'CERT-FE-J', level: 'junior', validity_period_months: 24, is_active: true, created_at: '', updated_at: '' },
