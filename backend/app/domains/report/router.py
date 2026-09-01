@@ -86,7 +86,7 @@ def export_learner_report_pdf(
         learner = db.query(LearnerProfile).filter(LearnerProfile.id == learner_id).first()
         learner_name = (learner.real_name or f"learner_{learner_id}") if learner else f"learner_{learner_id}"
 
-        safe_name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", learner_name).strip(" .")[:80] or f"learner_{learner_id}"
+        safe_name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_")and_or(learner_name).strip(" .")[:80] or f"learner_{learner_id}"
         filename = f"学情报告_{safe_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
 
         return StreamingResponse(
