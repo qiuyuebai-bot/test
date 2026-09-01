@@ -628,28 +628,38 @@ class MetricsServiceHelper(BaseService):
     def get_or_create_daily_metrics(cls, db) -> TestMetrics:
         """
         获取或创建当天的指标记录
-        
+
+        与 MetricService.persist_daily_snapshot 使用相同的北京时区日界
+        和当日范围查询，确保两条写入路径收敛到同一行，不再产生同日
+        重复快照。
+
         Args:
             db: 数据库会话
-            
-        Returns:
+
+            Returns:
             指标记录
         """
-        from datetime import date
-        today = date.today()
-        
+        from datetime import timedelta
+
+        from app.utils.datetime import local_now_naive
+
+        now = local_now_naive()
+        day_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+
         metrics = db.query(TestMetrics).filter(
-            TestMetrics.record_date == today
+            TestMetrics.record_period == "daily",
+            TestMetrics.record_date >= day_start,
+            TestMetrics.record_date < day_start + timedelta(days=1),
         ).first()
-        
+
         if not metrics:
             metrics = TestMetrics(
-                record_date=today,
+                record_date=day_start,
                 record_period="daily",
             )
             db.add(metrics)
             db.flush()
-        
+
         return metrics
     
     @classmethod

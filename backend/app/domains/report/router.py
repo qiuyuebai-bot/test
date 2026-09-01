@@ -273,7 +273,7 @@ def get_system_metrics(db: Session = Depends(get_db)) -> BaseResponse:
     获取系统级核心指标（对齐前端 SystemMetrics 类型）
 
     - 幻觉率、资源匹配准确率、知识点覆盖率
-    - 趋势数据（最近7天）
+    - 趋势数据（最近7个自然日，每日最新快照）
     """
     try:
         result = ReportService.get_system_metrics()

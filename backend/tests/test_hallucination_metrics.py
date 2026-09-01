@@ -223,8 +223,13 @@ def test_report_metrics_uses_the_same_evidence_aware_source(
 def test_report_metrics_uses_live_index_coverage_and_flat_trends(
     client, db_session, sample_knowledge_doc, sample_knowledge_slices
 ):
+    from datetime import timedelta
+
+    from app.utils.datetime import local_now_naive
+
+    yesterday = local_now_naive().date() - timedelta(days=1)
     db_session.add(TestMetrics(
-        record_date=datetime(2024, 1, 15),
+        record_date=datetime(yesterday.year, yesterday.month, yesterday.day),
         record_period="daily",
         hallucination_rate=2.5,
         resource_match_accuracy=94.0,
@@ -242,8 +247,58 @@ def test_report_metrics_uses_live_index_coverage_and_flat_trends(
     assert data["metrics_source"] == "realtime"
     assert data["metrics_status"] == "ready"
     assert data["snapshot_available"] is True
-    assert data["trends"][0]["knowledge_coverage_rate"] == 88.0
-    assert "metrics" not in data["trends"][0]
+    trends = data["trends"]
+    assert [trend["date"] for trend in trends] == [
+        (local_now_naive().date() - timedelta(days=offset)).isoformat()
+        for offset in range(6, -1, -1)
+    ]
+    yesterday_trend = trends[5]
+    assert yesterday_trend["knowledge_coverage_rate"] == 88.0
+    assert yesterday_trend["hallucination_rate"] == 2.5
+    assert "metrics" not in yesterday_trend
+
+
+def test_report_metrics_deduplicates_daily_snapshots(db_session, client):
+    from datetime import timedelta
+
+    from app.utils.datetime import local_now_naive
+
+    today = local_now_naive().date()
+    two_days_ago = today - timedelta(days=2)
+    yesterday = today - timedelta(days=1)
+    db_session.add_all([
+        TestMetrics(
+            record_date=datetime(two_days_ago.year, two_days_ago.month, two_days_ago.day, 0, 0),
+            record_period="daily",
+            hallucination_rate=4.0,
+        ),
+        TestMetrics(
+            record_date=datetime(two_days_ago.year, two_days_ago.month, two_days_ago.day, 12, 0),
+            record_period="daily",
+            hallucination_rate=3.0,
+        ),
+        TestMetrics(
+            record_date=datetime(yesterday.year, yesterday.month, yesterday.day),
+            record_period="daily",
+            hallucination_rate=2.0,
+        ),
+    ])
+    db_session.commit()
+
+    response = client.get("/api/v1/report/metrics")
+
+    assert response.status_code == 200
+    trends = response.json()["data"]["trends"]
+    assert len(trends) == 7
+    assert [trend["date"] for trend in trends] == [
+        (today - timedelta(days=offset)).isoformat() for offset in range(6, -1, -1)
+    ]
+    # 同日多条快照取最新一条（12:00 的 3.0），且窗口内缺失的日期补 null。
+    assert trends[4]["hallucination_rate"] == 3.0
+    assert trends[5]["hallucination_rate"] == 2.0
+    assert trends[6]["hallucination_rate"] is None
+    assert trends[3]["hallucination_rate"] is None
+    assert trends[0]["hallucination_rate"] is None
 
 
 def test_report_metrics_marks_missing_knowledge_data_as_no_data(client):

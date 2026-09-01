@@ -49,6 +49,19 @@ function formatMetricUpdatedAt(value?: string): string {
   })
 }
 
+function formatTrendDate(value?: string | null): string {
+  if (!value) return ''
+  const datePart = value.match(/^\d{4}-\d{2}-\d{2}/)?.[0]
+  if (datePart) return datePart
+  const date = new Date(value)
+  if (Number.isNaN(date.getTime())) return value
+  // 不用 toISOString()：它按 UTC 输出，会把本地日期回退一天
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export default function MetricsDashboard() {
   const { systemMetrics, metricsLoading, metricsError, metricsStatus } = useStore(
     useShallow((s) => ({
@@ -116,6 +129,10 @@ export default function MetricsDashboard() {
     ? knowledgeMetric?.value ?? null
     : systemMetrics?.knowledgeCoverageRate ?? null
   const trendData = systemMetrics?.trends ?? []
+  const trendChartData = trendData.map((trend) => ({
+    ...trend,
+    displayDate: formatTrendDate(trend.date),
+  }))
 
   const metricCards = [
     {
@@ -259,13 +276,13 @@ export default function MetricsDashboard() {
           <div className="p-6 border-b border-border">
             <div className="flex items-center gap-2">
               <LineChartIcon className="w-5 h-5 text-text-secondary" />
-              <h3 className="font-semibold text-text-primary">指标月度趋势</h3>
+              <h3 className="font-semibold text-text-primary">指标趋势（近7天）</h3>
             </div>
           </div>
           <div className="p-6 h-[300px]">
             {trendData.length > 0 ? (
               <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={trendData}>
+                <AreaChart data={trendChartData}>
                   <defs>
                     <linearGradient id="colorHallucination" x1="0" y1="0" x2="0" y2="1">
                       <stop offset="5%" stopColor="var(--color-error)" stopOpacity={0.2} />
@@ -281,7 +298,7 @@ export default function MetricsDashboard() {
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={CHART_COLORS.grid} />
-                  <XAxis dataKey="date" tick={{ fontSize: 12, fill: CHART_COLORS.text }} />
+                  <XAxis dataKey="displayDate" tick={{ fontSize: 12, fill: CHART_COLORS.text }} />
                   <YAxis tick={{ fontSize: 12, fill: CHART_COLORS.text }} />
                   <Tooltip {...CHART_TOOLTIP_PROPS} />
                   <Legend />
@@ -313,7 +330,7 @@ export default function MetricsDashboard() {
               </ResponsiveContainer>
             ) : (
               <div className="h-full flex items-center justify-center">
-                <EmptyState type="default" title="暂无趋势数据" description="系统运行后将自动生成月度趋势" />
+                <EmptyState type="default" title="暂无趋势数据" description="系统运行后将自动生成近7天趋势" />
               </div>
             )}
           </div>
