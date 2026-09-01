@@ -40,7 +40,13 @@ services:
       dockerfile: Dockerfile
     container_name: knowledge-backend
     env_file:
-      - ./backend/.env.development
+      # Local overrides are optional; the compose environment below provides
+      # the container defaults, so a fresh checkout can start without creating
+      # an untracked backend environment file first.
+      - path: ./backend/.env
+        required: false
+      - path: ./backend/.env.development
+        required: false
     ports:
       - "${BACKEND_PORT:-8000}:8000"
     environment:
@@ -119,7 +125,10 @@ services:
       dockerfile: Dockerfile
     container_name: knowledge-celery
     env_file:
-      - ./backend/.env.development
+      - path: ./backend/.env
+        required: false
+      - path: ./backend/.env.development
+        required: false
     command: celery -A app.celery_app worker --loglevel=info --concurrency=2
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:password@postgres:5432/knowledge_system}
@@ -148,7 +157,10 @@ services:
       dockerfile: Dockerfile
     container_name: knowledge-celery-beat
     env_file:
-      - ./backend/.env.development
+      - path: ./backend/.env
+        required: false
+      - path: ./backend/.env.development
+        required: false
     command: celery -A app.celery_app beat --loglevel=info
     environment:
       - DATABASE_URL=${DATABASE_URL:-postgresql://postgres:password@postgres:5432/knowledge_system}

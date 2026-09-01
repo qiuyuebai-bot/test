@@ -47,19 +47,11 @@ WORKDIR /app
 # CACHEBUST（CI 每次构建传入 github.sha）强制重跑本层，避免镜像层缓存错过新补丁。
 ARG CACHEBUST=default
 RUN apt-get update && \
-    apt-get install -y --only-upgrade --no-install-recommends \
-        bsdutils \
-        libblkid1 \
-        liblastlog2-2 \
-        libmount1 \
-        libsmartcols1 \
-        libuuid1 \
-        login \
-        mount \
-        util-linux \
-        libssl3t64 \
-        openssl \
-        openssl-provider-legacy && \
+    packages="bsdutils libblkid1 libmount1 libsmartcols1 libuuid1 login mount util-linux openssl" && \
+    for package in liblastlog2-2 libssl3t64 libssl3 openssl-provider-legacy; do \
+        if apt-cache show "${package}" >/dev/null 2>&1; then packages="${packages} ${package}"; fi; \
+    done && \
+    apt-get install -y --only-upgrade --no-install-recommends ${packages} && \
     echo "cache-bust: ${CACHEBUST}" && \
     rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
