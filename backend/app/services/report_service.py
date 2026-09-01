@@ -3,6 +3,7 @@
 输出结构化图表数据，字段对齐前端Recharts组件需求
 """
 from typing import Dict, Any, List, Optional
+from datetime import date, timedelta
 from loguru import logger
 from sqlalchemy import func
 
@@ -23,7 +24,7 @@ from app.services.path_planner import PathPlanner
 from app.services.metric_service import MetricService
 from app.utils.llm import LLMUtil
 from app.utils.metrics import MetricsUtil
-from app.utils.datetime import utcnow_naive
+from app.utils.datetime import local_now_naive
 
 
 class ReportService(BaseService):
@@ -468,17 +469,50 @@ class ReportService(BaseService):
             by_id = MetricService.by_id(metric_results)
             hallucination_result = by_id.get("hallucination_rate", {})
             hallucination_metadata = hallucination_result.get("metadata") or {}
-            snapshots = (
+            # 趋势横坐标锚定真实的近 7 个自然日（北京时区，含今天），
+            # 缺失的日子补 null 交给前端断线显示，而不是漂移到任意
+            # 旧快照的日期，避免与"近7天"标签矛盾。
+            now = local_now_naive()
+            today = now.date()
+            window_start = (now - timedelta(days=6)).replace(
+                hour=0, minute=0, second=0, microsecond=0
+            )
+            # Multiple legacy writers could create more than one snapshot per
+            # day. Keep the newest row for each calendar day inside the
+            # window.
+            daily_snapshots = (
                 db.query(TestMetrics)
                 .filter(TestMetrics.record_period == "daily")
-                .order_by(TestMetrics.record_date.desc())
-                .limit(7)
+                .filter(TestMetrics.record_date >= window_start)
+                .order_by(TestMetrics.record_date.desc(), TestMetrics.id.desc())
                 .all()
             )
+            snapshot_by_day: Dict[date, TestMetrics] = {}
+            for snapshot in daily_snapshots:
+                if snapshot.record_date is None:
+                    continue
+                day = snapshot.record_date.date()
+                if day not in snapshot_by_day:
+                    snapshot_by_day[day] = snapshot
 
+            empty_trend = {
+                "hallucination_rate": None,
+                "resource_match_accuracy": None,
+                "resource_match_score": None,
+                "resource_match_effectiveness": None,
+                "knowledge_coverage_rate": None,
+                "knowledge_index_coverage": None,
+            }
             trends = []
-            for snapshot in reversed(snapshots):
-                score = cls._snapshot_metric_value(snapshot, "resource_match_score", "resource_match_accuracy")
+            for offset in range(6, -1, -1):
+                day = today - timedelta(days=offset)
+                snapshot = snapshot_by_day.get(day)
+                if snapshot is None:
+                    trends.append({"date": day.isoformat(), **empty_trend})
+                    continue
+                score = cls._snapshot_metric_value(
+                    snapshot, "resource_match_score", "resource_match_accuracy"
+                )
                 effectiveness = cls._snapshot_metric_value(
                     snapshot, "resource_match_effectiveness", ""
                 )
@@ -486,7 +520,7 @@ class ReportService(BaseService):
                     snapshot, "knowledge_index_coverage", "knowledge_coverage_rate"
                 )
                 trends.append({
-                    "date": snapshot.record_date.isoformat() if snapshot.record_date else None,
+                    "date": day.isoformat(),
                     "hallucination_rate": cls._snapshot_metric_value(
                         snapshot, "hallucination_rate", "hallucination_rate"
                     ),
@@ -541,8 +575,8 @@ class ReportService(BaseService):
                 "learning_blind_spot_coverage_rate": by_id.get("blind_spot_resource_coverage", {}).get("value"),
                 "metrics_status": metrics_status,
                 "metrics_source": "realtime",
-                "snapshot_available": bool(snapshots),
-                "calculated_at": utcnow_naive().isoformat(),
+                "snapshot_available": bool(snapshot_by_day),
+                "calculated_at": local_now_naive().isoformat(),
                 "total_learners": learner_count,
                 "total_resources": resource_count,
                 "total_answers": answer_count,

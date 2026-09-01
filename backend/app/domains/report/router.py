@@ -86,7 +86,7 @@ def export_learner_report_pdf(
         learner = db.query(LearnerProfile).filter(LearnerProfile.id == learner_id).first()
         learner_name = (learner.real_name or f"learner_{learner_id}") if learner else f"learner_{learner_id}"
 
-        safe_name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_", learner_name).strip(" .")[:80] or f"learner_{learner_id}"
+        safe_name = re.sub(r'[\\/:*?"<>|\x00-\x1f]', "_")and_or(learner_name).strip(" .")[:80] or f"learner_{learner_id}"
         filename = f"学情报告_{safe_name}_{datetime.now().strftime('%Y%m%d')}.pdf"
 
         return StreamingResponse(
@@ -273,7 +273,7 @@ def get_system_metrics(db: Session = Depends(get_db)) -> BaseResponse:
     获取系统级核心指标（对齐前端 SystemMetrics 类型）
 
     - 幻觉率、资源匹配准确率、知识点覆盖率
-    - 趋势数据（最近7天）
+    - 趋势数据（最近7个自然日，每日最新快照）
     """
     try:
         result = ReportService.get_system_metrics()
